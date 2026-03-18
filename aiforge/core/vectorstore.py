@@ -34,11 +34,14 @@ class VectorStoreAdapter(ABC):
         embedding: list[float],
         top_k: int = 5,
         filter: dict[str, Any] | None = None,
+        include_embeddings: bool = False,
     ) -> list[dict[str, Any]]:
         """Return the *top_k* most similar documents.
 
         Each returned dict has keys: ``id``, ``text``, ``metadata``,
-        ``distance`` (lower is more similar).
+        ``distance`` (lower is more similar), and optionally
+        ``embeddings`` (list of floats, only when
+        ``include_embeddings=True``).
         """
 
     @abstractmethod
@@ -114,11 +117,16 @@ class ChromaVectorStore(VectorStoreAdapter):
         embedding: list[float],
         top_k: int = 5,
         filter: dict[str, Any] | None = None,
+        include_embeddings: bool = False,
     ) -> list[dict[str, Any]]:
+        include = ["documents", "metadatas", "distances"]
+        if include_embeddings:
+            include.append("embeddings")
+
         kwargs: dict[str, Any] = {
             "query_embeddings": [embedding],
             "n_results": top_k,
-            "include": ["documents", "metadatas", "distances"],
+            "include": include,
         }
         if filter:
             kwargs["where"] = filter
@@ -129,20 +137,29 @@ class ChromaVectorStore(VectorStoreAdapter):
         if not results["documents"]:
             return output
 
-        for doc, meta, dist, doc_id in zip(
-            results["documents"][0],
-            results["metadatas"][0],
-            results["distances"][0],
-            results["ids"][0],
-        ):
-            output.append(
-                {
-                    "id": doc_id,
-                    "text": doc,
-                    "metadata": meta or {},
-                    "distance": dist,
-                }
+        raw_embeds = (
+            results["embeddings"][0]
+            if include_embeddings and results.get("embeddings")
+            else None
+        )
+
+        for i, (doc, meta, dist, doc_id) in enumerate(
+            zip(
+                results["documents"][0],
+                results["metadatas"][0],
+                results["distances"][0],
+                results["ids"][0],
             )
+        ):
+            hit: dict[str, Any] = {
+                "id": doc_id,
+                "text": doc,
+                "metadata": meta or {},
+                "distance": dist,
+            }
+            if raw_embeds is not None:
+                hit["embeddings"] = raw_embeds[i]
+            output.append(hit)
         return output
 
     def delete_collection(self, name: str) -> None:

@@ -150,7 +150,16 @@ class SemanticSearch(BaseModule):
         for i in range(0, len(docs), batch_size):
             batch = docs[i : i + batch_size]
             texts = [d.text for d in batch]
-            embeddings = self._call_embedding(texts)
+            try:
+                embeddings = self._call_embedding(texts)
+            except Exception as exc:
+                self.logger.error(
+                    "search.index.embedding_failed",
+                    error=str(exc),
+                    num_texts=len(texts),
+                    batch_index=i // batch_size,
+                )
+                raise
             total_tokens += _estimate_tokens(texts)
             embedding_model = self.embedding_provider.model_name
             self._store.add_documents(
@@ -161,7 +170,11 @@ class SemanticSearch(BaseModule):
             )
 
         stats = self._store.collection_stats(self.collection_name)
-        cost = calculate_cost(embedding_model, total_tokens, 0)
+        cost = calculate_cost(
+            embedding_model,
+            total_tokens,
+            0,  # Embeddings have no output token cost
+        )
 
         return IndexResponse(
             indexed_count=len(docs),
@@ -191,7 +204,16 @@ class SemanticSearch(BaseModule):
         for i in range(0, len(docs), batch_size):
             batch = docs[i : i + batch_size]
             texts = [d.text for d in batch]
-            embeddings = await self._acall_embedding(texts)
+            try:
+                embeddings = await self._acall_embedding(texts)
+            except Exception as exc:
+                self.logger.error(
+                    "search.aindex.embedding_failed",
+                    error=str(exc),
+                    num_texts=len(texts),
+                    batch_index=i // batch_size,
+                )
+                raise
             total_tokens += _estimate_tokens(texts)
             embedding_model = self.embedding_provider.model_name
             self._store.add_documents(
@@ -202,7 +224,11 @@ class SemanticSearch(BaseModule):
             )
 
         stats = self._store.collection_stats(self.collection_name)
-        cost = calculate_cost(embedding_model, total_tokens, 0)
+        cost = calculate_cost(
+            embedding_model,
+            total_tokens,
+            0,  # Embeddings have no output token cost
+        )
 
         return IndexResponse(
             indexed_count=len(docs),
@@ -284,14 +310,19 @@ class SemanticSearch(BaseModule):
         *,
         top_k: int | None = None,
         filter: dict | None = None,
+        include_embeddings: bool = False,
     ) -> SearchResponse:
         """Embed *query* and retrieve the most similar documents.
 
         Args:
-            query:  Search query text.  Must be non-empty.
-            top_k:  Number of results (overrides instance default).
-            filter: ChromaDB ``where`` dict for metadata filtering, e.g.
-                    ``{"price": {"$lt": 100}}``.
+            query:              Search query text.  Must be non-empty.
+            top_k:              Number of results (overrides instance default).
+            filter:             ChromaDB ``where`` dict for metadata filtering,
+                                e.g. ``{"price": {"$lt": 100}}``.
+            include_embeddings: When ``True``, each :class:`SearchHit` in the
+                                response will have its ``embeddings`` field
+                                populated with the raw vector returned by the
+                                vector store.
 
         Returns:
             :class:`SearchResponse` with ranked hits.
@@ -307,12 +338,29 @@ class SemanticSearch(BaseModule):
             raise ValueError(f"top_k must be between 1 and {_TOP_K_MAX}")
 
         t0 = time.monotonic()
-        embedding = self.embedding_provider.embed_query(query)
+        try:
+            embedding = self.embedding_provider.embed_query(query)
+        except Exception as exc:
+            self.logger.error(
+                "search.query.embedding_failed",
+                error=str(exc),
+                query_head=query[:100],
+            )
+            raise
         embedding_model = self.embedding_provider.model_name
         token_count = _estimate_tokens([query])
-        cost = calculate_cost(embedding_model, token_count, 0)
+        cost = calculate_cost(
+            embedding_model,
+            token_count,
+            0,  # Embeddings have no output token cost
+        )
 
-        raw_hits = self._store.query(embedding=embedding, top_k=k, filter=filter)
+        raw_hits = self._store.query(
+            embedding=embedding,
+            top_k=k,
+            filter=filter,
+            include_embeddings=include_embeddings,
+        )
         total = self._store.collection_stats(self.collection_name).get("chunks", 0)
 
         hits = [
@@ -321,6 +369,7 @@ class SemanticSearch(BaseModule):
                 text=h["text"],
                 score=max(0.0, min(1.0, 1.0 - h["distance"])),
                 metadata=h.get("metadata", {}),
+                embeddings=h.get("embeddings") if include_embeddings else None,
             )
             for h in raw_hits
         ]
@@ -341,6 +390,7 @@ class SemanticSearch(BaseModule):
         *,
         top_k: int | None = None,
         filter: dict | None = None,
+        include_embeddings: bool = False,
     ) -> SearchResponse:
         """Async version of :meth:`query`."""
         if not query or not query.strip():
@@ -350,12 +400,29 @@ class SemanticSearch(BaseModule):
             raise ValueError(f"top_k must be between 1 and {_TOP_K_MAX}")
 
         t0 = time.monotonic()
-        embedding = await self.embedding_provider.embed_query_async(query)
+        try:
+            embedding = await self.embedding_provider.embed_query_async(query)
+        except Exception as exc:
+            self.logger.error(
+                "search.aquery.embedding_failed",
+                error=str(exc),
+                query_head=query[:100],
+            )
+            raise
         embedding_model = self.embedding_provider.model_name
         token_count = _estimate_tokens([query])
-        cost = calculate_cost(embedding_model, token_count, 0)
+        cost = calculate_cost(
+            embedding_model,
+            token_count,
+            0,  # Embeddings have no output token cost
+        )
 
-        raw_hits = self._store.query(embedding=embedding, top_k=k, filter=filter)
+        raw_hits = self._store.query(
+            embedding=embedding,
+            top_k=k,
+            filter=filter,
+            include_embeddings=include_embeddings,
+        )
         total = self._store.collection_stats(self.collection_name).get("chunks", 0)
 
         hits = [
@@ -364,6 +431,7 @@ class SemanticSearch(BaseModule):
                 text=h["text"],
                 score=max(0.0, min(1.0, 1.0 - h["distance"])),
                 metadata=h.get("metadata", {}),
+                embeddings=h.get("embeddings") if include_embeddings else None,
             )
             for h in raw_hits
         ]

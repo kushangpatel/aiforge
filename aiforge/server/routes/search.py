@@ -47,6 +47,7 @@ class QueryRequest(BaseModel):
     collection: str = "default"
     top_k: int = Field(default=5, ge=1, le=100)
     filter: dict | None = None
+    include_embeddings: bool = False
 
 
 class _HitOut(BaseModel):
@@ -54,6 +55,7 @@ class _HitOut(BaseModel):
     text: str
     score: float
     metadata: dict = {}
+    embeddings: list[float] | None = None
 
 
 class SearchResponseOut(BaseModel):
@@ -103,13 +105,22 @@ async def run_query(body: QueryRequest) -> Any:
     try:
         ss = SemanticSearch(collection=body.collection)
         result = await ss.aquery(
-            body.query, top_k=body.top_k, filter=body.filter
+            body.query,
+            top_k=body.top_k,
+            filter=body.filter,
+            include_embeddings=body.include_embeddings,
         )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc))
     return SearchResponseOut(
         hits=[
-            _HitOut(id=h.id, text=h.text, score=h.score, metadata=h.metadata)
+            _HitOut(
+                id=h.id,
+                text=h.text,
+                score=h.score,
+                metadata=h.metadata,
+                embeddings=h.embeddings,
+            )
             for h in result.hits
         ],
         query=result.query,

@@ -15,6 +15,26 @@ class SearchDocument(BaseModel):
     metadata: dict = Field(default_factory=dict)
 
 
+class IndexRequest(BaseModel):
+    """Request schema for batch document indexing."""
+
+    documents: list[SearchDocument]
+    collection: str = Field(default="default", description="Vector store collection name")
+
+
+class SearchRequest(BaseModel):
+    """Request schema for semantic search queries."""
+
+    query: str = Field(description="Search query text")
+    collection: str = Field(default="default", description="Vector store collection name")
+    top_k: int = Field(default=5, ge=1, le=100, description="Number of results to return")
+    filter: dict | None = Field(default=None, description="Metadata filter (ChromaDB where clause)")
+    include_embeddings: bool = Field(
+        default=False,
+        description="Include raw embedding vectors in each SearchHit",
+    )
+
+
 class SearchHit(BaseModel):
     """A single ranked search result."""
 
@@ -25,9 +45,13 @@ class SearchHit(BaseModel):
     """Document text."""
 
     score: float = Field(ge=0.0, le=1.0)
-    """Cosine similarity in [0, 1]. Derived as ``1.0 - cosine_distance``."""
+    """Cosine similarity in [0, 1].  Derived as ``1.0 - cosine_distance``."""
 
     metadata: dict = Field(default_factory=dict)
+
+    embeddings: list[float] | None = None
+    """Raw embedding vector for this hit.  Only populated when
+    ``include_embeddings=True`` was passed to the query call."""
 
 
 class IndexResponse(ModuleResponse):
@@ -65,3 +89,4 @@ class SearchResponse(ModuleResponse):
     def to_text(self) -> str:
         """Return the top hit's text for pipeline chaining, or empty string."""
         return self.hits[0].text if self.hits else ""
+

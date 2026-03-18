@@ -13,9 +13,11 @@ from aiforge.modules.search.module import (
     _estimate_tokens,
 )
 from aiforge.modules.search.schemas import (
+    IndexRequest,
     IndexResponse,
     SearchDocument,
     SearchHit,
+    SearchRequest,
     SearchResponse,
 )
 
@@ -618,3 +620,206 @@ class TestSearchServerRoute:
                 json={"documents": [{"id": "1", "text": "hi"}]},
             )
         assert resp.status_code == 422
+
+    def test_query_include_embeddings_passed_to_aquery(self) -> None:
+        """include_embeddings=True in the request body is forwarded to aquery."""
+        from unittest.mock import AsyncMock, patch
+
+        client = self._client()
+        mock_result = SearchResponse(
+            hits=[SearchHit(id="d1", text="result", score=0.9, embeddings=[0.1, 0.2])],
+            query="test",
+            total_searched=1,
+        )
+        with patch("aiforge.modules.search.module.SemanticSearch") as MockSS:
+            MockSS.return_value.aquery = AsyncMock(return_value=mock_result)
+            resp = client.post(
+                "/search/query",
+                json={"query": "test", "include_embeddings": True},
+            )
+        assert resp.status_code == 200
+        call_kwargs = MockSS.return_value.aquery.call_args.kwargs
+        assert call_kwargs["include_embeddings"] is True
+
+    def test_query_hit_out_includes_embeddings_field(self) -> None:
+        """_HitOut serialises the embeddings field when present."""
+        from unittest.mock import AsyncMock, patch
+
+        client = self._client()
+        embed_vec = [0.1, 0.2, 0.3]
+        mock_result = SearchResponse(
+            hits=[SearchHit(id="d1", text="result", score=0.9, embeddings=embed_vec)],
+            query="test",
+            total_searched=1,
+        )
+        with patch("aiforge.modules.search.module.SemanticSearch") as MockSS:
+            MockSS.return_value.aquery = AsyncMock(return_value=mock_result)
+            resp = client.post(
+                "/search/query",
+                json={"query": "test", "include_embeddings": True},
+            )
+        assert resp.status_code == 200
+        assert resp.json()["hits"][0]["embeddings"] == embed_vec
+
+    def test_query_hit_out_embeddings_null_by_default(self) -> None:
+        """embeddings is null in response when include_embeddings is False."""
+        from unittest.mock import AsyncMock, patch
+
+        client = self._client()
+        mock_result = SearchResponse(
+            hits=[SearchHit(id="d1", text="result", score=0.9)],
+            query="test",
+            total_searched=1,
+        )
+        with patch("aiforge.modules.search.module.SemanticSearch") as MockSS:
+            MockSS.return_value.aquery = AsyncMock(return_value=mock_result)
+            resp = client.post("/search/query", json={"query": "test"})
+        assert resp.status_code == 200
+        assert resp.json()["hits"][0]["embeddings"] is None
+
+
+# ---------------------------------------------------------------------------
+# TestNewSchemas
+# ---------------------------------------------------------------------------
+
+
+class TestNewSchemas:
+    def test_index_request_valid(self) -> None:
+        req = IndexRequest(documents=[SearchDocument(id="d1", text="hello")])
+        assert len(req.documents) == 1
+        assert req.collection == "default"
+
+    def test_index_request_custom_collection(self) -> None:
+        req = IndexRequest(
+            documents=[SearchDocument(id="d1", text="hi")],
+            collection="products",
+        )
+        assert req.collection == "products"
+
+    def test_search_request_valid(self) -> None:
+        req = SearchRequest(query="hello world")
+        assert req.query == "hello world"
+        assert req.collection == "default"
+        assert req.top_k == 5
+        assert req.filter is None
+        assert req.include_embeddings is False
+
+    def test_search_request_top_k_too_low_raises(self) -> None:
+        with pytest.raises(Exception):
+            SearchRequest(query="q", top_k=0)
+
+    def test_search_request_top_k_too_high_raises(self) -> None:
+        with pytest.raises(Exception):
+            SearchRequest(query="q", top_k=101)
+
+    def test_search_request_include_embeddings_default_false(self) -> None:
+        req = SearchRequest(query="q")
+        assert req.include_embeddings is False
+
+    def test_search_request_include_embeddings_true(self) -> None:
+        req = SearchRequest(query="q", include_embeddings=True)
+        assert req.include_embeddings is True
+
+    def test_search_hit_embeddings_default_none(self) -> None:
+        hit = SearchHit(id="d1", text="text", score=0.5)
+        assert hit.embeddings is None
+
+    def test_search_hit_embeddings_populated(self) -> None:
+        hit = SearchHit(id="d1", text="text", score=0.5, embeddings=[0.1, 0.2, 0.3])
+        assert hit.embeddings == [0.1, 0.2, 0.3]
+
+
+# ---------------------------------------------------------------------------
+# TestIncludeEmbeddings
+# ---------------------------------------------------------------------------
+
+
+class TestIncludeEmbeddings:
+    def test_query_include_embeddings_passes_flag_to_store(self) -> None:
+        """include_embeddings=True propagates to store.query()."""
+        store = _make_store(query_results=[])
+        ss = _ss(store=store)
+        ss.query("q", include_embeddings=True)
+        assert store.query.call_args.kwargs["include_embeddings"] is True
+
+    def test_query_include_embeddings_false_default(self) -> None:
+        """Default call passes include_embeddings=False to store.query()."""
+        store = _make_store(query_results=[])
+        ss = _ss(store=store)
+        ss.query("q")
+        assert store.query.call_args.kwargs["include_embeddings"] is False
+
+    def test_query_hit_has_embeddings_when_requested(self) -> None:
+        embed_vec = [0.1, 0.2, 0.3, 0.4]
+        raw = [{"id": "d1", "text": "t", "metadata": {}, "distance": 0.1, "embeddings": embed_vec}]
+        store = _make_store(query_results=raw)
+        ss = _ss(store=store)
+        result = ss.query("q", include_embeddings=True)
+        assert result.hits[0].embeddings == embed_vec
+
+    def test_query_hit_embeddings_none_when_not_requested(self) -> None:
+        raw = [{"id": "d1", "text": "t", "metadata": {}, "distance": 0.1}]
+        store = _make_store(query_results=raw)
+        ss = _ss(store=store)
+        result = ss.query("q", include_embeddings=False)
+        assert result.hits[0].embeddings is None
+
+    @pytest.mark.asyncio
+    async def test_aquery_include_embeddings_passes_flag_to_store(self) -> None:
+        store = _make_store(query_results=[])
+        ss = _ss(store=store)
+        await ss.aquery("q", include_embeddings=True)
+        assert store.query.call_args.kwargs["include_embeddings"] is True
+
+    @pytest.mark.asyncio
+    async def test_aquery_hit_has_embeddings_when_requested(self) -> None:
+        embed_vec = [0.5, 0.6]
+        raw = [{"id": "d1", "text": "t", "metadata": {}, "distance": 0.2, "embeddings": embed_vec}]
+        store = _make_store(query_results=raw)
+        ss = _ss(store=store)
+        result = await ss.aquery("q", include_embeddings=True)
+        assert result.hits[0].embeddings == embed_vec
+
+
+# ---------------------------------------------------------------------------
+# TestBatchOperations
+# ---------------------------------------------------------------------------
+
+
+class TestBatchOperations:
+    def test_run_batch_all_succeed(self) -> None:
+        """run_batch processes every input and collects SearchResponse objects."""
+        store = _make_store(query_results=_sample_raw_hits())
+        ss = _ss(store=store)
+        batch_result = ss.run_batch(["query one", "query two", "query three"])
+        assert len(batch_result.results) == 3
+        assert len(batch_result.failed) == 0
+        assert all(isinstance(r, SearchResponse) for r in batch_result.results)
+
+    def test_run_batch_partial_failure(self) -> None:
+        """When store.query raises for one item, that item lands in failed;
+        the rest still succeed."""
+        call_count = 0
+
+        def _selective_query(**kwargs: Any) -> list[dict]:
+            nonlocal call_count
+            call_count += 1
+            if call_count == 2:
+                raise RuntimeError("store error")
+            return _sample_raw_hits()
+
+        store = _make_store(query_results=[])
+        store.query.side_effect = _selective_query
+        ss = _ss(store=store)
+        batch_result = ss.run_batch(["q1", "q2", "q3"])
+        assert len(batch_result.results) == 2
+        assert len(batch_result.failed) == 1
+        assert batch_result.failed[0]["error"] == "store error"
+
+    def test_run_batch_empty_returns_empty(self) -> None:
+        """run_batch with an empty list returns an empty BatchResult."""
+        ss = _ss()
+        batch_result = ss.run_batch([])
+        assert batch_result.results == []
+        assert batch_result.failed == []
+
