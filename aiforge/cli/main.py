@@ -1,0 +1,166 @@
+"""
+AIForge CLI entry point.
+
+Commands:
+    aiforge init        — scaffold aiforge.yaml + .env.example
+    aiforge serve       — start FastAPI server
+    aiforge playground  — start Streamlit UI
+    aiforge migrate     — migrate / inspect vector store collections
+"""
+
+from __future__ import annotations
+
+import shutil
+from pathlib import Path
+from typing import Optional
+
+import typer
+from rich.console import Console
+from rich.table import Table
+
+app = typer.Typer(
+    name="aiforge",
+    help="AIForge — plug-and-play AI toolkit",
+    add_completion=False,
+)
+console = Console()
+
+
+@app.command()
+def init(
+    force: bool = typer.Option(
+        False, "--force", "-f", help="Overwrite existing config files."
+    ),
+) -> None:
+    """Scaffold aiforge.yaml + .env.example in the current directory."""
+    _copy_template("aiforge.yaml.example", "aiforge.yaml", force=force)
+    _copy_template(".env.example", ".env", force=force)
+    console.print(
+        "[green]✓[/green] Config files created. "
+        "Edit [bold]aiforge.yaml[/bold] and [bold].env[/bold] to get started."
+    )
+
+
+@app.command()
+def serve(
+    host: str = typer.Option("0.0.0.0", help="Bind host."),  # noqa: S104
+    port: int = typer.Option(8000, help="Bind port."),
+    reload: bool = typer.Option(False, help="Enable hot-reload (dev mode)."),
+) -> None:
+    """Start the FastAPI REST API server."""
+    try:
+        import uvicorn
+    except ImportError:
+        console.print(
+            "[red]uvicorn not installed.[/red] Run: pip install \"aiforge[server]\""
+        )
+        raise typer.Exit(1) from None
+
+    console.print(f"[cyan]Starting AIForge API server on http://{host}:{port}[/cyan]")
+    console.print("[dim]Swagger docs: http://{}:{}/docs[/dim]".format(host, port))
+    uvicorn.run(
+        "aiforge.server.app:app",
+        host=host,
+        port=port,
+        reload=reload,
+    )
+
+
+@app.command()
+def playground(
+    port: int = typer.Option(8501, help="Streamlit port."),
+) -> None:
+    """Start the Streamlit interactive playground."""
+    import subprocess
+    import sys
+
+    try:
+        import streamlit  # noqa: F401
+    except ImportError:
+        console.print(
+            "[red]Streamlit not installed.[/red] Run: pip install \"aiforge[playground]\""
+        )
+        raise typer.Exit(1) from None
+
+    playground_path = Path(__file__).parent.parent / "playground" / "app.py"
+    console.print(f"[cyan]Starting AIForge Playground on http://localhost:{port}[/cyan]")
+    subprocess.run(  # noqa: S603
+        [
+            sys.executable,
+            "-m",
+            "streamlit",
+            "run",
+            str(playground_path),
+            "--server.port",
+            str(port),
+        ],
+        check=False,
+    )
+
+
+@app.command()
+def migrate(
+    collection: Optional[str] = typer.Option(
+        None, "--collection", "-c", help="Specific collection to inspect."
+    ),
+    all: bool = typer.Option(False, "--all", "-a", help="List all collections."),
+    status: bool = typer.Option(False, "--status", "-s", help="Show collection stats."),
+    delete: Optional[str] = typer.Option(
+        None, "--delete", "-d", help="Delete a named collection."
+    ),
+) -> None:
+    """Inspect or manage vector store collections."""
+    from aiforge.core.vectorstore import ChromaVectorStore
+    from aiforge.infra.config import get_settings
+
+    settings = get_settings()
+    store = ChromaVectorStore(persist_dir=settings.CHROMA_PERSIST_DIR)
+
+    if delete:
+        if typer.confirm(f"Delete collection '{delete}'? This cannot be undone."):
+            store.delete_collection(delete)
+            console.print(f"[green]✓[/green] Deleted collection '{delete}'.")
+        return
+
+    if all or status:
+        collections = store.list_collections()
+        if not collections:
+            console.print("[yellow]No collections found.[/yellow]")
+            return
+
+        table = Table(title="ChromaDB Collections", show_header=True)
+        table.add_column("Name", style="cyan")
+        table.add_column("Chunks", justify="right")
+
+        for cname in collections:
+            if collection and cname != collection:
+                continue
+            try:
+                stats = store.collection_stats(cname)
+                table.add_row(cname, str(stats.get("chunks", "?")))
+            except Exception:  # noqa: BLE001
+                table.add_row(cname, "[red]error[/red]")
+
+        console.print(table)
+
+
+def _copy_template(src_name: str, dest_name: str, force: bool) -> None:
+    """Copy a template file from the package root to cwd."""
+    # Template lives next to pyproject.toml (package root)
+    pkg_root = Path(__file__).parent.parent.parent
+    src = pkg_root / src_name
+    dest = Path.cwd() / dest_name
+
+    if dest.exists() and not force:
+        console.print(f"[yellow]Skipping[/yellow] {dest_name} (already exists — use --force to overwrite)")
+        return
+
+    if src.exists():
+        shutil.copy2(src, dest)
+        console.print(f"[green]✓[/green] Created {dest_name}")
+    else:
+        console.print(f"[yellow]Template {src_name!r} not found in package root.[/yellow]")
+
+
+if __name__ == "__main__":
+    app()
