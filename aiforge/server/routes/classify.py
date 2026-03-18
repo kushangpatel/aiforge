@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter
-from pydantic import BaseModel, field_validator
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel, field_validator, model_validator
 
 router = APIRouter(prefix="/classify", tags=["classify"])
 
@@ -32,6 +32,18 @@ class ClassifyRequest(BaseModel):
             raise ValueError(f"labels must have at most {_LABELS_MAX} entries")
         return v
 
+    @model_validator(mode="after")
+    def _validate_example_labels(self) -> "ClassifyRequest":
+        """Ensure every example label exists in the provided taxonomy (I5 / I6)."""
+        if self.labels and self.examples:
+            label_set = set(self.labels)
+            bad = [e.label for e in self.examples if e.label not in label_set]
+            if bad:
+                raise ValueError(
+                    f"Example labels not in taxonomy: {sorted(set(bad))}"
+                )
+        return self
+
 
 class _LabelScoreOut(BaseModel):
     label: str
@@ -55,12 +67,15 @@ async def run_classify(body: ClassifyRequest) -> Any:
     from aiforge.modules.classify.schemas import ClassifyExample
 
     examples = [ClassifyExample(text=e.text, label=e.label) for e in body.examples]
-    c = Classifier(
-        labels=body.labels,
-        examples=examples or None,
-        multi_label=body.multi_label,
-    )
-    result = await c.aclassify(body.text)
+    try:
+        c = Classifier(
+            labels=body.labels,
+            examples=examples or None,
+            multi_label=body.multi_label,
+        )
+        result = await c.aclassify(body.text)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
     return ClassifyResponse(
         label=result.label,
         scores=[_LabelScoreOut(**s.model_dump()) for s in result.scores],

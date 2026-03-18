@@ -21,12 +21,16 @@ def _clf(
     labels: list[str] | None = None,
     examples: list[ClassifyExample] | None = None,
     multi_label: bool = False,
+    temperature: float = 0.0,
+    min_confidence: float = 0.0,
 ) -> Classifier:
     """Instantiate a Classifier bypassing BaseModule provider initialisation."""
     c = object.__new__(Classifier)
     c.labels = labels if labels is not None else list(_LABELS)
     c.examples = examples or []
     c.multi_label = multi_label
+    c.temperature = temperature
+    c.min_confidence = min_confidence
 
     import structlog
     from unittest.mock import MagicMock as MM
@@ -93,6 +97,19 @@ class TestClassifierConstructor:
         c = Classifier(labels=["a", "b"], multi_label=True)
         assert c.multi_label is True
 
+    def test_invalid_temperature_raises(self) -> None:
+        with pytest.raises(ValueError, match="temperature"):
+            Classifier(labels=["a"], temperature=3.0)
+
+    def test_invalid_min_confidence_raises(self) -> None:
+        with pytest.raises(ValueError, match="min_confidence"):
+            Classifier(labels=["a"], min_confidence=1.5)
+
+    def test_valid_temperature_and_min_confidence(self) -> None:
+        c = Classifier(labels=["a", "b"], temperature=0.7, min_confidence=0.5)
+        assert c.temperature == pytest.approx(0.7)
+        assert c.min_confidence == pytest.approx(0.5)
+
 
 # ---------------------------------------------------------------------------
 # _extract_json helper
@@ -115,6 +132,11 @@ class TestExtractJson:
         raw = '   {"label": "neutral"}   '
         assert _extract_json(raw) == '{"label": "neutral"}'
 
+    def test_empty_fence_returns_empty_string(self) -> None:
+        """Empty fence ```\n``` should not raise (M7)."""
+        result = _extract_json("```\n```")
+        assert result == ""
+
 
 # ---------------------------------------------------------------------------
 # Prompt formatting helpers
@@ -131,6 +153,18 @@ class TestPromptHelpers:
         result = _fmt_examples(exs)
         assert "hello world" in result
         assert "greet" in result
+
+    def test_fmt_examples_escapes_double_quotes(self) -> None:
+        """M1: quotes in example text must be backslash-escaped."""
+        exs = [ClassifyExample(text='Say "hello" world', label="greet")]
+        result = _fmt_examples(exs)
+        assert '\\"hello\\"' in result
+        assert "greet" in result
+
+    def test_fmt_examples_escapes_backslashes(self) -> None:
+        exs = [ClassifyExample(text="path\\to\\file", label="path")]
+        result = _fmt_examples(exs)
+        assert "path\\\\to\\\\file" in result
 
 
 # ---------------------------------------------------------------------------
@@ -170,6 +204,102 @@ class TestBuildMessages:
         msgs = c._build_messages("test text")
         assert '"labels"' in msgs[1]["content"]
         assert "Examples:" in msgs[1]["content"]
+
+
+# ---------------------------------------------------------------------------
+# Edge case input validation (I1)
+# ---------------------------------------------------------------------------
+
+class TestEdgeCases:
+    def test_classify_empty_text_raises(self) -> None:
+        c = _clf()
+        with pytest.raises(ValueError, match="empty"):
+            c.classify("")
+
+    def test_classify_whitespace_text_raises(self) -> None:
+        c = _clf()
+        with pytest.raises(ValueError, match="empty"):
+            c.classify("   ")
+
+    @pytest.mark.asyncio
+    async def test_aclassify_empty_text_raises(self) -> None:
+        c = _clf()
+        with pytest.raises(ValueError, match="empty"):
+            await c.aclassify("")
+
+
+# ---------------------------------------------------------------------------
+# Confidence clamping (C1)
+# ---------------------------------------------------------------------------
+
+class TestConfidenceClamping:
+    def test_confidence_above_one_clamped(self) -> None:
+        c = _clf()
+        result = c._parse_response('{"label": "positive", "confidence": 1.5, "rationale": ""}')
+        assert result.label == "positive"
+        assert result.scores[0].confidence == pytest.approx(1.0)
+
+    def test_confidence_below_zero_clamped(self) -> None:
+        c = _clf()
+        result = c._parse_response('{"label": "positive", "confidence": -0.3, "rationale": ""}')
+        assert result.label == "positive"
+        assert result.scores[0].confidence == pytest.approx(0.0)
+
+    def test_multi_label_confidence_clamped(self) -> None:
+        c = _clf(multi_label=True)
+        json_str = '{"labels": [{"label": "positive", "confidence": 2.0}], "rationale": ""}'
+        result = c._parse_response(json_str)
+        assert result.scores[0].confidence == pytest.approx(1.0)
+
+
+# ---------------------------------------------------------------------------
+# min_confidence threshold (M6)
+# ---------------------------------------------------------------------------
+
+class TestMinConfidence:
+    def test_low_confidence_returns_none(self) -> None:
+        c = _clf(min_confidence=0.8)
+        result = c._parse_response('{"label": "positive", "confidence": 0.5, "rationale": ""}')
+        assert result.label is None
+
+    def test_exact_threshold_passes(self) -> None:
+        c = _clf(min_confidence=0.8)
+        result = c._parse_response('{"label": "positive", "confidence": 0.8, "rationale": ""}')
+        assert result.label == "positive"
+
+    def test_multi_label_filters_below_threshold(self) -> None:
+        c = _clf(multi_label=True, min_confidence=0.7)
+        json_str = '{"labels": [{"label": "positive", "confidence": 0.9}, {"label": "neutral", "confidence": 0.4}], "rationale": ""}'
+        result = c._parse_response(json_str)
+        assert len(result.scores) == 1
+        assert result.scores[0].label == "positive"
+
+
+# ---------------------------------------------------------------------------
+# Case-insensitive label matching (I6 / I7)
+# ---------------------------------------------------------------------------
+
+class TestCaseInsensitiveLabels:
+    def test_case_mismatch_matched_via_fallback(self) -> None:
+        c = _clf()
+        result = c._parse_response('{"label": "Positive", "confidence": 0.9, "rationale": ""}')
+        assert result.label == "positive"  # case-insensitive fallback
+
+    def test_all_caps_matched(self) -> None:
+        c = _clf()
+        result = c._parse_response('{"label": "NEUTRAL", "confidence": 0.7, "rationale": ""}')
+        assert result.label == "neutral"
+
+    def test_completely_unknown_label_returns_none(self) -> None:
+        c = _clf()
+        result = c._parse_response('{"label": "amazing", "confidence": 0.9, "rationale": ""}')
+        assert result.label is None  # truly unknown — no case-insensitive match
+
+    def test_multi_label_case_mismatch_resolved(self) -> None:
+        c = _clf(multi_label=True)
+        json_str = '{"labels": [{"label": "POSITIVE", "confidence": 0.9}], "rationale": ""}'
+        result = c._parse_response(json_str)
+        assert result.label == "positive"
 
 
 # ---------------------------------------------------------------------------
@@ -320,6 +450,19 @@ class TestPipelineCompatibility:
     def test_to_text_unknown_when_no_label(self) -> None:
         assert ClassifyResponse(label=None).to_text() == "unknown"
 
+    @pytest.mark.asyncio
+    async def test_sync_async_parity(self) -> None:
+        """M10: sync classify() and async aclassify() must produce identical results."""
+        c = _clf()
+        resp_json = '{"label": "positive", "confidence": 0.9, "rationale": "great tone"}'
+        with patch.object(c, "_call_llm", return_value=_fake_llm(resp_json)):
+            sync_result = c.classify("I love this!")
+        with patch.object(c, "_acall_llm", AsyncMock(return_value=_fake_llm(resp_json))):
+            async_result = await c.aclassify("I love this!")
+        assert sync_result.label == async_result.label
+        assert sync_result.rationale == async_result.rationale
+        assert sync_result.scores[0].confidence == async_result.scores[0].confidence
+
 
 # ---------------------------------------------------------------------------
 # run_batch()
@@ -392,6 +535,18 @@ class TestClassifyServerRoute:
         resp = client.post(
             "/classify",
             json={"text": "hello", "labels": [str(i) for i in range(101)]},
+        )
+        assert resp.status_code == 422
+
+    def test_example_label_not_in_taxonomy_returns_422(self, client) -> None:  # type: ignore[no-untyped-def]
+        """I5/I6: example label outside label list must return 422, not 500."""
+        resp = client.post(
+            "/classify",
+            json={
+                "text": "hello",
+                "labels": ["a", "b"],
+                "examples": [{"text": "foo", "label": "c"}],
+            },
         )
         assert resp.status_code == 422
 

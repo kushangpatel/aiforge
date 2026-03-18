@@ -20,10 +20,12 @@ CLASSIFY_USER_ZERO_SHOT = """Classify the following text into exactly one of the
 {labels_list}
 
 Respond ONLY with valid JSON:
-{{"label": "chosen_label", "confidence": 0.0_to_1.0, "rationale": "one short sentence"}}
+{{"label": "<chosen_label>", "confidence": <float 0.0-1.0>, "rationale": "<one sentence>"}}
 
 Text:
-{text}"""
+<text>
+{text}
+</text>"""
 
 CLASSIFY_USER_FEW_SHOT = """Classify the following text into exactly one of these labels:
 {labels_list}
@@ -32,10 +34,12 @@ Examples:
 {examples_block}
 
 Respond ONLY with valid JSON:
-{{"label": "chosen_label", "confidence": 0.0_to_1.0, "rationale": "one short sentence"}}
+{{"label": "<chosen_label>", "confidence": <float 0.0-1.0>, "rationale": "<one sentence>"}}
 
 Text:
-{text}"""
+<text>
+{text}
+</text>"""
 
 # ---------------------------------------------------------------------------
 # Multi-label templates
@@ -45,10 +49,12 @@ CLASSIFY_USER_MULTI_ZERO_SHOT = """Classify the following text. Assign ALL appli
 {labels_list}
 
 Respond ONLY with valid JSON (include only labels that genuinely apply; at least one):
-{{"labels": [{{"label": "...", "confidence": 0.0_to_1.0}}, ...], "rationale": "one short sentence"}}
+{{"labels": [{{"label": "<label>", "confidence": <float 0.0-1.0>}}, ...], "rationale": "<one sentence>"}}
 
 Text:
-{text}"""
+<text>
+{text}
+</text>"""
 
 CLASSIFY_USER_MULTI_FEW_SHOT = """Classify the following text. Assign ALL applicable labels from:
 {labels_list}
@@ -57,7 +63,9 @@ Examples:
 {examples_block}
 
 Respond ONLY with valid JSON (include only labels that genuinely apply; at least one):
-{{"labels": [{{"label": "...", "confidence": 0.0_to_1.0}}, ...], "rationale": "one short sentence"}}
+{{"labels": [{{"label": "<label>", "confidence": <float 0.0-1.0>}}, ...], "rationale": "<one sentence>"}}
 
 Text:
-{text}"""
+<text>
+{text}
+</text>"""

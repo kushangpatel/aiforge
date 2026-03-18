@@ -68,10 +68,15 @@ def _fmt_labels(labels: list[str]) -> str:
 
 
 def _fmt_examples(examples: list[ClassifyExample]) -> str:
-    """Format few-shot examples as a readable block for prompt insertion."""
+    """Format few-shot examples as a readable block for prompt insertion.
+
+    Escapes backslashes and double-quotes in example text so the prompt
+    structure is not corrupted by user-supplied content (M1 / C2).
+    """
     lines = []
     for ex in examples:
-        lines.append(f'  Text: "{ex.text}"\n  Label: {ex.label}')
+        safe_text = ex.text.replace("\\", "\\\\").replace('"', '\\"')
+        lines.append(f'  Text: "{safe_text}"\n  Label: {ex.label}')
     return "\n\n".join(lines)
 
 
@@ -97,6 +102,8 @@ class Classifier(BaseModule):
         labels: list[str],
         examples: list[ClassifyExample] | None = None,
         multi_label: bool = False,
+        temperature: float = 0.0,
+        min_confidence: float = 0.0,
         **kwargs: Any,
     ) -> None:
         super().__init__(**kwargs)
@@ -104,6 +111,10 @@ class Classifier(BaseModule):
             raise ValueError("labels must be non-empty")
         if len(labels) > _LABELS_MAX:
             raise ValueError(f"labels must have at most {_LABELS_MAX} entries")
+        if not 0.0 <= temperature <= 2.0:
+            raise ValueError("temperature must be in [0.0, 2.0]")
+        if not 0.0 <= min_confidence <= 1.0:
+            raise ValueError("min_confidence must be in [0.0, 1.0]")
         # Preserve order, remove duplicates
         deduped = list(dict.fromkeys(labels))
         if len(deduped) != len(labels):
@@ -115,6 +126,8 @@ class Classifier(BaseModule):
         self.labels: list[str] = deduped
         self.examples: list[ClassifyExample] = examples or []
         self.multi_label: bool = multi_label
+        self.temperature: float = temperature
+        self.min_confidence: float = min_confidence
         # Validate that all examples reference known labels
         label_set = set(self.labels)
         bad = [ex.label for ex in self.examples if ex.label not in label_set]
@@ -127,8 +140,10 @@ class Classifier(BaseModule):
 
     def classify(self, text: str) -> ClassifyResponse:
         """Classify *text* synchronously and return a :class:`ClassifyResponse`."""
+        if not text or not text.strip():
+            raise ValueError("text must not be empty or whitespace-only")
         t0 = time.monotonic()
-        llm = self._call_llm(self._build_messages(text), temperature=0.0)
+        llm = self._call_llm(self._build_messages(text), temperature=self.temperature)
         result = self._parse_response(llm.text)
         from aiforge.core.pricing import calculate_cost
         cost = calculate_cost(llm.model, llm.input_tokens, llm.output_tokens)
@@ -145,8 +160,10 @@ class Classifier(BaseModule):
 
     async def aclassify(self, text: str) -> ClassifyResponse:
         """Async version of :meth:`classify`."""
+        if not text or not text.strip():
+            raise ValueError("text must not be empty or whitespace-only")
         t0 = time.monotonic()
-        llm = await self._acall_llm(self._build_messages(text), temperature=0.0)
+        llm = await self._acall_llm(self._build_messages(text), temperature=self.temperature)
         result = self._parse_response(llm.text)
         from aiforge.core.pricing import calculate_cost
         cost = calculate_cost(llm.model, llm.input_tokens, llm.output_tokens)
@@ -208,26 +225,44 @@ class Classifier(BaseModule):
     def _parse_response(self, llm_text: str) -> ClassifyResponse:
         """Parse LLM JSON output into a :class:`ClassifyResponse`.
 
-        Gracefully degrades on malformed output: returns
+        Gracefully degrades on malformed output — returns
         ``ClassifyResponse(label=None)`` rather than raising.
+
+        Confidence values are clamped to ``[0.0, 1.0]`` (C1).
+        Labels are matched case-insensitively as a fallback (I6).
+        Results below ``self.min_confidence`` return ``label=None`` (M6).
         """
         try:
             data = json.loads(_extract_json(llm_text))
         except json.JSONDecodeError:
-            self.logger.warning("classify.json_parse_failed", raw=llm_text[:200])
+            self.logger.warning("classify.json_parse_failed", raw_head=llm_text[:200])
+            self.logger.debug("classify.json_parse_failed_full", raw=llm_text)
             return ClassifyResponse(label=None, scores=[], rationale="")
 
         rationale: str = str(data.get("rationale", ""))
         label_set = set(self.labels)
+
+        def _resolve(raw: str) -> str | None:
+            """Exact match, then case-insensitive fallback."""
+            if raw in label_set:
+                return raw
+            matched = next((lbl for lbl in self.labels if lbl.lower() == raw.lower()), None)
+            if matched:
+                self.logger.warning(
+                    "classify.label_case_mismatch", returned=raw, matched=matched
+                )
+            return matched
 
         if self.multi_label:
             raw_entries: list[dict] = data.get("labels", [])
             scores: list[LabelScore] = []
             for entry in raw_entries:
                 lbl = str(entry.get("label", ""))
-                conf = float(entry.get("confidence", 1.0))
-                if lbl in label_set:
-                    scores.append(LabelScore(label=lbl, confidence=conf))
+                conf = max(0.0, min(1.0, float(entry.get("confidence", 1.0))))
+                resolved = _resolve(lbl)
+                if resolved is not None:
+                    if conf >= self.min_confidence:
+                        scores.append(LabelScore(label=resolved, confidence=conf))
                 else:
                     self.logger.warning("classify.unknown_label_ignored", label=lbl)
             scores.sort(key=lambda s: s.confidence, reverse=True)
@@ -235,16 +270,25 @@ class Classifier(BaseModule):
             return ClassifyResponse(label=top, scores=scores, rationale=rationale)
         else:
             raw_label = str(data.get("label", ""))
-            confidence = float(data.get("confidence", 1.0))
-            if raw_label not in label_set:
+            confidence = max(0.0, min(1.0, float(data.get("confidence", 1.0))))
+            resolved = _resolve(raw_label)
+            if resolved is None:
                 self.logger.warning(
                     "classify.label_not_in_taxonomy",
                     label=raw_label,
                     taxonomy=self.labels,
                 )
                 return ClassifyResponse(label=None, scores=[], rationale=rationale)
+            if confidence < self.min_confidence:
+                self.logger.warning(
+                    "classify.confidence_below_threshold",
+                    label=resolved,
+                    confidence=confidence,
+                    min_confidence=self.min_confidence,
+                )
+                return ClassifyResponse(label=None, scores=[], rationale=rationale)
             return ClassifyResponse(
-                label=raw_label,
-                scores=[LabelScore(label=raw_label, confidence=confidence)],
+                label=resolved,
+                scores=[LabelScore(label=resolved, confidence=confidence)],
                 rationale=rationale,
             )

@@ -44,13 +44,32 @@ def render() -> None:
     from aiforge.modules.classify.schemas import ClassifyExample
 
     examples: list[ClassifyExample] = []
+    malformed_lines = 0
+    dropped_labels = 0
     if show_examples and examples_raw.strip():
         for line in examples_raw.splitlines():
+            if not line.strip():
+                continue
             parts = line.split("|", 1)
-            if len(parts) == 2:
-                ex_text, ex_label = parts[0].strip(), parts[1].strip()
-                if ex_label in labels:
-                    examples.append(ClassifyExample(text=ex_text, label=ex_label))
+            if len(parts) != 2:
+                malformed_lines += 1
+                continue
+            ex_text, ex_label = parts[0].strip(), parts[1].strip()
+            if not ex_text or not ex_label:
+                malformed_lines += 1
+                continue
+            if ex_label in labels:
+                examples.append(ClassifyExample(text=ex_text, label=ex_label))
+            else:
+                dropped_labels += 1
+    if malformed_lines:
+        st.warning(
+            f"{malformed_lines} example line(s) skipped — use format: `text | label`"
+        )
+    if dropped_labels:
+        st.warning(
+            f"{dropped_labels} example(s) ignored — label not found in taxonomy"
+        )
 
     with st.spinner("Classifying..."):
         try:
