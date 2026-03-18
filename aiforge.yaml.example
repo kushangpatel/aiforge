@@ -1,0 +1,125 @@
+# aiforge.yaml.example
+# Copy this file to aiforge.yaml and fill in your values.
+# Environment variables (AIFORGE_*) and .env always override these settings.
+# Keys here do NOT need the AIFORGE_ prefix — it is added automatically.
+
+# ---------------------------------------------------------------------------
+# Provider & model
+# ---------------------------------------------------------------------------
+
+# LLM provider to use. Options: openai | anthropic | ollama | azure
+provider: openai
+
+# Default LLM model name for the chosen provider.
+# openai examples   : gpt-4o, gpt-4o-mini, gpt-4-turbo, o1, o3-mini
+# anthropic examples: claude-opus-4, claude-sonnet-4, claude-3-5-haiku-20241022
+# ollama examples   : llama3.3, mistral-nemo, phi-4, gemma2, qwen2.5
+# azure             : your deployment name (e.g. my-gpt4o)
+model: gpt-4o
+
+# Sampling temperature (0.0 – 2.0). Lower = more deterministic.
+temperature: 0.0
+
+# Hard token cap per LLM response. Omit (or set to null) to use model default.
+# max_tokens: 2048
+
+# Embedding model compatible with the chosen provider.
+# openai    : text-embedding-3-small | text-embedding-3-large | text-embedding-ada-002
+# anthropic : voyage-3 | voyage-3-lite | voyage-large-2 | voyage-code-2
+# ollama    : nomic-embed-text | mxbai-embed-large | all-minilm
+# azure     : text-embedding-3-small | text-embedding-3-large | text-embedding-ada-002
+embedding_model: text-embedding-3-small
+
+# ---------------------------------------------------------------------------
+# API keys  (prefer .env or shell env vars for secrets)
+# ---------------------------------------------------------------------------
+
+# openai_api_key: sk-...
+# anthropic_api_key: sk-ant-...
+# voyage_api_key: pa-...          # Required when provider=anthropic for embeddings
+
+# Azure OpenAI
+# azure_openai_api_key: ...
+# azure_openai_endpoint: https://<resource>.openai.azure.com/
+# azure_openai_deployment: my-gpt4o
+# azure_openai_api_version: "2024-02-01"
+
+# ---------------------------------------------------------------------------
+# Ollama  (only relevant when provider=ollama)
+# ---------------------------------------------------------------------------
+
+# ollama_base_url: http://localhost:11434
+
+# ---------------------------------------------------------------------------
+# Vector store (ChromaDB)
+# ---------------------------------------------------------------------------
+
+# Local directory where ChromaDB persists its data.
+chroma_persist_dir: ./aiforge_data
+
+# ---------------------------------------------------------------------------
+# Rate limiting
+# ---------------------------------------------------------------------------
+
+# Requests per minute cap across all LLM calls.
+rate_limit_rpm: 500
+
+# Tokens per minute cap across all LLM calls.
+rate_limit_tpm: 150000
+
+# ---------------------------------------------------------------------------
+# Cost tracking
+# ---------------------------------------------------------------------------
+
+# Set to false to disable cost tracking entirely.
+cost_tracking_enabled: true
+
+# Log a warning when a single LLM call exceeds this USD amount.
+cost_warn_threshold: 1.0
+
+# ---------------------------------------------------------------------------
+# Tracing / observability
+# ---------------------------------------------------------------------------
+
+# Set to true to enable trace export.
+tracing_enabled: false
+
+# Tracing backend. Options: langsmith | otel | console
+tracing_backend: langsmith
+
+# LangSmith
+# langsmith_api_key: ls__...
+# langsmith_project: aiforge
+
+# OpenTelemetry OTLP endpoint (only used when tracing_backend=otel)
+# otel_exporter_endpoint: http://localhost:4317
+
+# ---------------------------------------------------------------------------
+# Logging
+# ---------------------------------------------------------------------------
+
+# Log verbosity. Options: DEBUG | INFO | WARNING | ERROR | CRITICAL
+log_level: INFO
+
+# Log output format. Options: json | console
+log_format: json
+
+# ---------------------------------------------------------------------------
+# REST API server  (aiforge serve)
+# ---------------------------------------------------------------------------
+
+# Bearer token required in Authorization header. Leave blank to disable auth.
+# api_key: my-secret-token
+
+# Interface to bind the server to.
+api_host: "0.0.0.0"
+
+# Port the FastAPI server listens on.
+api_port: 8000
+
+# ---------------------------------------------------------------------------
+# Playground UI  (aiforge playground)
+# ---------------------------------------------------------------------------
+
+# Port the Streamlit playground listens on.
+playground_port: 8501
