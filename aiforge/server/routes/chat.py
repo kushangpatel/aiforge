@@ -108,8 +108,9 @@ async def reset_chat(req: ResetRequest) -> ResetResponseOut:
     """Reset a conversation (clear history, keep system prompt)."""
     if req.conversation_id not in _conversations:
         raise HTTPException(status_code=404, detail="Conversation not found")
-    agent = _conversations[req.conversation_id]
+    agent = _conversations.pop(req.conversation_id)
     agent.reset()
+    _conversations[agent.conversation_id] = agent
     return ResetResponseOut(
         status="reset",
         conversation_id=agent.conversation_id,

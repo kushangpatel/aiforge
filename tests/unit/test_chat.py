@@ -41,11 +41,13 @@ def _agent(
     agent.max_tool_iterations = max_tool_iterations
     agent.conversation_id = "test-conv-id"
 
+    base_prompt = system_prompt or DEFAULT_SYSTEM_PROMPT
     if tools:
         tool_descs = "\n".join(f"- {t.name}: {t.description}" for t in tools)
-        agent.system_prompt = TOOL_USE_SYSTEM.format(tool_descriptions=tool_descs)
+        tool_instructions = TOOL_USE_SYSTEM.format(tool_descriptions=tool_descs)
+        agent.system_prompt = f"{base_prompt}\n\n{tool_instructions}"
     else:
-        agent.system_prompt = system_prompt or DEFAULT_SYSTEM_PROMPT
+        agent.system_prompt = base_prompt
 
     agent._messages = [{"role": "system", "content": agent.system_prompt}]
 
@@ -757,6 +759,11 @@ class TestRoutes:
 
         mock_agent = MagicMock()
         mock_agent.conversation_id = "existing-id"
+
+        def _do_reset():
+            mock_agent.conversation_id = "new-id-after-reset"
+
+        mock_agent.reset = MagicMock(side_effect=_do_reset)
         _conversations["existing-id"] = mock_agent
 
         client = TestClient(app)
@@ -766,6 +773,9 @@ class TestRoutes:
         )
         assert resp.status_code == 200
         mock_agent.reset.assert_called_once()
+        # Old key must be removed, new key must be registered
+        assert "existing-id" not in _conversations
+        assert "new-id-after-reset" in _conversations
 
     def test_conversations_list(self) -> None:
         from fastapi.testclient import TestClient
@@ -859,3 +869,97 @@ class TestGetBuiltinTools:
         calc = next(t for t in tools if t.name == "calculator")
         result = calc.invoke({"expression": "3 + 4"})
         assert result == "7"
+
+
+# ===========================================================================
+# Bug regression tests
+# ===========================================================================
+
+
+class TestCustomPromptWithTools:
+    """Custom system prompt must be preserved when tools are also provided."""
+
+    def test_custom_prompt_combined_with_tool_instructions(self) -> None:
+        tool = _mock_tool("calculator", "Math tool")
+        agent = _agent(system_prompt="You are a pirate.", tools=[tool])
+        # Both the custom prompt and the tool descriptions must be present
+        assert "You are a pirate." in agent.system_prompt
+        assert "calculator" in agent.system_prompt
+        assert "Math tool" in agent.system_prompt
+
+    def test_default_prompt_combined_with_tool_instructions(self) -> None:
+        tool = _mock_tool("calculator", "Math tool")
+        agent = _agent(tools=[tool])
+        # Default prompt + tool instructions
+        assert DEFAULT_SYSTEM_PROMPT in agent.system_prompt
+        assert "calculator" in agent.system_prompt
+
+
+class TestHistoryDoesNotLeakToolIntermediates:
+    """Graph's internal tool messages must not pollute conversation history."""
+
+    def test_history_clean_after_tool_use(self) -> None:
+        """After a tool-using turn, _messages should only contain
+        system, user, assistant — no intermediate tool messages."""
+        tool = _mock_tool("calculator", "Math tool")
+        agent = _agent(tools=[tool])
+
+        calls = iter([
+            _fake_llm('{"tool": "calculator", "input": {"expression": "2+2"}}'),
+            _fake_llm("The answer is 4."),
+        ])
+        agent._call_llm = MagicMock(side_effect=lambda m, **kw: next(calls))
+        agent.chat("What is 2+2?")
+
+        roles = [m["role"] for m in agent._messages]
+        # Should be: system, user, assistant — no synthetic tool messages
+        assert roles == ["system", "user", "assistant"]
+        # No "[Tool calls:" markers in the messages
+        for msg in agent._messages:
+            assert not msg["content"].startswith("[Tool calls:")
+            assert not msg["content"].startswith("Tool results:")
+
+    def test_none_mode_preserves_real_user_message_after_tools(self) -> None:
+        """In 'none' mode with tools, the user's actual message must be kept,
+        not a synthetic 'Tool results:' message."""
+        tool = _mock_tool("calc", "Math")
+        agent = _agent(tools=[tool], memory="none")
+
+        calls = iter([
+            _fake_llm('{"tool": "calc", "input": {}}'),
+            _fake_llm("Done."),
+        ])
+        agent._call_llm = MagicMock(side_effect=lambda m, **kw: next(calls))
+        agent.chat("Please calculate something")
+
+        assert len(agent._messages) == 3
+        assert agent._messages[1]["role"] == "user"
+        assert agent._messages[1]["content"] == "Please calculate something"
+        assert agent._messages[2]["role"] == "assistant"
+        assert agent._messages[2]["content"] == "Done."
+
+    def test_buffer_mode_not_inflated_by_tool_messages(self) -> None:
+        """Tool intermediate messages should not consume memory_k slots."""
+        tool = _mock_tool("calc", "Math")
+        agent = _agent(tools=[tool], memory="buffer", memory_k=4)
+
+        calls = iter([
+            _fake_llm('{"tool": "calc", "input": {}}'),
+            _fake_llm("r1"),
+            _fake_llm('{"tool": "calc", "input": {}}'),
+            _fake_llm("r2"),
+            _fake_llm('{"tool": "calc", "input": {}}'),
+            _fake_llm("r3"),
+        ])
+        agent._call_llm = MagicMock(side_effect=lambda m, **kw: next(calls))
+
+        agent.chat("q1")
+        agent.chat("q2")
+        agent.chat("q3")
+
+        # With K=4, after 3 turns (6 user/assistant msgs + 1 system = 7 total)
+        # buffer trims to system + last 4 = 5 messages
+        assert len(agent._messages) <= 5
+        # All messages should be real roles (no tool intermediates)
+        for msg in agent._messages:
+            assert msg["role"] in ("system", "user", "assistant")

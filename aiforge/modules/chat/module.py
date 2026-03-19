@@ -81,15 +81,18 @@ class ChatAgent(BaseModule):
         self.conversation_id: str = uuid.uuid4().hex[:16]
 
         # Build the effective system prompt
+        base_prompt = system_prompt or DEFAULT_SYSTEM_PROMPT
         if tools:
             tool_descs = "\n".join(
                 f"- {t.name}: {t.description}" for t in self.tools
             )
-            self.system_prompt: str = TOOL_USE_SYSTEM.format(
+            tool_instructions = TOOL_USE_SYSTEM.format(
                 tool_descriptions=tool_descs,
             )
+            # Combine the user's custom prompt with tool-use instructions
+            self.system_prompt: str = f"{base_prompt}\n\n{tool_instructions}"
         else:
-            self.system_prompt = system_prompt or DEFAULT_SYSTEM_PROMPT
+            self.system_prompt = base_prompt
 
         # Conversation history — list of ``{"role": ..., "content": ...}`` dicts
         self._messages: list[dict[str, str]] = [
@@ -133,8 +136,11 @@ class ChatAgent(BaseModule):
         # The last message should be the assistant's response
         response_text = self._extract_response(final)
 
-        # Update our conversation history from the graph's final messages
-        self._messages = final["messages"]
+        # Append only the final assistant reply to our clean history.
+        # Do NOT overwrite self._messages with graph's internal messages
+        # (which include intermediate tool-call markers and synthetic
+        # "Tool results" entries that would pollute multi-turn context).
+        self._messages.append({"role": "assistant", "content": response_text})
 
         # Memory management
         self._manage_memory()
@@ -159,7 +165,7 @@ class ChatAgent(BaseModule):
         final = await graph.ainvoke(self._initial_state(message))
 
         response_text = self._extract_response(final)
-        self._messages = final["messages"]
+        self._messages.append({"role": "assistant", "content": response_text})
         self._manage_memory()
 
         return self._build_response(final, response_text, t0)
