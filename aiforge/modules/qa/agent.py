@@ -136,17 +136,24 @@ def build_qa_graph(
         result = llm_fn(prompt)
         raw = result.text.strip()
 
+        # Strip leading markdown bullets / dashes that LLMs often add.
+        cleaned = raw.lstrip("-*• ").strip()
+
         updates: dict[str, Any] = {
             "total_input_tokens": result.input_tokens,
             "total_output_tokens": result.output_tokens,
             "model": result.model,
         }
 
-        if raw.upper().startswith("SUFFICIENT"):
-            try:
-                conf = float(raw.split(":")[1].strip())
-                conf = max(0.0, min(1.0, conf))
-            except (IndexError, ValueError):
+        if cleaned.upper().startswith("SUFFICIENT"):
+            # Extract confidence score — tolerate brackets, text, etc.
+            after_colon = cleaned.split(":", 1)[1] if ":" in cleaned else ""
+            import re
+
+            match = re.search(r"(-?\d+\.?\d*)", after_colon)
+            if match:
+                conf = max(0.0, min(1.0, float(match.group(1))))
+            else:
                 conf = 0.7
             updates["confidence"] = conf
             updates["decision"] = "sufficient"
@@ -155,8 +162,10 @@ def build_qa_graph(
             ]
         else:
             updates["decision"] = "insufficient"
-            if ":" in raw:
-                updates["current_query"] = raw.split(":", 1)[1].strip()
+            if ":" in cleaned:
+                refined = cleaned.split(":", 1)[1].strip().strip('"\'')
+                if refined:
+                    updates["current_query"] = refined
             updates["trace"] = [
                 {"step": "reason", "result": raw, "decision": "insufficient"}
             ]

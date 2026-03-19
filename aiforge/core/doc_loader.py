@@ -126,7 +126,8 @@ class DocLoader:
             if path.is_dir():
                 docs = self._load_directory(path, stats)
             elif path.is_file():
-                docs = self._load_single_file(path, stats)
+                # User explicitly chose this file — skip extension filter.
+                docs = self._load_single_file(path, stats, apply_extension_filter=False)
             else:
                 raise FileNotFoundError(f"Source not found: {source!r}")
 
@@ -152,13 +153,23 @@ class DocLoader:
             docs.extend(file_docs)
         return docs
 
-    def _load_single_file(self, path: Path, stats: IngestStats) -> list[Document]:
+    def _load_single_file(
+        self,
+        path: Path,
+        stats: IngestStats,
+        *,
+        apply_extension_filter: bool = True,
+    ) -> list[Document]:
         ext = path.suffix.lower()
 
         if ext in _IGNORE_EXTENSIONS:
             return []
 
-        if self._allowed_extensions is not None and ext not in self._allowed_extensions:
+        if (
+            apply_extension_filter
+            and self._allowed_extensions is not None
+            and ext not in self._allowed_extensions
+        ):
             stats.skipped_files.append(str(path))
             return []
 

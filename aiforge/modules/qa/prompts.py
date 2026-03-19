@@ -29,8 +29,10 @@ Evaluate:
 3. Would a refined search likely find better information?
 
 Respond with exactly one of:
-- SUFFICIENT: [confidence score 0.0-1.0]
-- INSUFFICIENT: [suggested refined query]"""
+SUFFICIENT: <confidence score between 0.0 and 1.0>
+INSUFFICIENT: <suggested refined query>
+
+Do NOT add bullet points, brackets, or extra formatting around the score or query."""
 
 RESPOND_PROMPT = """\
 Answer the following question using ONLY the provided context.

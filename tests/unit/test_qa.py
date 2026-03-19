@@ -1179,3 +1179,122 @@ class TestDocQAIngestSkippedFiles:
         assert result.files_processed == 1
         # DocLoader puts non-whitelisted files in skipped_files
         assert any("notes.md" in s for s in result.skipped_files)
+
+
+# ===========================================================================
+# Reason-node parsing robustness (LLM formatting edge cases)
+# ===========================================================================
+
+
+class TestReasonNodeMarkdownBullet:
+    """LLM returns '- SUFFICIENT: 0.8' with markdown bullet prefix."""
+
+    def test_bullet_sufficient_parsed(self) -> None:
+        calls = iter(
+            [
+                _fake_llm("factual"),
+                _fake_llm("- SUFFICIENT: 0.8"),
+                _fake_llm("answer"),
+            ]
+        )
+        graph = build_qa_graph(
+            llm_fn=lambda p: next(calls),
+            retrieve_fn=MagicMock(return_value=_sample_hits()),
+        )
+        result = graph.invoke(_initial_state())
+        assert result["decision"] == "sufficient"
+        assert result["confidence"] == pytest.approx(0.8)
+
+    def test_asterisk_bullet_sufficient(self) -> None:
+        calls = iter(
+            [
+                _fake_llm("factual"),
+                _fake_llm("* SUFFICIENT: 0.75"),
+                _fake_llm("answer"),
+            ]
+        )
+        graph = build_qa_graph(
+            llm_fn=lambda p: next(calls),
+            retrieve_fn=MagicMock(return_value=_sample_hits()),
+        )
+        result = graph.invoke(_initial_state())
+        assert result["decision"] == "sufficient"
+        assert result["confidence"] == pytest.approx(0.75)
+
+
+class TestReasonNodeBracketedConfidence:
+    """LLM returns 'SUFFICIENT: [confidence score 0.8]' echoing prompt format."""
+
+    def test_bracketed_score_extracted(self) -> None:
+        calls = iter(
+            [
+                _fake_llm("factual"),
+                _fake_llm("SUFFICIENT: [confidence score 0.85]"),
+                _fake_llm("answer"),
+            ]
+        )
+        graph = build_qa_graph(
+            llm_fn=lambda p: next(calls),
+            retrieve_fn=MagicMock(return_value=_sample_hits()),
+        )
+        result = graph.invoke(_initial_state())
+        assert result["decision"] == "sufficient"
+        assert result["confidence"] == pytest.approx(0.85)
+
+    def test_bullet_and_brackets(self) -> None:
+        """Exact format from the bug report: '- SUFFICIENT: [confidence score 0.8]'."""
+        calls = iter(
+            [
+                _fake_llm("factual"),
+                _fake_llm("- SUFFICIENT: [confidence score 0.8]"),
+                _fake_llm("answer"),
+            ]
+        )
+        graph = build_qa_graph(
+            llm_fn=lambda p: next(calls),
+            retrieve_fn=MagicMock(return_value=_sample_hits()),
+        )
+        result = graph.invoke(_initial_state())
+        assert result["decision"] == "sufficient"
+        assert result["confidence"] == pytest.approx(0.8)
+
+
+class TestReasonNodeInsufficientQuotedQuery:
+    """LLM returns INSUFFICIENT with quoted refined query."""
+
+    def test_quoted_query_stripped(self) -> None:
+        calls = iter(
+            [
+                _fake_llm("factual"),
+                _fake_llm('INSUFFICIENT: "How did Romeo and Juliet meet?"'),
+                _fake_llm("SUFFICIENT: 0.9"),
+                _fake_llm("answer"),
+            ]
+        )
+        retrieve_fn = MagicMock(return_value=_sample_hits())
+        graph = build_qa_graph(
+            llm_fn=lambda p: next(calls),
+            retrieve_fn=retrieve_fn,
+        )
+        result = graph.invoke(_initial_state(max_iterations=3))
+        # The refined query should have quotes stripped
+        second_retrieve = retrieve_fn.call_args_list[1]
+        assert second_retrieve[0][0] == "How did Romeo and Juliet meet?"
+
+    def test_bullet_insufficient_with_query(self) -> None:
+        calls = iter(
+            [
+                _fake_llm("factual"),
+                _fake_llm("- INSUFFICIENT: a better query"),
+                _fake_llm("SUFFICIENT: 0.9"),
+                _fake_llm("answer"),
+            ]
+        )
+        retrieve_fn = MagicMock(return_value=_sample_hits())
+        graph = build_qa_graph(
+            llm_fn=lambda p: next(calls),
+            retrieve_fn=retrieve_fn,
+        )
+        result = graph.invoke(_initial_state(max_iterations=3))
+        second_retrieve = retrieve_fn.call_args_list[1]
+        assert second_retrieve[0][0] == "a better query"
