@@ -55,15 +55,13 @@ def _split_text(text: str, chunk_size: int, overlap: int = _CHUNK_OVERLAP) -> li
         splitter = TextSplitter(chunk_size=chunk_size, chunk_overlap=overlap)
         return splitter.split_text(text, ext=".txt")
     except Exception:  # noqa: BLE001
-        # Simple fallback
+        # Simple fallback — stride must always be >= 1 to avoid infinite loop
+        stride = max(1, chunk_size - overlap)
         chunks: list[str] = []
         start = 0
         while start < len(text):
-            end = start + chunk_size
-            chunks.append(text[start:end])
-            start = end - overlap
-            if start >= len(text):
-                break
+            chunks.append(text[start : start + chunk_size])
+            start += stride
         return chunks or [text]
 
 

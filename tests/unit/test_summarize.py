@@ -692,3 +692,66 @@ class TestSummarizeServerRoute:
             json={"text": "Hello.", "style": "haiku"},
         )
         assert resp.status_code == 422
+
+
+# ---------------------------------------------------------------------------
+# _split_text edge cases
+# ---------------------------------------------------------------------------
+
+
+class TestSplitTextEdgeCases:
+    def test_chunk_size_smaller_than_overlap_no_infinite_loop(self) -> None:
+        """Regression: chunk_size <= overlap must not cause an infinite loop."""
+        text = "a" * 500
+        # Force the fallback path by making the TextSplitter import raise
+        with patch.dict("sys.modules", {"aiforge.core.text_splitter": None}):
+            chunks = _split_text(text, chunk_size=100, overlap=200)
+        assert len(chunks) >= 1
+        # Every character in the text must appear in at least one chunk
+        joined = "".join(chunks)
+        assert len(joined) >= len(text)
+
+    def test_chunk_size_equals_overlap_terminates(self) -> None:
+        """chunk_size == overlap should still produce chunks without looping."""
+        text = "b" * 300
+        with patch.dict("sys.modules", {"aiforge.core.text_splitter": None}):
+            chunks = _split_text(text, chunk_size=100, overlap=100)
+        assert len(chunks) >= 1
+
+    def test_zero_chunk_size_terminates(self) -> None:
+        """chunk_size == 0 should not hang; stride clamps to 1."""
+        text = "c" * 50
+        with patch.dict("sys.modules", {"aiforge.core.text_splitter": None}):
+            chunks = _split_text(text, chunk_size=0, overlap=0)
+        assert len(chunks) >= 1
+
+
+# ---------------------------------------------------------------------------
+# _get_chunk_size
+# ---------------------------------------------------------------------------
+
+
+class TestGetChunkSize:
+    def test_returns_60_percent_of_context_window(self) -> None:
+        s = _sum()
+        with patch("aiforge.core.pricing.get_context_window", return_value=10_000):
+            result = s._get_chunk_size()
+        assert result == 6_000
+
+    def test_small_context_window(self) -> None:
+        s = _sum()
+        with patch("aiforge.core.pricing.get_context_window", return_value=100):
+            result = s._get_chunk_size()
+        assert result == 60
+
+
+# ---------------------------------------------------------------------------
+# _count_tokens — additional edge cases
+# ---------------------------------------------------------------------------
+
+
+class TestCountTokensExtra:
+    def test_unknown_model_empty_text_returns_at_least_one(self) -> None:
+        """Heuristic fallback: max(1, len('') // 4) == 1."""
+        count = _count_tokens("", "nonexistent-model-xyz")
+        assert count >= 1
