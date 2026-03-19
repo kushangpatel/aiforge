@@ -320,8 +320,12 @@ class DocQA(BaseModule):
             :class:`QAResponse` with answer, sources, and confidence.
 
         Raises:
+            ValueError: if *query* is empty or whitespace-only.
             AIForgeError: If the collection contains no documents.
         """
+        if not query or not query.strip():
+            raise ValueError("query must not be empty or whitespace-only")
+
         from aiforge.modules.qa.agent import build_qa_graph
 
         t0 = time.monotonic()
@@ -349,6 +353,9 @@ class DocQA(BaseModule):
         include_trace: bool = False,
     ) -> QAResponse:
         """Async version of :meth:`ask`."""
+        if not query or not query.strip():
+            raise ValueError("query must not be empty or whitespace-only")
+
         from aiforge.modules.qa.agent import build_qa_graph
 
         t0 = time.monotonic()

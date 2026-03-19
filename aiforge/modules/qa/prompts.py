@@ -12,15 +12,6 @@ Question: {query}
 
 Return a single word: the category."""
 
-RETRIEVE_REFINEMENT = """\
-The initial search for "{original_query}" did not return sufficient context. \
-Based on what we found so far:
-
-{current_context}
-
-Generate a refined search query that would find the missing information.
-Return only the refined query text, nothing else."""
-
 REASON_PROMPT = """\
 Given the question and retrieved context, determine if you have \
 enough information to answer confidently.

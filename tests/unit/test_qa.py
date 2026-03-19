@@ -13,7 +13,6 @@ from aiforge.modules.qa.prompts import (
     CLASSIFY_PROMPT,
     REASON_PROMPT,
     RESPOND_PROMPT,
-    RETRIEVE_REFINEMENT,
 )
 from aiforge.modules.qa.schemas import IngestResponse, QAResponse
 
@@ -199,12 +198,6 @@ class TestPrompts:
         result = RESPOND_PROMPT.format(query="test", context="some context")
         assert "test" in result
         assert "some context" in result
-
-    def test_retrieve_refinement_format(self) -> None:
-        result = RETRIEVE_REFINEMENT.format(
-            original_query="auth", current_context="chunks"
-        )
-        assert "auth" in result
 
 
 # ===========================================================================
@@ -1094,3 +1087,95 @@ class TestDocQABatch:
         # run_batch uses arun internally
         result = qa.run_batch(["q1", "q2"])
         assert len(result.results) + len(result.failed) == 2
+
+
+# ===========================================================================
+# Gap-audit: additional edge-case tests (T1–T5)
+# ===========================================================================
+
+
+class TestDocQAIngestFileList:
+    """T1: Ingest a list of file paths."""
+
+    def test_ingest_file_list(self, tmp_path: Any) -> None:
+        f1 = tmp_path / "one.py"
+        f2 = tmp_path / "two.md"
+        f1.write_text("x = 1\n")
+        f2.write_text("# Two\n")
+
+        store = MagicMock()
+        qa = _qa(store=store)
+        qa._call_embedding = MagicMock(return_value=[[0.1] * 384])
+
+        result = qa.ingest([str(f1), str(f2)])
+        assert result.files_processed == 2
+        assert result.chunks_indexed >= 2
+
+
+class TestDocQAIngestInvalidSource:
+    """T2: Invalid source raises FileNotFoundError."""
+
+    def test_ingest_nonexistent_path(self) -> None:
+        qa = _qa()
+        with pytest.raises(FileNotFoundError):
+            qa.ingest("/nonexistent/path/that/does/not/exist")
+
+
+class TestAgentInsufficientNoColon:
+    """T3: INSUFFICIENT without colon — current_query stays unchanged."""
+
+    def test_insufficient_no_colon_reuses_query(self) -> None:
+        calls = iter(
+            [
+                _fake_llm("factual"),  # classify
+                _fake_llm("INSUFFICIENT"),  # reason 1 — no colon, no refined query
+                _fake_llm("SUFFICIENT: 0.6"),  # reason 2
+                _fake_llm("answer"),  # respond
+            ]
+        )
+        retrieve_fn = MagicMock(return_value=_sample_hits())
+        graph = build_qa_graph(
+            llm_fn=lambda p: next(calls), retrieve_fn=retrieve_fn,
+        )
+        result = graph.invoke(_initial_state(query="original q", max_iterations=3))
+        # Second retrieve call should reuse original query (not updated)
+        second_call = retrieve_fn.call_args_list[1]
+        assert second_call[0][0] == "original q"
+        assert result["answer"] == "answer"
+
+
+class TestDocQAAskQueryValidation:
+    """T4: Empty/whitespace query raises ValueError."""
+
+    def test_ask_empty_query(self) -> None:
+        qa = _qa()
+        with pytest.raises(ValueError, match="query must not be empty"):
+            qa.ask("")
+
+    def test_ask_whitespace_query(self) -> None:
+        qa = _qa()
+        with pytest.raises(ValueError, match="query must not be empty"):
+            qa.ask("   ")
+
+    @pytest.mark.asyncio
+    async def test_aask_empty_query(self) -> None:
+        qa = _qa()
+        with pytest.raises(ValueError, match="query must not be empty"):
+            await qa.aask("")
+
+
+class TestDocQAIngestSkippedFiles:
+    """T5: Extension filter causes skipped_files to be populated."""
+
+    def test_extension_filter_populates_skipped_files(self, tmp_path: Any) -> None:
+        (tmp_path / "code.py").write_text("x = 1\n")
+        (tmp_path / "notes.md").write_text("# Notes\n")
+
+        store = MagicMock()
+        qa = _qa(store=store)
+        qa._call_embedding = MagicMock(return_value=[[0.1] * 384])
+
+        result = qa.ingest(str(tmp_path), file_extensions=[".py"])
+        assert result.files_processed == 1
+        # DocLoader puts non-whitelisted files in skipped_files
+        assert any("notes.md" in s for s in result.skipped_files)
