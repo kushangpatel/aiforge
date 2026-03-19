@@ -308,6 +308,8 @@ class TestAgentGraphMultiIteration:
         result = graph.invoke(_initial_state(max_iterations=2))
         assert result["iteration"] == 2
         assert result["answer"] == "Best guess answer."
+        # Fallback confidence assigned when forced to respond without SUFFICIENT
+        assert result["confidence"] == pytest.approx(0.3)
 
     def test_query_refinement_updates_current_query(self) -> None:
         calls = iter(

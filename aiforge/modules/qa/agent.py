@@ -15,6 +15,7 @@ Usage::
 from __future__ import annotations
 
 import operator
+import re
 from typing import Annotated, Any, Callable, TypedDict
 
 from langgraph.graph import END, StateGraph
@@ -148,7 +149,6 @@ def build_qa_graph(
         if cleaned.upper().startswith("SUFFICIENT"):
             # Extract confidence score — tolerate brackets, text, etc.
             after_colon = cleaned.split(":", 1)[1] if ":" in cleaned else ""
-            import re
 
             match = re.search(r"(-?\d+\.?\d*)", after_colon)
             if match:
@@ -180,13 +180,25 @@ def build_qa_graph(
         )
         prompt = RESPOND_PROMPT.format(query=state["query"], context=context)
         result = llm_fn(prompt)
-        return {
+
+        updates: dict[str, Any] = {
             "answer": result.text,
             "total_input_tokens": result.input_tokens,
             "total_output_tokens": result.output_tokens,
             "model": result.model,
             "trace": [{"step": "respond"}],
         }
+
+        # If agent exhausted iterations without SUFFICIENT, assign a
+        # low fallback confidence so it doesn't stay at 0%.
+        if (
+            state["decision"] != "sufficient"
+            and state["confidence"] == 0.0
+            and state["retrieved_chunks"]
+        ):
+            updates["confidence"] = 0.3
+
+        return updates
 
     # -- routing -------------------------------------------------------------
 
