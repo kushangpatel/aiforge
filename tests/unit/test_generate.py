@@ -817,3 +817,101 @@ class TestPricePatterns:
     )
     def test_no_price(self, text: str) -> None:
         assert not any(p.search(text) for p in _PRICE_PATTERNS)
+
+
+# ---------------------------------------------------------------------------
+# get_custom_guardrails utility
+# ---------------------------------------------------------------------------
+
+
+class TestGetCustomGuardrails:
+    def setup_method(self) -> None:
+        _CUSTOM_GUARDRAILS.pop("test_util", None)
+
+    def teardown_method(self) -> None:
+        _CUSTOM_GUARDRAILS.pop("test_util", None)
+
+    def test_returns_copy(self) -> None:
+        from aiforge.modules.generate.module import get_custom_guardrails
+
+        @register_guardrail("test_util")
+        def _check(text: str) -> GuardrailResult:
+            return GuardrailResult(passed=True)
+
+        snapshot = get_custom_guardrails()
+        assert "test_util" in snapshot
+        # Mutating the copy must not affect the real registry
+        snapshot.pop("test_util")
+        assert "test_util" in _CUSTOM_GUARDRAILS
+
+    def test_empty_when_clean(self) -> None:
+        from aiforge.modules.generate.module import get_custom_guardrails
+
+        result = get_custom_guardrails()
+        assert "test_util" not in result
+
+
+# ---------------------------------------------------------------------------
+# professional_tone through retry loop
+# ---------------------------------------------------------------------------
+
+
+class TestProfessionalToneRetryLoop:
+    def test_unprofessional_triggers_retry(self) -> None:
+        g = _gen(guardrails=["professional_tone"])
+        tone_calls = iter([_fake_llm("NO"), _fake_llm("YES")])
+        gen_calls = iter([_fake_llm("yo sup"), _fake_llm("Dear valued customer,")])
+
+        def llm_side_effect(messages: Any, **kwargs: Any) -> MagicMock:
+            content = messages[-1]["content"]
+            if "professional tone" in content.lower() or "Evaluate" in content:
+                return next(tone_calls)
+            return next(gen_calls)
+
+        with patch.object(g, "_call_llm", side_effect=llm_side_effect):
+            result = g.generate(prompt="Write a greeting")
+        assert result.retry_count == 1
+        assert result.guardrail_flags == []
+        assert result.text == "Dear valued customer,"
+
+    @pytest.mark.asyncio
+    async def test_unprofessional_triggers_retry_async(self) -> None:
+        g = _gen(guardrails=["professional_tone"])
+        tone_calls = iter([_fake_llm("NO"), _fake_llm("YES")])
+        gen_calls = iter([_fake_llm("yo"), _fake_llm("Respectfully,")])
+
+        async def llm_side_effect(messages: Any, **kwargs: Any) -> MagicMock:
+            content = messages[-1]["content"]
+            if "professional tone" in content.lower() or "Evaluate" in content:
+                return next(tone_calls)
+            return next(gen_calls)
+
+        with patch.object(g, "_acall_llm", new_callable=AsyncMock, side_effect=llm_side_effect):
+            result = await g.agenerate(prompt="Write a greeting")
+        assert result.retry_count == 1
+        assert result.guardrail_flags == []
+
+
+# ---------------------------------------------------------------------------
+# Batch partial failure
+# ---------------------------------------------------------------------------
+
+
+class TestBatchPartialFailure:
+    def test_run_batch_partial_failure(self) -> None:
+        g = _gen()
+        fake = _fake_llm("batch ok")
+        call_count = 0
+
+        async def _selective(*args: Any, **kwargs: Any) -> MagicMock:
+            nonlocal call_count
+            call_count += 1
+            if call_count == 2:
+                raise RuntimeError("llm error")
+            return fake
+
+        with patch.object(g, "_acall_llm", new_callable=AsyncMock, side_effect=_selective):
+            batch = g.run_batch(["p1", "p2", "p3"])
+        assert len(batch.results) == 2
+        assert len(batch.failed) == 1
+        assert batch.failed[0]["error"] == "llm error"

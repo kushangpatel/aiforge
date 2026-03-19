@@ -142,7 +142,7 @@ class Generator(BaseModule):
         """
         t0 = time.monotonic()
         final_prompt = self._resolve_prompt(prompt, variables)
-        return self._generate_loop(final_prompt, t0, sync=True)
+        return self._generate_loop(final_prompt, t0)
 
     async def agenerate(self, prompt: str | None = None, **variables: Any) -> GenerateResponse:
         """Async version of :meth:`generate`."""
@@ -194,7 +194,7 @@ class Generator(BaseModule):
     # Generate-and-guard loop
     # ------------------------------------------------------------------
 
-    def _generate_loop(self, final_prompt: str, t0: float, *, sync: bool = True) -> GenerateResponse:
+    def _generate_loop(self, final_prompt: str, t0: float) -> GenerateResponse:
         """Synchronous generate → check guardrails → retry loop."""
         total_in = total_out = 0
         total_cost = 0.0
