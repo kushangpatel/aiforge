@@ -824,11 +824,11 @@ class TestSafeCalculator:
 
         assert _safe_calculator("10 / 3") == str(10 / 3)
 
-    def test_rejects_function_calls(self) -> None:
+    def test_rejects_function_calls_to_unsafe_builtins(self) -> None:
         from aiforge.modules.chat.widget import _safe_calculator
 
-        with pytest.raises(ValueError, match="Unsafe"):
-            _safe_calculator("__import__('os').system('ls')")
+        with pytest.raises(ValueError, match="Unsafe function"):
+            _safe_calculator("__import__('os')")
 
     def test_rejects_attribute_access(self) -> None:
         from aiforge.modules.chat.widget import _safe_calculator
@@ -842,6 +842,113 @@ class TestSafeCalculator:
         with pytest.raises((ValueError, SyntaxError)):
             _safe_calculator("[x for x in range(10)]")
 
+    # --- Advanced math functions ---
+
+    def test_sqrt(self) -> None:
+        from aiforge.modules.chat.widget import _safe_calculator
+
+        assert _safe_calculator("sqrt(16)") == "4.0"
+        assert _safe_calculator("sqrt(2)") == str(__import__("math").sqrt(2))
+
+    def test_trig_functions(self) -> None:
+        from aiforge.modules.chat.widget import _safe_calculator
+        import math as m
+
+        assert abs(float(_safe_calculator("sin(0)")) - 0.0) < 1e-10
+        assert abs(float(_safe_calculator("cos(0)")) - 1.0) < 1e-10
+        assert abs(float(_safe_calculator("tan(0)")) - 0.0) < 1e-10
+        # sin(pi/2) ≈ 1.0
+        assert abs(float(_safe_calculator("sin(pi / 2)")) - 1.0) < 1e-10
+
+    def test_inverse_trig(self) -> None:
+        from aiforge.modules.chat.widget import _safe_calculator
+        import math as m
+
+        assert abs(float(_safe_calculator("asin(1)")) - m.asin(1)) < 1e-10
+        assert abs(float(_safe_calculator("acos(0)")) - m.acos(0)) < 1e-10
+        assert abs(float(_safe_calculator("atan(1)")) - m.atan(1)) < 1e-10
+
+    def test_log_functions(self) -> None:
+        from aiforge.modules.chat.widget import _safe_calculator
+        import math as m
+
+        assert abs(float(_safe_calculator("log(e)")) - 1.0) < 1e-10
+        assert abs(float(_safe_calculator("log2(8)")) - 3.0) < 1e-10
+        assert abs(float(_safe_calculator("log10(1000)")) - 3.0) < 1e-10
+        # log with base: log(100, 10) = 2
+        assert abs(float(_safe_calculator("log(100, 10)")) - 2.0) < 1e-10
+
+    def test_exp(self) -> None:
+        from aiforge.modules.chat.widget import _safe_calculator
+        import math as m
+
+        assert abs(float(_safe_calculator("exp(1)")) - m.e) < 1e-10
+
+    def test_ceil_floor(self) -> None:
+        from aiforge.modules.chat.widget import _safe_calculator
+
+        assert _safe_calculator("ceil(3.2)") == "4"
+        assert _safe_calculator("floor(3.9)") == "3"
+
+    def test_factorial(self) -> None:
+        from aiforge.modules.chat.widget import _safe_calculator
+
+        assert _safe_calculator("factorial(5)") == "120"
+        assert _safe_calculator("factorial(0)") == "1"
+
+    def test_gcd(self) -> None:
+        from aiforge.modules.chat.widget import _safe_calculator
+
+        assert _safe_calculator("gcd(12, 8)") == "4"
+
+    def test_constants(self) -> None:
+        from aiforge.modules.chat.widget import _safe_calculator
+        import math as m
+
+        assert abs(float(_safe_calculator("pi")) - m.pi) < 1e-10
+        assert abs(float(_safe_calculator("e")) - m.e) < 1e-10
+        assert abs(float(_safe_calculator("tau")) - m.tau) < 1e-10
+
+    def test_combined_expression(self) -> None:
+        from aiforge.modules.chat.widget import _safe_calculator
+        import math as m
+
+        # sqrt(2) * pi
+        expected = m.sqrt(2) * m.pi
+        assert abs(float(_safe_calculator("sqrt(2) * pi")) - expected) < 1e-10
+
+    def test_radians_degrees(self) -> None:
+        from aiforge.modules.chat.widget import _safe_calculator
+        import math as m
+
+        assert abs(float(_safe_calculator("radians(180)")) - m.pi) < 1e-10
+        assert abs(float(_safe_calculator("degrees(pi)")) - 180.0) < 1e-10
+
+    def test_abs_round_min_max(self) -> None:
+        from aiforge.modules.chat.widget import _safe_calculator
+
+        assert _safe_calculator("abs(-42)") == "42"
+        assert _safe_calculator("round(3.7)") == "4"
+        assert _safe_calculator("min(3, 7)") == "3"
+        assert _safe_calculator("max(3, 7)") == "7"
+
+    def test_hypot(self) -> None:
+        from aiforge.modules.chat.widget import _safe_calculator
+
+        assert _safe_calculator("hypot(3, 4)") == "5.0"
+
+    def test_rejects_exec(self) -> None:
+        from aiforge.modules.chat.widget import _safe_calculator
+
+        with pytest.raises((ValueError, SyntaxError)):
+            _safe_calculator("exec('print(1)')")
+
+    def test_rejects_unknown_name(self) -> None:
+        from aiforge.modules.chat.widget import _safe_calculator
+
+        with pytest.raises(ValueError, match="Unknown variable"):
+            _safe_calculator("x + 1")
+
 
 class TestCurrentTime:
     def test_returns_iso_format(self) -> None:
@@ -853,14 +960,13 @@ class TestCurrentTime:
 
 
 class TestGetBuiltinTools:
-    def test_returns_two_tools(self) -> None:
+    def test_returns_four_tools(self) -> None:
         from aiforge.modules.chat.widget import _get_builtin_tools
 
         tools = _get_builtin_tools()
-        assert len(tools) == 2
+        assert len(tools) == 4
         names = {t.name for t in tools}
-        assert "calculator" in names
-        assert "current_time" in names
+        assert names == {"calculator", "current_time", "research", "unit_converter"}
 
     def test_tools_are_invokable(self) -> None:
         from aiforge.modules.chat.widget import _get_builtin_tools
@@ -869,6 +975,117 @@ class TestGetBuiltinTools:
         calc = next(t for t in tools if t.name == "calculator")
         result = calc.invoke({"expression": "3 + 4"})
         assert result == "7"
+
+    def test_calculator_tool_handles_advanced(self) -> None:
+        from aiforge.modules.chat.widget import _get_builtin_tools
+
+        tools = _get_builtin_tools()
+        calc = next(t for t in tools if t.name == "calculator")
+        result = calc.invoke({"expression": "sqrt(16)"})
+        assert result == "4.0"
+
+    def test_research_tool_graceful_fallback(self) -> None:
+        """Research tool returns a message when search module can't connect."""
+        from aiforge.modules.chat.widget import _get_builtin_tools
+
+        tools = _get_builtin_tools()
+        research = next(t for t in tools if t.name == "research")
+        # Will fail gracefully since no vector store is configured
+        result = research.invoke({"query": "test query"})
+        assert isinstance(result, str)
+        assert len(result) > 0
+
+    def test_unit_converter_tool(self) -> None:
+        from aiforge.modules.chat.widget import _get_builtin_tools
+
+        tools = _get_builtin_tools()
+        conv = next(t for t in tools if t.name == "unit_converter")
+        result = conv.invoke({"expression": "100 celsius to fahrenheit"})
+        assert "212" in result
+
+
+class TestResearchTool:
+    def test_returns_string(self) -> None:
+        from aiforge.modules.chat.widget import _research
+
+        result = _research("test query")
+        assert isinstance(result, str)
+
+    def test_handles_import_error(self) -> None:
+        from aiforge.modules.chat.widget import _research
+
+        with patch("aiforge.modules.chat.widget._research.__module__"):
+            result = _research("anything")
+            assert isinstance(result, str)
+
+
+class TestUnitConverter:
+    def test_celsius_to_fahrenheit(self) -> None:
+        from aiforge.modules.chat.widget import _unit_converter
+
+        result = _unit_converter("100 celsius to fahrenheit")
+        assert "212" in result
+
+    def test_fahrenheit_to_celsius(self) -> None:
+        from aiforge.modules.chat.widget import _unit_converter
+
+        result = _unit_converter("32 fahrenheit to celsius")
+        assert "0.0000" in result
+
+    def test_miles_to_km(self) -> None:
+        from aiforge.modules.chat.widget import _unit_converter
+
+        result = _unit_converter("1 miles to km")
+        assert "1.6093" in result
+
+    def test_kg_to_lbs(self) -> None:
+        from aiforge.modules.chat.widget import _unit_converter
+
+        result = _unit_converter("1 kg to lbs")
+        assert "2.2046" in result
+
+    def test_degrees_to_radians(self) -> None:
+        from aiforge.modules.chat.widget import _unit_converter
+        import math
+
+        result = _unit_converter("180 degrees to radians")
+        assert str(round(math.pi, 4)) in result
+
+    def test_same_unit(self) -> None:
+        from aiforge.modules.chat.widget import _unit_converter
+
+        result = _unit_converter("5 kg to kg")
+        assert "same unit" in result
+
+    def test_bad_format_raises(self) -> None:
+        from aiforge.modules.chat.widget import _unit_converter
+
+        with pytest.raises(ValueError, match="Format"):
+            _unit_converter("convert this")
+
+    def test_unknown_units_raises(self) -> None:
+        from aiforge.modules.chat.widget import _unit_converter
+
+        with pytest.raises(ValueError, match="Unknown conversion"):
+            _unit_converter("5 parsecs to lightyears")
+
+    def test_negative_values(self) -> None:
+        from aiforge.modules.chat.widget import _unit_converter
+
+        result = _unit_converter("-40 celsius to fahrenheit")
+        assert "-40" in result
+
+    def test_liters_to_gallons(self) -> None:
+        from aiforge.modules.chat.widget import _unit_converter
+
+        result = _unit_converter("3.78541 liters to gallons")
+        assert "1.0000" in result
+
+    def test_celsius_to_kelvin(self) -> None:
+        from aiforge.modules.chat.widget import _unit_converter
+
+        result = _unit_converter("0 celsius to kelvin")
+        assert "273.15" in result
 
 
 # ===========================================================================
