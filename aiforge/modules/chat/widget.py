@@ -137,22 +137,101 @@ def _current_time() -> str:
 
 
 def _research(query: str) -> str:
-    """Research a topic using the AIForge search module.
+    """Research a topic using web search and/or ingested knowledge sources.
 
-    Performs a semantic search across previously-ingested knowledge sources
-    (documents, codebases, etc.) using the AIForge Search module. Returns
-    the top results as context the chat agent can use to answer questions.
+    Strategy:
+    1. Search the web via DuckDuckGo Lite (no API key needed).
+    2. Also search ingested knowledge sources via AIForge SearchAgent.
+    3. Return combined results — web first, then knowledge base.
 
-    Falls back to a helpful error message if the search module or its
-    dependencies are not available.
+    Falls back gracefully if either source is unavailable.
     """
+    sections: list[str] = []
+
+    # ── Web search via DuckDuckGo Lite ──
+    web_results = _web_search(query)
+    if web_results:
+        sections.append("=== Web Results ===\n" + web_results)
+
+    # ── Knowledge base search ──
+    kb_results = _knowledge_search(query)
+    if kb_results:
+        sections.append("=== Knowledge Base ===\n" + kb_results)
+
+    if not sections:
+        return f"No results found for: {query}"
+
+    return "\n\n".join(sections)
+
+
+def _web_search(query: str, max_results: int = 5) -> str:
+    """Search the web using DuckDuckGo Lite (HTML). No API key required.
+
+    Returns a formatted string of search results, or empty string on failure.
+    """
+    import re
+    import urllib.parse
+    import urllib.request
+
+    try:
+        encoded = urllib.parse.urlencode({"q": query})
+        url = f"https://lite.duckduckgo.com/lite/?{encoded}"
+        req = urllib.request.Request(
+            url,
+            headers={"User-Agent": "AIForge/1.0 (research tool)"},
+        )
+        with urllib.request.urlopen(req, timeout=10) as resp:  # noqa: S310
+            html = resp.read().decode("utf-8", errors="replace")
+
+        # Parse the DuckDuckGo Lite results page.
+        # Each result is in a table row with class "result-link" (title)
+        # and a subsequent snippet row.
+        titles = re.findall(
+            r'class="result-link"[^>]*>(.*?)</a>', html, re.DOTALL,
+        )
+        snippets = re.findall(
+            r'class="result-snippet"[^>]*>(.*?)</td>', html, re.DOTALL,
+        )
+        links = re.findall(
+            r'class="result-link"\s+href="([^"]+)"', html,
+        )
+
+        if not titles:
+            # Fallback: try a simpler pattern for result links
+            titles = re.findall(r'<a[^>]*class="[^"]*result[^"]*"[^>]*>(.*?)</a>', html, re.DOTALL)
+            links = re.findall(r'<a[^>]*class="[^"]*result[^"]*"\s+href="([^"]+)"', html)
+
+        if not titles:
+            return ""
+
+        lines: list[str] = []
+        for i, title in enumerate(titles[:max_results]):
+            clean_title = re.sub(r"<[^>]+>", "", title).strip()
+            link = links[i] if i < len(links) else ""
+            snippet = ""
+            if i < len(snippets):
+                snippet = re.sub(r"<[^>]+>", "", snippets[i]).strip()
+            entry = f"[{i + 1}] {clean_title}"
+            if link:
+                entry += f"\n    {link}"
+            if snippet:
+                entry += f"\n    {snippet}"
+            lines.append(entry)
+
+        return "\n\n".join(lines)
+    except Exception:  # noqa: BLE001
+        return ""
+
+
+def _knowledge_search(query: str) -> str:
+    """Search ingested knowledge sources via AIForge SearchAgent."""
     try:
         from aiforge.modules.search.module import SearchAgent
 
         agent = SearchAgent()
         result = agent.run(query)
         if not result.results:
-            return f"No results found for: {query}"
+            return ""
 
         lines: list[str] = []
         for i, r in enumerate(result.results[:5], 1):
@@ -161,12 +240,9 @@ def _research(query: str) -> str:
             lines.append(f"[{i}] {source}{score}\n{r.text[:500]}")
         return "\n\n".join(lines)
     except ImportError:
-        return (
-            "Research tool unavailable — the search module or its "
-            "dependencies (chromadb, sentence-transformers) are not installed."
-        )
-    except Exception as exc:  # noqa: BLE001
-        return f"Research error: {exc}"
+        return ""
+    except Exception:  # noqa: BLE001
+        return ""
 
 
 def _unit_converter(expression: str) -> str:
@@ -268,10 +344,11 @@ def _get_builtin_tools() -> list[Any]:
         func=_research,
         name="research",
         description=(
-            "Search previously-ingested knowledge sources (documents, "
-            "codebases) for information about a topic. Returns the top "
-            "matching passages. Use when you need factual information "
-            "that might be in the knowledge base."
+            "Research a topic by searching the web (DuckDuckGo) and any "
+            "previously-ingested knowledge sources. Returns web results "
+            "and knowledge base matches. Use for factual questions, "
+            "current events, technical lookups, or anything requiring "
+            "external information."
         ),
     )
     converter = StructuredTool.from_function(

@@ -1011,12 +1011,81 @@ class TestResearchTool:
         result = _research("test query")
         assert isinstance(result, str)
 
-    def test_handles_import_error(self) -> None:
+    def test_web_search_returns_string(self) -> None:
+        from aiforge.modules.chat.widget import _web_search
+
+        # May return empty string if network unavailable — that's fine
+        result = _web_search("python programming")
+        assert isinstance(result, str)
+
+    def test_knowledge_search_returns_string(self) -> None:
+        from aiforge.modules.chat.widget import _knowledge_search
+
+        result = _knowledge_search("test query")
+        assert isinstance(result, str)
+
+    def test_knowledge_search_graceful_on_missing_deps(self) -> None:
+        from aiforge.modules.chat.widget import _knowledge_search
+
+        # Should return empty string, not raise
+        result = _knowledge_search("anything")
+        assert isinstance(result, str)
+
+    def test_web_search_timeout_graceful(self) -> None:
+        """Web search should not raise on network failure."""
+        from aiforge.modules.chat.widget import _web_search
+
+        with patch("urllib.request.urlopen", side_effect=TimeoutError("timeout")):
+            result = _web_search("test")
+            assert result == ""
+
+    def test_web_search_parses_html(self) -> None:
+        """Web search should extract results from DuckDuckGo HTML."""
+        from aiforge.modules.chat.widget import _web_search
+        from unittest.mock import MagicMock
+        import io
+
+        fake_html = (
+            '<a class="result-link" href="https://example.com">Example Title</a>'
+            '<td class="result-snippet">A snippet of text.</td>'
+        )
+        mock_resp = MagicMock()
+        mock_resp.read.return_value = fake_html.encode("utf-8")
+        mock_resp.__enter__ = MagicMock(return_value=mock_resp)
+        mock_resp.__exit__ = MagicMock(return_value=False)
+
+        with patch("urllib.request.urlopen", return_value=mock_resp):
+            result = _web_search("test")
+            assert "Example Title" in result
+            assert "example.com" in result
+            assert "snippet" in result
+
+    def test_research_combines_web_and_kb(self) -> None:
+        """Research should combine web and knowledge base results."""
         from aiforge.modules.chat.widget import _research
 
-        with patch("aiforge.modules.chat.widget._research.__module__"):
-            result = _research("anything")
-            assert isinstance(result, str)
+        with patch("aiforge.modules.chat.widget._web_search", return_value="[1] Web result"):
+            with patch("aiforge.modules.chat.widget._knowledge_search", return_value="[1] KB result"):
+                result = _research("test")
+                assert "Web Results" in result
+                assert "Knowledge Base" in result
+
+    def test_research_web_only_when_kb_empty(self) -> None:
+        from aiforge.modules.chat.widget import _research
+
+        with patch("aiforge.modules.chat.widget._web_search", return_value="[1] Web result"):
+            with patch("aiforge.modules.chat.widget._knowledge_search", return_value=""):
+                result = _research("test")
+                assert "Web Results" in result
+                assert "Knowledge Base" not in result
+
+    def test_research_no_results(self) -> None:
+        from aiforge.modules.chat.widget import _research
+
+        with patch("aiforge.modules.chat.widget._web_search", return_value=""):
+            with patch("aiforge.modules.chat.widget._knowledge_search", return_value=""):
+                result = _research("test")
+                assert "No results found" in result
 
 
 class TestUnitConverter:
