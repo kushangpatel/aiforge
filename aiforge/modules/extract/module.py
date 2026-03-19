@@ -76,6 +76,8 @@ class Extractor(BaseModule):
         **kwargs: Any,
     ) -> None:
         super().__init__(**kwargs)
+        if not 0.0 <= temperature <= 2.0:
+            raise ValueError("temperature must be in [0.0, 2.0]")
         if output_schema is not None:
             # Validate early so callers get an immediate error
             _schema_to_description(output_schema)
@@ -83,8 +85,6 @@ class Extractor(BaseModule):
         self.examples: list[ExtractExample] = examples or []
         self.max_retries: int = max(1, max_retries)
         self.temperature: float = temperature
-        if not 0.0 <= temperature <= 2.0:
-            raise ValueError("temperature must be in [0.0, 2.0]")
 
     # ------------------------------------------------------------------
     # Public API
@@ -104,7 +104,7 @@ class Extractor(BaseModule):
             raise ValueError("output_schema must be provided either in constructor or extract() call")
         exs = examples if examples is not None else self.examples
         t0 = time.monotonic()
-        return self._extract_loop(text, schema, exs, t0, sync=True)
+        return self._extract_loop(text, schema, exs, t0)
 
     async def aextract(
         self,
@@ -140,8 +140,6 @@ class Extractor(BaseModule):
         schema: type[BaseModel] | dict[str, Any],
         examples: list[ExtractExample],
         t0: float,
-        *,
-        sync: bool = True,
     ) -> ExtractResponse:
         """Synchronous extraction with retry-on-validation-failure."""
         schema_desc = _schema_to_description(schema)

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -107,6 +108,11 @@ class TestExtractJson:
     def test_no_fence_with_extra_text_prefix(self) -> None:
         # LLM might return prose before JSON — _extract_json only strips fences
         raw = '{"key": "value"}'
+        assert _extract_json(raw) == raw
+
+    def test_prose_before_json_returned_as_is(self) -> None:
+        """Prose before JSON is not stripped — only fences are removed."""
+        raw = 'Here is the data: {"name": "Eve"}'
         assert _extract_json(raw) == raw
 
 
@@ -581,3 +587,127 @@ class TestExtractExample:
     def test_empty_output_ok(self) -> None:
         ex = ExtractExample(input="text", output={})
         assert ex.output == {}
+
+
+# ---------------------------------------------------------------------------
+# Batch operations — FR-EXT-004
+# ---------------------------------------------------------------------------
+
+
+class TestBatchOperations:
+    def test_run_batch_all_succeed(self) -> None:
+        """run_batch processes every input and collects ExtractResponse objects."""
+        e = _ext(output_schema=PersonSchema)
+        valid = _fake_llm('{"name": "Alice", "age": 30}')
+        with patch.object(e, "_acall_llm", new_callable=AsyncMock, return_value=valid):
+            batch_result = e.run_batch(["text one", "text two", "text three"])
+        assert len(batch_result.results) == 3
+        assert len(batch_result.failed) == 0
+        assert all(isinstance(r, ExtractResponse) for r in batch_result.results)
+
+    def test_run_batch_partial_failure(self) -> None:
+        """When one item fails, it lands in failed; the rest still succeed."""
+        e = _ext(output_schema=PersonSchema)
+        call_count = 0
+        valid = _fake_llm('{"name": "Alice", "age": 30}')
+
+        async def _selective_llm(*args: Any, **kwargs: Any) -> MagicMock:
+            nonlocal call_count
+            call_count += 1
+            if call_count == 2:
+                raise RuntimeError("llm error")
+            return valid
+
+        with patch.object(e, "_acall_llm", new_callable=AsyncMock, side_effect=_selective_llm):
+            batch_result = e.run_batch(["q1", "q2", "q3"])
+        assert len(batch_result.results) == 2
+        assert len(batch_result.failed) == 1
+        assert batch_result.failed[0]["error"] == "llm error"
+
+    def test_run_batch_empty_returns_empty(self) -> None:
+        """run_batch with an empty list returns an empty BatchResult."""
+        e = _ext(output_schema=PersonSchema)
+        batch_result = e.run_batch([])
+        assert batch_result.results == []
+        assert batch_result.failed == []
+
+
+# ---------------------------------------------------------------------------
+# Server route — /extract
+# ---------------------------------------------------------------------------
+
+
+class TestExtractServerRoute:
+    def _client(self) -> Any:
+        from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+
+        from aiforge.server.routes.extract import router
+
+        app = FastAPI()
+        app.include_router(router)
+        return TestClient(app)
+
+    def test_extract_returns_200(self) -> None:
+        client = self._client()
+        mock_result = ExtractResponse(
+            data={"name": "Alice", "age": 30},
+            raw_json='{"name": "Alice", "age": 30}',
+            validation_passed=True,
+            retry_count=0,
+            cost=0.001,
+        )
+        with patch("aiforge.modules.extract.module.Extractor") as MockExt:
+            MockExt.return_value.aextract = AsyncMock(return_value=mock_result)
+            resp = client.post(
+                "/extract",
+                json={
+                    "text": "Alice is 30 years old",
+                    "output_schema": {
+                        "type": "object",
+                        "properties": {"name": {"type": "string"}, "age": {"type": "integer"}},
+                    },
+                },
+            )
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["validation_passed"] is True
+        assert body["data"] == {"name": "Alice", "age": 30}
+
+    def test_extract_with_examples(self) -> None:
+        client = self._client()
+        mock_result = ExtractResponse(
+            data={"name": "Bob", "age": 25},
+            raw_json='{"name": "Bob", "age": 25}',
+            validation_passed=True,
+        )
+        with patch("aiforge.modules.extract.module.Extractor") as MockExt:
+            MockExt.return_value.aextract = AsyncMock(return_value=mock_result)
+            resp = client.post(
+                "/extract",
+                json={
+                    "text": "Bob is 25",
+                    "output_schema": {"type": "object"},
+                    "examples": [{"input": "Carol is 40", "output": {"name": "Carol", "age": 40}}],
+                },
+            )
+        assert resp.status_code == 200
+        assert resp.json()["data"]["name"] == "Bob"
+
+    def test_extract_missing_schema_returns_422(self) -> None:
+        client = self._client()
+        resp = client.post("/extract", json={"text": "hello"})
+        assert resp.status_code == 422
+
+    def test_extract_value_error_returns_422(self) -> None:
+        client = self._client()
+        with patch("aiforge.modules.extract.module.Extractor") as MockExt:
+            MockExt.return_value.aextract = AsyncMock(
+                side_effect=ValueError("text must not be empty"),
+            )
+            resp = client.post(
+                "/extract",
+                json={"text": "", "output_schema": {"type": "object"}},
+            )
+        assert resp.status_code == 422
+        assert "text must not be empty" in resp.json()["detail"]
