@@ -49,10 +49,21 @@ class AIForgeSettings(BaseSettings):
     AIFORGE_OLLAMA_BASE_URL: str = "http://localhost:11434"
 
     # Vector store
-    AIFORGE_VECTOR_STORE: str = "chroma"                # chroma | pinecone | qdrant
+    AIFORGE_VECTOR_STORE: str = "chroma"                # chroma | pgvector | pinecone | qdrant
     AIFORGE_CHROMA_PERSIST_DIR: str = "./aiforge_data"
+
+    # pgvector
+    AIFORGE_PGVECTOR_DSN: str = ""                       # e.g. postgresql://user:pass@host:5432/db
+    AIFORGE_PGVECTOR_COLLECTION: str = "default"
+
+    # Pinecone
     AIFORGE_PINECONE_API_KEY: str = ""
     AIFORGE_PINECONE_INDEX: str = ""
+
+    # Qdrant
+    AIFORGE_QDRANT_URL: str = ""                         # e.g. http://localhost:6333
+    AIFORGE_QDRANT_API_KEY: str = ""
+    AIFORGE_QDRANT_COLLECTION: str = ""
 
     # Observability
     AIFORGE_TRACING_ENABLED: bool = False
@@ -86,8 +97,14 @@ provider: openai
 model: gpt-4o
 temperature: 0
 embedding_model: text-embedding-3-small
-vector_store: chroma
-chroma_persist_dir: ./aiforge_data
+vector_store: chroma                # chroma | pgvector | pinecone | qdrant
+chroma_persist_dir: ./aiforge_data  # only used when vector_store=chroma
+
+# pgvector_dsn: postgresql://user:pass@localhost:5432/aiforge
+# pgvector_collection: default
+# pinecone_index: my-index           # prefer API key in .env
+# qdrant_url: http://localhost:6333
+# qdrant_collection: default
 
 # Provider credentials (prefer env vars for secrets)
 # openai_api_key: sk-...      # DON'T put keys here — use env vars
@@ -136,8 +153,15 @@ cost_tracking:
 | `AIFORGE_AZURE_OPENAI_ENDPOINT` | Yes (if Azure) | Azure endpoint | — |
 | `AIFORGE_AZURE_OPENAI_API_KEY` | Yes (if Azure) | Azure API key | — |
 | `AIFORGE_OLLAMA_BASE_URL` | No | Ollama server URL | `http://localhost:11434` |
-| `AIFORGE_VECTOR_STORE` | No | Vector store type | `chroma` |
+| `AIFORGE_VECTOR_STORE` | No | Vector store backend | `chroma` |
 | `AIFORGE_CHROMA_PERSIST_DIR` | No | ChromaDB data directory | `./aiforge_data` |
+| `AIFORGE_PGVECTOR_DSN` | Yes (if pgvector) | PostgreSQL connection string | — |
+| `AIFORGE_PGVECTOR_COLLECTION` | No | pgvector table name | `default` |
+| `AIFORGE_PINECONE_API_KEY` | Yes (if Pinecone) | Pinecone API key | — |
+| `AIFORGE_PINECONE_INDEX` | Yes (if Pinecone) | Pinecone index name | — |
+| `AIFORGE_QDRANT_URL` | Yes (if Qdrant) | Qdrant server URL | — |
+| `AIFORGE_QDRANT_API_KEY` | No | Qdrant Cloud API key | — |
+| `AIFORGE_QDRANT_COLLECTION` | No | Qdrant collection name | — |
 | `AIFORGE_TRACING_ENABLED` | No | Enable tracing | `false` |
 | `AIFORGE_LANGSMITH_API_KEY` | No | LangSmith key | — |
 | `AIFORGE_COST_TRACKING_ENABLED` | No | Enable cost tracking | `true` |
@@ -148,6 +172,88 @@ cost_tracking:
 | `AIFORGE_API_PORT` | No | API server port | `8000` |
 | `AIFORGE_API_KEY` | No | Bearer token for REST API auth | — (disabled) |
 | `AIFORGE_CORS_ORIGINS` | No | Allowed CORS origins | `http://localhost:8501` |
+
+---
+
+## Vector Store Backends
+
+AIForge supports four vector store backends. The default is **ChromaDB** (zero infrastructure). Swap backends via `AIFORGE_VECTOR_STORE` — all modules (DocQA, SemanticSearch) auto-route through the factory.
+
+### ChromaDB (default)
+
+No extra install needed — ChromaDB is a core dependency.
+
+```bash
+# .env
+AIFORGE_VECTOR_STORE=chroma
+AIFORGE_CHROMA_PERSIST_DIR=./aiforge_data
+```
+
+### pgvector (PostgreSQL)
+
+```bash
+pip install aiforge[pgvector]
+```
+
+```bash
+# .env
+AIFORGE_VECTOR_STORE=pgvector
+AIFORGE_PGVECTOR_DSN=postgresql://user:pass@localhost:5432/aiforge
+AIFORGE_PGVECTOR_COLLECTION=default   # optional — maps to table name
+```
+
+The adapter auto-creates the `vector` extension, collection table, and IVFFlat index on first use. Each collection maps to a separate table prefixed with `aiforge_`.
+
+### Pinecone
+
+```bash
+pip install aiforge[pinecone]
+```
+
+```bash
+# .env
+AIFORGE_VECTOR_STORE=pinecone
+AIFORGE_PINECONE_API_KEY=pk-...
+AIFORGE_PINECONE_INDEX=my-index
+```
+
+Each AIForge "collection" maps to a Pinecone **namespace** within the configured index. Text is stored in `metadata["_text"]` since Pinecone is a pure-vector store.
+
+### Qdrant
+
+```bash
+pip install aiforge[qdrant]
+```
+
+```bash
+# .env
+AIFORGE_VECTOR_STORE=qdrant
+AIFORGE_QDRANT_URL=http://localhost:6333
+AIFORGE_QDRANT_API_KEY=               # optional — only needed for Qdrant Cloud
+AIFORGE_QDRANT_COLLECTION=default     # optional
+```
+
+The adapter auto-creates the Qdrant collection (cosine similarity) on first use if it doesn't exist.
+
+### Custom Vector Stores
+
+Register any backend that implements the `VectorStoreAdapter` ABC:
+
+```python
+from aiforge.core.vectorstore import VectorStoreAdapter
+from aiforge.registry import register_vectorstore
+
+class WeaviateStore(VectorStoreAdapter):
+    def add_documents(self, texts, embeddings, metadatas, ids): ...
+    def query(self, embedding, top_k=5, filter=None, include_embeddings=False): ...
+    def delete_collection(self, name): ...
+    def list_collections(self): ...
+    def collection_stats(self, name): ...
+
+register_vectorstore("weaviate", WeaviateStore)
+```
+
+Then set `AIFORGE_VECTOR_STORE=weaviate` in your config.
 
 ---
 

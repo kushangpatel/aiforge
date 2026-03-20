@@ -79,7 +79,7 @@ The API server handles `SIGTERM` and `SIGINT` signals gracefully:
 1. Stop accepting new requests
 2. Wait for in-flight requests to complete (up to 30-second timeout)
 3. Flush pending cost tracking and tracing data
-4. Close ChromaDB connections
+4. Close vector store connections (ChromaDB, pgvector, etc.)
 5. Exit with code 0
 
 This is handled by uvicorn's built-in signal handling plus a custom `lifespan` context manager for AIForge-specific cleanup.

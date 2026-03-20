@@ -31,6 +31,7 @@
 | **LangChain** | Core LLM abstraction for all 8 modules |
 | **LangGraph** | Stateful multi-turn chat agent & RAG agentic loops |
 | **ChromaDB** | Default vector database for semantic search & RAG |
+| **Pinecone / Qdrant / pgvector** | Production-scale vector store alternatives (install as extras) |
 | **FastAPI** | REST API server |
 | **Streamlit** | Interactive UI playground |
 | **Pydantic v2** | Configuration, schemas, input/output validation |
@@ -111,6 +112,9 @@ pip install -e ".[all]"
 # Install specific extras
 pip install -e ".[anthropic]"          # Anthropic + Voyage AI embeddings
 pip install -e ".[local]"              # Ollama (local models)
+pip install -e ".[pinecone]"           # Pinecone vector store
+pip install -e ".[qdrant]"             # Qdrant vector store
+pip install -e ".[pgvector]"           # PostgreSQL + pgvector
 pip install -e ".[server]"             # FastAPI server + Streamlit playground
 pip install -e ".[observability]"      # OpenTelemetry + LangSmith
 pip install -e ".[docs]"              # PDF, DOCX, HTML document loaders
@@ -285,7 +289,12 @@ AIForge uses a layered configuration system:
 | `AIFORGE_ANTHROPIC_API_KEY` | Yes (if Anthropic) | — | Anthropic API key |
 | `AIFORGE_VOYAGE_API_KEY` | Yes (if Anthropic) | — | Voyage AI key for Anthropic embeddings |
 | `AIFORGE_OLLAMA_BASE_URL` | No | `http://localhost:11434` | Ollama server URL |
+| `AIFORGE_VECTOR_STORE` | No | `chroma` | Vector backend (`chroma`, `pgvector`, `pinecone`, `qdrant`) |
 | `AIFORGE_CHROMA_PERSIST_DIR` | No | `./aiforge_data` | ChromaDB data directory |
+| `AIFORGE_PGVECTOR_DSN` | Yes (if pgvector) | — | PostgreSQL connection string |
+| `AIFORGE_PINECONE_API_KEY` | Yes (if Pinecone) | — | Pinecone API key |
+| `AIFORGE_PINECONE_INDEX` | Yes (if Pinecone) | — | Pinecone index name |
+| `AIFORGE_QDRANT_URL` | Yes (if Qdrant) | — | Qdrant server URL |
 | `AIFORGE_TRACING_ENABLED` | No | `false` | Enable LangSmith/OTel tracing |
 | `AIFORGE_COST_TRACKING_ENABLED` | No | `true` | Enable cost tracking |
 | `AIFORGE_API_KEY` | No | — | Bearer token auth for REST API |
@@ -395,6 +404,10 @@ aiforge/
 │   │   ├── types.py                   # BaseModule, CompletionResult, error hierarchy
 │   │   ├── provider.py               # LLMProvider, EmbeddingProvider ABCs
 │   │   ├── vectorstore.py            # VectorStoreAdapter + ChromaDB default
+│   │   ├── vectorstore_pinecone.py    # PineconeVectorStore adapter
+│   │   ├── vectorstore_qdrant.py      # QdrantVectorStore adapter
+│   │   ├── vectorstore_pgvector.py    # PgVectorStore adapter (PostgreSQL + pgvector)
+│   │   ├── vectorstore_factory.py     # Config-driven vector store factory
 │   │   ├── doc_loader.py             # Document loading (files, directories, git)
 │   │   ├── text_splitter.py          # Language-aware chunking
 │   │   └── pricing.py                # Token pricing tables

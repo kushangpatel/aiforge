@@ -16,7 +16,7 @@ Upload documents → ask questions → get grounded answers with source citation
 from aiforge import DocQA
 
 qa = DocQA(
-    collection="my_docs",      # ChromaDB collection name
+    collection="my_docs",      # Vector store collection name
     chunk_size=1500,           # characters per chunk
     chunk_overlap=200,         # overlap between chunks
     retrieval_k=6,             # chunks to retrieve per query

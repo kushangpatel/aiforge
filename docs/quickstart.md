@@ -18,6 +18,11 @@ pip install aiforge[azure]
 # Everything
 pip install aiforge[all]
 
+# Vector store backends
+pip install aiforge[pinecone]          # Pinecone
+pip install aiforge[qdrant]            # Qdrant
+pip install aiforge[pgvector]          # PostgreSQL + pgvector
+
 # API server + UI
 pip install aiforge[server]            # includes FastAPI + Streamlit
 ```
