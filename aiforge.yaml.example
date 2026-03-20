@@ -51,11 +51,32 @@ embedding_model: text-embedding-3-small
 # ollama_base_url: http://localhost:11434
 
 # ---------------------------------------------------------------------------
-# Vector store (ChromaDB)
+# Vector store
 # ---------------------------------------------------------------------------
 
-# Local directory where ChromaDB persists its data.
+# Which vector store backend to use.  Must match a name registered in the
+# plugin registry.  Built-in: chroma.  Register your own (pgvector, pinecone,
+# qdrant, weaviate, …) and set the name here.
+# Options: chroma | pgvector | <any registered name>
+vector_store: chroma
+
+# ChromaDB settings (only used when vector_store=chroma)
 chroma_persist_dir: ./aiforge_data
+
+# pgvector settings (only used when vector_store=pgvector)
+# Connection string — keep secrets in .env, not here.
+# pgvector_dsn: postgresql://user:pass@localhost:5432/aiforge
+# pgvector_collection: default
+
+# Pinecone settings (only used when vector_store=pinecone)
+# pinecone_api_key: ...          # prefer .env
+# pinecone_index: my-index
+# pinecone_environment: us-east-1
+
+# Qdrant settings (only used when vector_store=qdrant)
+# qdrant_url: http://localhost:6333
+# qdrant_api_key: ...            # prefer .env
+# qdrant_collection: default
 
 # ---------------------------------------------------------------------------
 # Rate limiting

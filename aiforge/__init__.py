@@ -26,6 +26,7 @@ from aiforge.core.types import (
 )
 from aiforge.core.model_router import MODEL_CATALOG, ModelRouter, ModelSpec
 from aiforge.core.vectorstore import VectorStoreAdapter
+from aiforge.core.vectorstore_factory import build_vectorstore
 from aiforge.infra.config import AIForgeSettings, get_settings
 from aiforge.infra.cost_tracker import CostTracker
 from aiforge.infra.logging import configure_logging
@@ -165,6 +166,7 @@ __all__ = [
     "list_vectorstores",
     "VectorStoreAdapter",
     "ChromaVectorStore",
+    "build_vectorstore",
     # Pipeline
     "Pipeline",
     "Router",

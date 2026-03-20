@@ -109,7 +109,22 @@ class AIForgeSettings(BaseSettings):
     # ------------------------------------------------------------------
     # Vector store
     # ------------------------------------------------------------------
+    VECTOR_STORE: str = "chroma"  # "chroma" | "pgvector" | registered name
     CHROMA_PERSIST_DIR: str = "./aiforge_data"
+
+    # pgvector
+    PGVECTOR_DSN: str | None = None  # e.g. postgresql://user:pass@host:5432/db
+    PGVECTOR_COLLECTION: str = "default"
+
+    # Pinecone
+    PINECONE_API_KEY: str | None = None
+    PINECONE_INDEX: str | None = None
+    PINECONE_ENVIRONMENT: str | None = None
+
+    # Qdrant
+    QDRANT_URL: str | None = None
+    QDRANT_API_KEY: str | None = None
+    QDRANT_COLLECTION: str | None = None
 
     # ------------------------------------------------------------------
     # Rate limiting

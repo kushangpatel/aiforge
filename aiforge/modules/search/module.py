@@ -483,9 +483,10 @@ class SemanticSearch(BaseModule):
     # ------------------------------------------------------------------
 
     def _build_store(self) -> VectorStoreAdapter:
-        from aiforge.core.vectorstore import ChromaVectorStore
+        from aiforge.core.vectorstore_factory import build_vectorstore
 
-        return ChromaVectorStore(
-            persist_dir=self.persist_dir,
+        return build_vectorstore(
             collection_name=self.collection_name,
+            persist_dir=self.persist_dir,
+            settings=self.settings,
         )
