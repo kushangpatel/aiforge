@@ -257,6 +257,112 @@ Then set `AIFORGE_VECTOR_STORE=weaviate` in your config.
 
 ---
 
+## Plugin System
+
+AIForge includes a **registry-based plugin system** that lets you extend the toolkit with custom modules, providers, and vector stores — all using a consistent `register_*()` / `get_*()` pattern.
+
+All built-in modules and vector stores are auto-registered on import, so they're always discoverable via the registry.
+
+### Registry API
+
+```python
+from aiforge.registry import (
+    # Modules
+    register_module, get_module, list_modules,
+    # Providers
+    register_provider, get_provider, list_providers,
+    # Vector stores
+    register_vectorstore, get_vectorstore, list_vectorstores,
+)
+```
+
+All registry names are **normalised** to lowercase and stripped of leading/trailing whitespace.
+
+### Built-in Registrations
+
+After `import aiforge`, the following are auto-registered:
+
+| Registry | Names |
+|----------|-------|
+| **Modules** | `summarize`, `qa`, `extract`, `classify`, `search`, `generate`, `chat`, `moderate` |
+| **Vector stores** | `chroma`, `pinecone`, `qdrant`, `pgvector` (if respective clients are installed) |
+| **Providers** | `openai`, `anthropic`, `ollama`, `azure` (if respective extras are installed) |
+
+### Custom Module
+
+Extend `BaseModule` and register it for use in pipelines or for discovery via `get_module()`:
+
+```python
+from aiforge.core.types import BaseModule, ModuleResponse
+from aiforge.registry import register_module
+
+class SentimentAnalyzer(BaseModule):
+    def run(self, text: str, **kwargs) -> ModuleResponse:
+        result = self._call_llm(f"Classify sentiment: {text}")
+        return ModuleResponse(text=result.text.strip(), cost=result.cost)
+
+    async def arun(self, text: str, **kwargs) -> ModuleResponse:
+        result = await self._acall_llm(f"Classify sentiment: {text}")
+        return ModuleResponse(text=result.text.strip(), cost=result.cost)
+
+register_module("sentiment", SentimentAnalyzer)
+
+# Later, look it up by name
+cls = get_module("sentiment")         # returns SentimentAnalyzer class
+print(list_modules())                  # [..., 'sentiment', 'summarize', ...]
+```
+
+Registered custom modules can be used in `Pipeline` alongside built-in modules:
+
+```python
+from aiforge import Pipeline, Summarizer
+
+pipe = Pipeline([
+    ("sentiment", SentimentAnalyzer()),
+    ("summarize", Summarizer()),
+])
+result = pipe.run("I absolutely love this product!")
+```
+
+### Custom Provider
+
+Register an LLM + embedding provider pair so any module can use it via config:
+
+```python
+from aiforge.core.provider import LLMProvider, EmbeddingProvider
+from aiforge.registry import register_provider
+
+class InternalGatewayLLM(LLMProvider):
+    def complete(self, messages, **kwargs): ...
+    async def complete_async(self, messages, **kwargs): ...
+    async def stream(self, messages, **kwargs): ...
+
+class InternalGatewayEmbedding(EmbeddingProvider):
+    def embed(self, texts): ...
+    def embed_query(self, text): ...
+
+register_provider("internal_gateway", InternalGatewayLLM, InternalGatewayEmbedding)
+```
+
+Then set `AIFORGE_PROVIDER=internal_gateway` in your config, or pass it at runtime:
+
+```python
+from aiforge import Summarizer
+s = Summarizer(provider="internal_gateway")
+```
+
+### Custom Vector Store
+
+See the [Custom Vector Stores](#custom-vector-stores) section above for an example. Any class that implements the `VectorStoreAdapter` ABC can be registered with `register_vectorstore()` and activated via `AIFORGE_VECTOR_STORE`.
+
+### Type Safety
+
+- `register_module()` requires the class to be a subclass of `BaseModule` — raises `TypeError` otherwise.
+- `register_vectorstore()` requires the class to be a subclass of `VectorStoreAdapter` — raises `TypeError` otherwise.
+- `get_module()` / `get_vectorstore()` / `get_provider()` raise `KeyError` with a helpful message listing available names if the name isn't found.
+
+---
+
 ## Config Loading Order
 
 ```python

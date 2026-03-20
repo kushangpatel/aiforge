@@ -27,6 +27,22 @@ pip install aiforge[pgvector]          # PostgreSQL + pgvector
 pip install aiforge[server]            # includes FastAPI + Streamlit
 ```
 
+### Plugin System
+
+AIForge auto-registers all 8 built-in modules and vector stores on import. You can extend it with custom plugins:
+
+```python
+from aiforge.registry import register_module, list_modules
+
+# Register a custom module
+register_module("sentiment", SentimentAnalyzer)
+
+# See all available modules
+print(list_modules())  # ['chat', 'classify', ..., 'sentiment', 'summarize']
+```
+
+See the [Plugin System](configuration.md#plugin-system) section for full details on custom modules, providers, and vector stores.
+
 ## 2. Scaffold Config
 
 ```bash

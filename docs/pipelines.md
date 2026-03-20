@@ -94,19 +94,26 @@ pipe = Pipeline([
 
 ## Custom Module in Pipeline
 
+Extend `BaseModule`, implement `run()` / `arun()`, and optionally register with the plugin system:
+
 ```python
-from aiforge.core.module import BaseModule, ModuleResponse
+from aiforge.core.types import BaseModule, ModuleResponse
+from aiforge.registry import register_module
 from aiforge import Pipeline, Summarizer
 
 class SentimentAnalyzer(BaseModule):
     """Custom module — follows the same interface as built-in modules."""
 
-    def run(self, text: str) -> ModuleResponse:
+    def run(self, text: str, **kwargs) -> ModuleResponse:
         result = self._call_llm(f"Classify sentiment: {text}")
-        return SentimentResponse(sentiment=result.text.strip(), cost=result.cost)
+        return ModuleResponse(text=result.text.strip(), cost=result.cost)
 
-    def to_text(self, response: ModuleResponse) -> str:
-        return response.sentiment
+    async def arun(self, text: str, **kwargs) -> ModuleResponse:
+        result = await self._acall_llm(f"Classify sentiment: {text}")
+        return ModuleResponse(text=result.text.strip(), cost=result.cost)
+
+# Register so it's discoverable by name
+register_module("sentiment", SentimentAnalyzer)
 
 # Use in pipelines immediately
 pipe = Pipeline([

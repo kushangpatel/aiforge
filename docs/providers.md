@@ -123,8 +123,8 @@ class MyCustomProvider(LLMProvider):
         ...
 
 # Register for use
-from aiforge.providers import register_provider
-register_provider("my_provider", MyCustomProvider)
+from aiforge.registry import register_provider
+register_provider("my_provider", MyCustomProvider, MyCustomEmbeddingProvider)
 
 # Now usable everywhere
 s = Summarizer(provider="my_provider")
@@ -134,16 +134,18 @@ s = Summarizer(provider="my_provider")
 
 ```python
 from aiforge.core.vectorstore import VectorStoreAdapter
+from aiforge.registry import register_vectorstore
 
-class PgVectorAdapter(VectorStoreAdapter):
-    def add_documents(self, docs, embeddings): ...
-    def query(self, embedding, top_k, filter): ...
+class WeaviateAdapter(VectorStoreAdapter):
+    def add_documents(self, docs, embeddings, metadatas, ids): ...
+    def query(self, embedding, top_k, filter, include_embeddings): ...
     def delete_collection(self, name): ...
+    def list_collections(self): ...
+    def collection_stats(self, name): ...
 
-from aiforge.vectorstores import register_vectorstore
-register_vectorstore("pgvector", PgVectorAdapter)
+register_vectorstore("weaviate", WeaviateAdapter)
 
-qa = DocQA(vector_store="pgvector", pgvector_dsn="postgresql://...")
+# Then set AIFORGE_VECTOR_STORE=weaviate in your config
 ```
 
 ---

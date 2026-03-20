@@ -18,6 +18,7 @@
 | **Provider-Agnostic** | Swap OpenAI → Anthropic → Ollama (local) by changing 1 config value |
 | **Production-Ready** | Retry, rate limiting, streaming, cost tracking out of the box |
 | **Composable Pipelines** | Chain modules into workflows (e.g., extract → classify → summarize) |
+| **Plugin System** | Extend with custom modules, providers, and vector stores via a unified registry |
 | **Built-in Observability** | OpenTelemetry + LangSmith tracing, structured logging, cost tracking |
 | **UI Playground** | Streamlit-powered interactive demo per module — launch with 1 command |
 | **REST API** | Optional FastAPI server exposing all modules as HTTP endpoints |
@@ -400,6 +401,7 @@ aiforge/
 ├── aiforge/                           # SDK source code
 │   ├── __init__.py                    # Public API exports
 │   ├── __version__.py                 # Version string
+│   ├── registry.py                    # Plugin registry (modules, providers, vector stores)
 │   ├── core/                          # Provider-agnostic abstractions
 │   │   ├── types.py                   # BaseModule, CompletionResult, error hierarchy
 │   │   ├── provider.py               # LLMProvider, EmbeddingProvider ABCs
@@ -533,29 +535,71 @@ make docker          # Build Docker image
 
 ## Extending AIForge
 
+AIForge ships with a **plugin system** powered by a unified registry. Register custom modules, providers, and vector stores — then use them interchangeably with built-ins.
+
 ### Custom Module
 
 ```python
 from aiforge.core.types import BaseModule, ModuleResponse
+from aiforge.registry import register_module
 
 class SentimentAnalyzer(BaseModule):
-    def run(self, text: str) -> ModuleResponse:
+    def run(self, text: str, **kwargs) -> ModuleResponse:
         result = self._call_llm(f"Classify sentiment: {text}")
-        return SentimentResponse(sentiment=result.text.strip(), cost=result.cost)
+        return ModuleResponse(text=result.text.strip(), cost=result.cost)
+
+    async def arun(self, text: str, **kwargs) -> ModuleResponse:
+        result = await self._acall_llm(f"Classify sentiment: {text}")
+        return ModuleResponse(text=result.text.strip(), cost=result.cost)
+
+register_module("sentiment", SentimentAnalyzer)
 ```
 
 ### Custom Provider
 
 ```python
-from aiforge.core.provider import LLMProvider
-from aiforge.providers import register_provider
+from aiforge.core.provider import LLMProvider, EmbeddingProvider
+from aiforge.registry import register_provider
 
 class MyProvider(LLMProvider):
-    def complete(self, messages, **kwargs):
-        ...
+    def complete(self, messages, **kwargs): ...
+    async def complete_async(self, messages, **kwargs): ...
+    async def stream(self, messages, **kwargs): ...
 
-register_provider("my_provider", MyProvider)
+class MyEmbeddingProvider(EmbeddingProvider):
+    def embed(self, texts): ...
+    def embed_query(self, text): ...
+
+register_provider("my_provider", MyProvider, MyEmbeddingProvider)
 ```
+
+### Custom Vector Store
+
+```python
+from aiforge.core.vectorstore import VectorStoreAdapter
+from aiforge.registry import register_vectorstore
+
+class WeaviateStore(VectorStoreAdapter):
+    def add_documents(self, texts, embeddings, metadatas, ids): ...
+    def query(self, embedding, top_k, filter, include_embeddings): ...
+    def delete_collection(self, name): ...
+    def list_collections(self): ...
+    def collection_stats(self, name): ...
+
+register_vectorstore("weaviate", WeaviateStore)
+```
+
+### Registry Discovery
+
+```python
+from aiforge.registry import list_modules, list_providers, list_vectorstores
+
+print(list_modules())       # ['chat', 'classify', ..., 'summarize']
+print(list_providers())     # ['anthropic', 'azure', 'ollama', 'openai']
+print(list_vectorstores())  # ['chroma', 'pgvector', 'pinecone', 'qdrant']
+```
+
+See [Plugin System docs](docs/configuration.md#plugin-system) for full details.
 
 ---
 
