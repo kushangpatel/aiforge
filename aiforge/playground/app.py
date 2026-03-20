@@ -31,6 +31,7 @@ PAGES = {
     "✍️ Generate": "pages/generate.py",
     "💬 Chat": "pages/chat.py",
     "🛡️ Moderate": "pages/moderate.py",
+    "🔗 Pipeline": "pages/pipeline.py",
     "⚙️ Settings": "pages/settings.py",
 }
 
@@ -70,5 +71,5 @@ if selected == "🏠 Home" or PAGES.get(selected) is None:
     st.divider()
     st.info(
         "**Available modules:** Summarize · DocQA · Semantic Search · "
-        "Classify · Extract · Generate · Chat · Moderate"
+        "Classify · Extract · Generate · Chat · Moderate · Pipeline"
     )
