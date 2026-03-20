@@ -54,11 +54,11 @@ class _PineconeStub(_StubStore):
     """Pinecone-like stub."""
 
     def __init__(self, *, api_key: str | None = None, index_name: str | None = None,
-                 environment: str | None = None, **kw: Any) -> None:
-        super().__init__(api_key=api_key, index_name=index_name, environment=environment, **kw)
+                 namespace: str = "default", **kw: Any) -> None:
+        super().__init__(api_key=api_key, index_name=index_name, namespace=namespace, **kw)
         self.api_key = api_key
         self.index_name = index_name
-        self.environment = environment
+        self.namespace = namespace
 
 
 class _QdrantStub(_StubStore):
@@ -196,7 +196,7 @@ class TestBuildVectorstorePinecone:
         assert isinstance(store, _PineconeStub)
         assert store.api_key == "pk-test"
         assert store.index_name == "my-idx"
-        assert store.environment == "us-east-1"
+        assert store.namespace == "default"
 
 
 class TestBuildVectorstoreQdrant:

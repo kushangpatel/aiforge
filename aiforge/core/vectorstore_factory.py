@@ -95,8 +95,8 @@ def build_vectorstore(
         kwargs["api_key"] = cfg.PINECONE_API_KEY
         if cfg.PINECONE_INDEX:
             kwargs["index_name"] = cfg.PINECONE_INDEX
-        if cfg.PINECONE_ENVIRONMENT:
-            kwargs["environment"] = cfg.PINECONE_ENVIRONMENT
+        # Pinecone maps "collection" to namespace
+        kwargs["namespace"] = collection_name
 
     elif store_name == "qdrant":
         kwargs["url"] = cfg.QDRANT_URL
@@ -115,7 +115,7 @@ def build_vectorstore(
         "vectorstore.created",
         store=store_name,
         adapter=adapter_cls.__name__,
-        collection=kwargs.get("collection_name", collection_name),
+        collection=kwargs.get("collection_name") or kwargs.get("namespace") or collection_name,
     )
 
     return adapter_cls(**kwargs)

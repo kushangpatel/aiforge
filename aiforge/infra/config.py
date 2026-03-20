@@ -119,7 +119,7 @@ class AIForgeSettings(BaseSettings):
     # Pinecone
     PINECONE_API_KEY: str | None = None
     PINECONE_INDEX: str | None = None
-    PINECONE_ENVIRONMENT: str | None = None
+    PINECONE_ENVIRONMENT: str | None = None  # Deprecated — unused by factory (v3 SDK resolves endpoint automatically)
 
     # Qdrant
     QDRANT_URL: str | None = None

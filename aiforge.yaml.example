@@ -71,7 +71,7 @@ chroma_persist_dir: ./aiforge_data
 # Pinecone settings (only used when vector_store=pinecone)
 # pinecone_api_key: ...          # prefer .env
 # pinecone_index: my-index
-# pinecone_environment: us-east-1
+# Note: pinecone_environment is deprecated — the v3 SDK resolves the endpoint automatically.
 
 # Qdrant settings (only used when vector_store=qdrant)
 # qdrant_url: http://localhost:6333
