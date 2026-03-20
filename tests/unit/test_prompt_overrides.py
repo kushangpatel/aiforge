@@ -444,6 +444,92 @@ class TestDocQAOverride:
 
 
 # ---------------------------------------------------------------------------
+# ChatAgent — prompt override integration
+# ---------------------------------------------------------------------------
+
+
+class TestChatAgentOverride:
+    def _make(self, *, system_prompt=None, custom_prompts=None, tools=None):
+        from aiforge.modules.chat.module import ChatAgent
+        from aiforge.modules.chat.prompts import DEFAULT_SYSTEM_PROMPT, TOOL_USE_SYSTEM
+        import structlog
+        from aiforge.infra.cost_tracker import CostTracker
+
+        agent = object.__new__(ChatAgent)
+        agent.tools = tools or []
+        agent.memory_mode = "buffer"
+        agent.memory_k = 20
+        agent.max_tool_iterations = 5
+        agent.conversation_id = "test-conv-id"
+        agent._system_prompt_override = system_prompt
+        agent.logger = structlog.get_logger()
+        agent._provider = None
+        agent._embedding_provider = MagicMock()
+        agent.settings = _mock_settings(custom_prompts)
+        agent.cost_tracker = CostTracker.get_session()
+
+        from aiforge.core.prompt_override import resolve_prompt
+        base = resolve_prompt(
+            call_override=None,
+            instance_override=system_prompt,
+            config_override=(custom_prompts or {}).get("chat", {}).get("system"),
+            default=DEFAULT_SYSTEM_PROMPT,
+        )
+        if tools:
+            tool_descs = "\n".join(f"- {t.name}: {t.description}" for t in tools)
+            agent.system_prompt = f"{base}\n\n{TOOL_USE_SYSTEM.format(tool_descriptions=tool_descs)}"
+        else:
+            agent.system_prompt = base
+        agent._messages = [{"role": "system", "content": agent.system_prompt}]
+        return agent
+
+    def _graph_result(self, text="response"):
+        return {
+            "messages": [{"role": "assistant", "content": text}],
+            "tool_calls": [],
+            "tool_results": [],
+            "iteration": 0,
+            "total_input_tokens": 10,
+            "total_output_tokens": 5,
+            "model": "gpt-4o-mini",
+        }
+
+    def test_no_override_uses_default(self) -> None:
+        from aiforge.modules.chat.prompts import DEFAULT_SYSTEM_PROMPT
+        agent = self._make()
+        assert agent._messages[0]["content"] == DEFAULT_SYSTEM_PROMPT
+
+    def test_constructor_override_used(self) -> None:
+        agent = self._make(system_prompt="Custom chat system")
+        assert agent._messages[0]["content"] == "Custom chat system"
+
+    def test_per_call_override_used(self) -> None:
+        agent = self._make(system_prompt="Constructor prompt")
+        with patch("aiforge.modules.chat.agent.build_chat_graph") as mock_graph:
+            mock_graph.return_value.invoke.return_value = self._graph_result()
+            agent.chat("hi", system_prompt="Call prompt")
+            assert agent._messages[0]["content"] == "Call prompt"
+
+    def test_config_override_used(self) -> None:
+        agent = self._make(custom_prompts={"chat": {"system": "YAML chat"}})
+        assert agent._messages[0]["content"] == "YAML chat"
+
+    def test_run_passes_system_prompt(self) -> None:
+        agent = self._make()
+        with patch("aiforge.modules.chat.agent.build_chat_graph") as mock_graph:
+            mock_graph.return_value.invoke.return_value = self._graph_result()
+            agent.run("hi", system_prompt="via-run")
+            assert agent._messages[0]["content"] == "via-run"
+
+    def test_per_call_override_beats_constructor(self) -> None:
+        agent = self._make(system_prompt="Constructor")
+        with patch("aiforge.modules.chat.agent.build_chat_graph") as mock_graph:
+            mock_graph.return_value.invoke.return_value = self._graph_result()
+            agent.chat("hi", system_prompt="Per-call wins")
+            assert agent._messages[0]["content"] == "Per-call wins"
+
+
+# ---------------------------------------------------------------------------
 # AIForgeSettings — CUSTOM_PROMPTS field
 # ---------------------------------------------------------------------------
 

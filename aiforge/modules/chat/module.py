@@ -80,11 +80,12 @@ class ChatAgent(BaseModule):
         self.memory_k: int = memory_k
         self.max_tool_iterations: int = max_tool_iterations
         self.conversation_id: str = uuid.uuid4().hex[:16]
+        self._system_prompt_override: str | None = system_prompt
 
         # Build the effective system prompt
         base_prompt = resolve_prompt(
             call_override=None,
-            instance_override=system_prompt,
+            instance_override=self._system_prompt_override,
             config_override=self.settings.CUSTOM_PROMPTS.get("chat", {}).get("system"),
             default=DEFAULT_SYSTEM_PROMPT,
         )
@@ -109,7 +110,7 @@ class ChatAgent(BaseModule):
     # Public API
     # ------------------------------------------------------------------
 
-    def chat(self, message: str) -> ChatResponse:
+    def chat(self, message: str, *, system_prompt: str | None = None) -> ChatResponse:
         """Send a message and get a response.
 
         Maintains conversation state across calls. Tools are invoked
@@ -117,6 +118,7 @@ class ChatAgent(BaseModule):
 
         Args:
             message: The user's message.
+            system_prompt: Optional per-call system prompt override.
 
         Returns:
             :class:`ChatResponse` with the assistant's reply.
@@ -126,6 +128,9 @@ class ChatAgent(BaseModule):
         """
         if not message or not message.strip():
             raise ValueError("message must not be empty or whitespace-only")
+
+        if system_prompt is not None:
+            self._apply_system_prompt_override(system_prompt)
 
         from aiforge.modules.chat.agent import build_chat_graph
 
@@ -153,10 +158,13 @@ class ChatAgent(BaseModule):
 
         return self._build_response(final, response_text, t0)
 
-    async def achat(self, message: str) -> ChatResponse:
+    async def achat(self, message: str, *, system_prompt: str | None = None) -> ChatResponse:
         """Async version of :meth:`chat`."""
         if not message or not message.strip():
             raise ValueError("message must not be empty or whitespace-only")
+
+        if system_prompt is not None:
+            self._apply_system_prompt_override(system_prompt)
 
         from aiforge.modules.chat.agent import build_chat_graph
 
@@ -176,7 +184,7 @@ class ChatAgent(BaseModule):
 
         return self._build_response(final, response_text, t0)
 
-    async def chat_stream(self, message: str) -> AsyncGenerator[str, None]:
+    async def chat_stream(self, message: str, *, system_prompt: str | None = None) -> AsyncGenerator[str, None]:
         """Stream the assistant's response token-by-token.
 
         Yields text chunks as they become available.
@@ -184,6 +192,9 @@ class ChatAgent(BaseModule):
         """
         if not message or not message.strip():
             raise ValueError("message must not be empty or whitespace-only")
+
+        if system_prompt is not None:
+            self._apply_system_prompt_override(system_prompt)
 
         from aiforge.modules.chat.agent import build_chat_graph
 
@@ -214,9 +225,9 @@ class ChatAgent(BaseModule):
             )
             self._manage_memory()
 
-    async def achat_stream(self, message: str) -> AsyncGenerator[str, None]:
+    async def achat_stream(self, message: str, *, system_prompt: str | None = None) -> AsyncGenerator[str, None]:
         """Alias for :meth:`chat_stream`."""
-        async for chunk in self.chat_stream(message):
+        async for chunk in self.chat_stream(message, system_prompt=system_prompt):
             yield chunk
 
     def reset(self) -> None:
@@ -232,11 +243,13 @@ class ChatAgent(BaseModule):
 
     def run(self, text: str, **kwargs: Any) -> ChatResponse:
         """BaseModule interface — delegates to :meth:`chat`."""
-        return self.chat(text)
+        sp = kwargs.pop("system_prompt", None)
+        return self.chat(text, system_prompt=sp)
 
     async def arun(self, text: str, **kwargs: Any) -> ChatResponse:
         """Async BaseModule interface — delegates to :meth:`achat`."""
-        return await self.achat(text)
+        sp = kwargs.pop("system_prompt", None)
+        return await self.achat(text, system_prompt=sp)
 
     def run_stream(self, text: str, **kwargs: Any) -> Iterator[str]:
         """Sync streaming — wraps async stream with event loop."""
@@ -258,6 +271,24 @@ class ChatAgent(BaseModule):
     # ------------------------------------------------------------------
     # Memory management
     # ------------------------------------------------------------------
+
+    def _apply_system_prompt_override(self, system_prompt: str) -> None:
+        """Resolve and apply a per-call system prompt override."""
+        base = resolve_prompt(
+            call_override=system_prompt,
+            instance_override=self._system_prompt_override,
+            config_override=self.settings.CUSTOM_PROMPTS.get("chat", {}).get("system"),
+            default=DEFAULT_SYSTEM_PROMPT,
+        )
+        if self.tools:
+            tool_descs = "\n".join(
+                f"- {t.name}: {t.description}" for t in self.tools
+            )
+            effective = f"{base}\n\n{TOOL_USE_SYSTEM.format(tool_descriptions=tool_descs)}"
+        else:
+            effective = base
+        self.system_prompt = effective
+        self._messages[0] = {"role": "system", "content": self.system_prompt}
 
     def _manage_memory(self) -> None:
         """Apply memory strategy after each turn."""
