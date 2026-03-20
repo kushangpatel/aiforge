@@ -377,6 +377,53 @@ class TestModeratorOverride:
             messages = mock.call_args[0][0]
             assert messages[0]["content"] == "Call prompt"
 
+    def test_toxicity_sub_key_used(self) -> None:
+        """Config `moderate.toxicity_system` overrides only toxicity prompt."""
+        from aiforge.modules.moderate.prompts import INJECTION_SYSTEM
+        m = self._make(
+            checks=["toxicity", "prompt_injection"],
+            custom_prompts={"moderate": {"toxicity_system": "Custom tox"}},
+        )
+        tox_resp = '{"is_toxic": false, "confidence": 0.1, "reason": ""}'
+        inj_resp = '{"is_injection": false, "confidence": 0.1, "reason": ""}'
+        with patch.object(m, "_call_llm", side_effect=[_fake_llm(tox_resp), _fake_llm(inj_resp)]) as mock:
+            m.check("text")
+            tox_messages = mock.call_args_list[0][0][0]
+            inj_messages = mock.call_args_list[1][0][0]
+            assert tox_messages[0]["content"] == "Custom tox"
+            assert inj_messages[0]["content"] == INJECTION_SYSTEM
+
+    def test_injection_sub_key_used(self) -> None:
+        """Config `moderate.injection_system` overrides only injection prompt."""
+        from aiforge.modules.moderate.prompts import TOXICITY_SYSTEM
+        m = self._make(
+            checks=["toxicity", "prompt_injection"],
+            custom_prompts={"moderate": {"injection_system": "Custom inj"}},
+        )
+        tox_resp = '{"is_toxic": false, "confidence": 0.1, "reason": ""}'
+        inj_resp = '{"is_injection": false, "confidence": 0.1, "reason": ""}'
+        with patch.object(m, "_call_llm", side_effect=[_fake_llm(tox_resp), _fake_llm(inj_resp)]) as mock:
+            m.check("text")
+            tox_messages = mock.call_args_list[0][0][0]
+            inj_messages = mock.call_args_list[1][0][0]
+            assert tox_messages[0]["content"] == TOXICITY_SYSTEM
+            assert inj_messages[0]["content"] == "Custom inj"
+
+    def test_system_key_overrides_both_when_no_sub_keys(self) -> None:
+        """Config `moderate.system` overrides both when sub-keys absent."""
+        m = self._make(
+            checks=["toxicity", "prompt_injection"],
+            custom_prompts={"moderate": {"system": "Blanket override"}},
+        )
+        tox_resp = '{"is_toxic": false, "confidence": 0.1, "reason": ""}'
+        inj_resp = '{"is_injection": false, "confidence": 0.1, "reason": ""}'
+        with patch.object(m, "_call_llm", side_effect=[_fake_llm(tox_resp), _fake_llm(inj_resp)]) as mock:
+            m.check("text")
+            tox_messages = mock.call_args_list[0][0][0]
+            inj_messages = mock.call_args_list[1][0][0]
+            assert tox_messages[0]["content"] == "Blanket override"
+            assert inj_messages[0]["content"] == "Blanket override"
+
 
 # ---------------------------------------------------------------------------
 # DocQA — prompt override integration

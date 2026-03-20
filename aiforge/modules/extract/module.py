@@ -130,11 +130,13 @@ class Extractor(BaseModule):
 
     def run(self, text: str, **kwargs: Any) -> ExtractResponse:
         """Pipeline entry point (sync)."""
-        return self.extract(text, **kwargs)
+        sp = kwargs.pop("system_prompt", None)
+        return self.extract(text, system_prompt=sp)
 
     async def arun(self, text: str, **kwargs: Any) -> ExtractResponse:
         """Pipeline entry point (async)."""
-        return await self.aextract(text, **kwargs)
+        sp = kwargs.pop("system_prompt", None)
+        return await self.aextract(text, system_prompt=sp)
 
     # ------------------------------------------------------------------
     # Retry loops

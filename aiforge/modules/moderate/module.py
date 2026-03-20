@@ -203,10 +203,11 @@ class Moderator(BaseModule):
             flags.extend(self._run_pii(text))
 
         if "toxicity" in self.checks:
+            mod_cfg = self.settings.CUSTOM_PROMPTS.get("moderate", {})
             tox_sys = resolve_prompt(
                 call_override=system_prompt,
                 instance_override=self._system_prompt_override,
-                config_override=self.settings.CUSTOM_PROMPTS.get("moderate", {}).get("system"),
+                config_override=mod_cfg.get("toxicity_system") or mod_cfg.get("system"),
                 default=TOXICITY_SYSTEM,
             )
             llm = self._call_llm(
@@ -222,10 +223,11 @@ class Moderator(BaseModule):
             flags.extend(self._parse_toxicity(llm.text))
 
         if "prompt_injection" in self.checks:
+            mod_cfg = self.settings.CUSTOM_PROMPTS.get("moderate", {})
             inj_sys = resolve_prompt(
                 call_override=system_prompt,
                 instance_override=self._system_prompt_override,
-                config_override=self.settings.CUSTOM_PROMPTS.get("moderate", {}).get("system"),
+                config_override=mod_cfg.get("injection_system") or mod_cfg.get("system"),
                 default=INJECTION_SYSTEM,
             )
             llm = self._call_llm(
@@ -253,10 +255,11 @@ class Moderator(BaseModule):
             flags.extend(self._run_pii(text))
 
         if "toxicity" in self.checks:
+            mod_cfg = self.settings.CUSTOM_PROMPTS.get("moderate", {})
             tox_sys = resolve_prompt(
                 call_override=system_prompt,
                 instance_override=self._system_prompt_override,
-                config_override=self.settings.CUSTOM_PROMPTS.get("moderate", {}).get("system"),
+                config_override=mod_cfg.get("toxicity_system") or mod_cfg.get("system"),
                 default=TOXICITY_SYSTEM,
             )
             llm = await self._acall_llm(
@@ -272,10 +275,11 @@ class Moderator(BaseModule):
             flags.extend(self._parse_toxicity(llm.text))
 
         if "prompt_injection" in self.checks:
+            mod_cfg = self.settings.CUSTOM_PROMPTS.get("moderate", {})
             inj_sys = resolve_prompt(
                 call_override=system_prompt,
                 instance_override=self._system_prompt_override,
-                config_override=self.settings.CUSTOM_PROMPTS.get("moderate", {}).get("system"),
+                config_override=mod_cfg.get("injection_system") or mod_cfg.get("system"),
                 default=INJECTION_SYSTEM,
             )
             llm = await self._acall_llm(

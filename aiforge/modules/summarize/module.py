@@ -149,11 +149,13 @@ class Summarizer(BaseModule):
 
     def run(self, text: str, **kwargs: Any) -> SummarizeResponse:
         """Pipeline entry point (sync)."""
-        return self.summarize(text, **kwargs)
+        sp = kwargs.pop("system_prompt", None)
+        return self.summarize(text, system_prompt=sp)
 
     async def arun(self, text: str, **kwargs: Any) -> SummarizeResponse:
         """Pipeline entry point (async)."""
-        return await self.asummarize(text, **kwargs)
+        sp = kwargs.pop("system_prompt", None)
+        return await self.asummarize(text, system_prompt=sp)
 
     # ------------------------------------------------------------------
     # Strategy selection

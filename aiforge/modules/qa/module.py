@@ -386,11 +386,13 @@ class DocQA(BaseModule):
 
     def run(self, text: str, **kwargs: Any) -> QAResponse:
         """Pipeline entry point — delegates to :meth:`ask`."""
-        return self.ask(text, **kwargs)
+        sp = kwargs.pop("system_prompt", None)
+        return self.ask(text, system_prompt=sp)
 
     async def arun(self, text: str, **kwargs: Any) -> QAResponse:
         """Async pipeline entry point — delegates to :meth:`aask`."""
-        return await self.aask(text, **kwargs)
+        sp = kwargs.pop("system_prompt", None)
+        return await self.aask(text, system_prompt=sp)
 
     # ------------------------------------------------------------------
     # Collection management
