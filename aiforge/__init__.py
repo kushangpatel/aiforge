@@ -25,19 +25,23 @@ from aiforge.core.types import (
     VectorStoreError,
 )
 from aiforge.core.model_router import MODEL_CATALOG, ModelRouter, ModelSpec
+from aiforge.core.vectorstore import VectorStoreAdapter
 from aiforge.infra.config import AIForgeSettings, get_settings
 from aiforge.infra.cost_tracker import CostTracker
 from aiforge.infra.logging import configure_logging
 from aiforge.infra.tracing import setup_tracing
 from aiforge.pipeline.pipeline import Pipeline
 from aiforge.pipeline.router import Router
-from aiforge.providers import get_embedding_provider, get_provider, register_provider
+from aiforge.providers import get_embedding_provider
 from aiforge.registry import (
     get_module,
+    get_provider,
     get_vectorstore,
     list_modules,
+    list_providers,
     list_vectorstores,
     register_module,
+    register_provider,
     register_vectorstore,
 )
 
@@ -116,9 +120,12 @@ for _name, _cls in _BUILTIN_MODULES.items():
         register_module(_name, _cls)
 
 # Built-in vector stores
-from aiforge.core.vectorstore import ChromaVectorStore  # noqa: E402
+try:
+    from aiforge.core.vectorstore import ChromaVectorStore  # noqa: E402
 
-register_vectorstore("chroma", ChromaVectorStore)
+    register_vectorstore("chroma", ChromaVectorStore)
+except Exception:  # chromadb may not be installed
+    ChromaVectorStore = None  # type: ignore[assignment,misc]
 
 __all__ = [
     "__version__",
@@ -148,6 +155,7 @@ __all__ = [
     "get_provider",
     "get_embedding_provider",
     "register_provider",
+    "list_providers",
     # Registry (plugin system)
     "register_module",
     "get_module",
@@ -155,6 +163,7 @@ __all__ = [
     "register_vectorstore",
     "get_vectorstore",
     "list_vectorstores",
+    "VectorStoreAdapter",
     "ChromaVectorStore",
     # Pipeline
     "Pipeline",

@@ -16,6 +16,13 @@ _module_registry: dict[str, type[BaseModule]] = {}
 _vectorstore_registry: dict[str, type[VectorStoreAdapter]] = {}
 
 
+def _validate_name(name: str) -> str:
+    """Normalise and validate a registry name."""
+    if not isinstance(name, str) or not name.strip():
+        raise ValueError("Registry name must be a non-empty string")
+    return name.strip().lower()
+
+
 # ---------------------------------------------------------------------------
 # Module registration
 # ---------------------------------------------------------------------------
@@ -34,9 +41,10 @@ def register_module(name: str, cls: type[BaseModule]) -> None:
 
         register_module("sentiment", SentimentAnalyzer)
     """
+    key = _validate_name(name)
     if not (isinstance(cls, type) and issubclass(cls, BaseModule)):
         raise TypeError(f"{cls!r} must be a subclass of BaseModule")
-    _module_registry[name] = cls
+    _module_registry[key] = cls
 
 
 def get_module(name: str) -> type[BaseModule]:
@@ -45,12 +53,13 @@ def get_module(name: str) -> type[BaseModule]:
     Raises:
         KeyError: if *name* is not registered.
     """
-    if name not in _module_registry:
+    key = _validate_name(name)
+    if key not in _module_registry:
         raise KeyError(
-            f"Module {name!r} not registered. "
+            f"Module {key!r} not registered. "
             f"Available: {sorted(_module_registry)}"
         )
-    return _module_registry[name]
+    return _module_registry[key]
 
 
 def list_modules() -> list[str]:
@@ -75,9 +84,10 @@ def register_vectorstore(name: str, cls: type[VectorStoreAdapter]) -> None:
 
         register_vectorstore("pgvector", PgVectorAdapter)
     """
+    key = _validate_name(name)
     if not (isinstance(cls, type) and issubclass(cls, VectorStoreAdapter)):
         raise TypeError(f"{cls!r} must be a subclass of VectorStoreAdapter")
-    _vectorstore_registry[name] = cls
+    _vectorstore_registry[key] = cls
 
 
 def get_vectorstore(name: str) -> type[VectorStoreAdapter]:
@@ -86,14 +96,29 @@ def get_vectorstore(name: str) -> type[VectorStoreAdapter]:
     Raises:
         KeyError: if *name* is not registered.
     """
-    if name not in _vectorstore_registry:
+    key = _validate_name(name)
+    if key not in _vectorstore_registry:
         raise KeyError(
-            f"Vector store {name!r} not registered. "
+            f"Vector store {key!r} not registered. "
             f"Available: {sorted(_vectorstore_registry)}"
         )
-    return _vectorstore_registry[name]
+    return _vectorstore_registry[key]
 
 
 def list_vectorstores() -> list[str]:
     """Return names of all registered vector store adapters."""
     return sorted(_vectorstore_registry)
+
+
+# ---------------------------------------------------------------------------
+# Provider registration (delegates to aiforge.providers)
+# ---------------------------------------------------------------------------
+# The provider subsystem in aiforge.providers has a richer API (lazy loading,
+# settings-based resolution).  We re-export the registration and listing
+# functions here so that registry.py is the unified plugin entry point.
+
+from aiforge.providers import (  # noqa: E402
+    get_provider,
+    list_providers,
+    register_provider,
+)

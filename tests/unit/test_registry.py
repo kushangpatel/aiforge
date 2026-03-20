@@ -239,11 +239,15 @@ class TestPublicExports:
     def test_registry_importable_from_top_level(self) -> None:
         from aiforge import (
             ChromaVectorStore,
+            VectorStoreAdapter,
             get_module,
+            get_provider,
             get_vectorstore,
             list_modules,
+            list_providers,
             list_vectorstores,
             register_module,
+            register_provider,
             register_vectorstore,
         )
 
@@ -253,4 +257,91 @@ class TestPublicExports:
         assert callable(register_vectorstore)
         assert callable(get_vectorstore)
         assert callable(list_vectorstores)
+        assert callable(register_provider)
+        assert callable(get_provider)
+        assert callable(list_providers)
+        assert VectorStoreAdapter is not None
         assert ChromaVectorStore is not None
+
+
+# ---------------------------------------------------------------------------
+# Provider registry (delegates to aiforge.providers)
+# ---------------------------------------------------------------------------
+
+
+class TestProviderRegistry:
+    def test_register_and_list(self) -> None:
+        """register_provider() stores a custom provider, list_providers() includes it."""
+        from aiforge.registry import list_providers, register_provider
+
+        class _FakeLLM:
+            pass
+
+        class _FakeEmbed:
+            pass
+
+        register_provider("custom_test", _FakeLLM, _FakeEmbed)
+        assert "custom_test" in list_providers()
+
+    def test_list_providers_includes_builtins(self) -> None:
+        from aiforge.registry import list_providers
+
+        names = list_providers()
+        # OpenAI is always lazily registered
+        assert "openai" in names
+
+    def test_register_provider_importable_from_registry(self) -> None:
+        """Spec requires register_provider, get_provider, list_providers in registry.py."""
+        from aiforge.registry import get_provider, list_providers, register_provider
+
+        assert callable(register_provider)
+        assert callable(get_provider)
+        assert callable(list_providers)
+
+
+# ---------------------------------------------------------------------------
+# Name normalisation and validation
+# ---------------------------------------------------------------------------
+
+
+class TestNameNormalisation:
+    def test_module_name_lowercased(self) -> None:
+        register_module("MyModule", _StubModule)
+        assert get_module("mymodule") is _StubModule
+        assert "mymodule" in list_modules()
+
+    def test_module_name_stripped(self) -> None:
+        register_module("  padded  ", _StubModule)
+        assert get_module("padded") is _StubModule
+
+    def test_vectorstore_name_lowercased(self) -> None:
+        register_vectorstore("PgVector", _StubVectorStore)
+        assert get_vectorstore("pgvector") is _StubVectorStore
+        assert "pgvector" in list_vectorstores()
+
+    def test_get_module_case_insensitive(self) -> None:
+        register_module("alpha", _StubModule)
+        assert get_module("Alpha") is _StubModule
+        assert get_module("ALPHA") is _StubModule
+
+
+class TestNameValidation:
+    def test_empty_module_name_raises(self) -> None:
+        with pytest.raises(ValueError, match="non-empty"):
+            register_module("", _StubModule)
+
+    def test_whitespace_module_name_raises(self) -> None:
+        with pytest.raises(ValueError, match="non-empty"):
+            register_module("   ", _StubModule)
+
+    def test_empty_vectorstore_name_raises(self) -> None:
+        with pytest.raises(ValueError, match="non-empty"):
+            register_vectorstore("", _StubVectorStore)
+
+    def test_none_module_name_raises(self) -> None:
+        with pytest.raises((ValueError, TypeError)):
+            register_module(None, _StubModule)  # type: ignore[arg-type]
+
+    def test_empty_name_on_get_raises(self) -> None:
+        with pytest.raises(ValueError, match="non-empty"):
+            get_module("")
