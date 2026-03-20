@@ -95,6 +95,28 @@ tracing_backend: langsmith
 # otel_exporter_endpoint: http://localhost:4317
 
 # ---------------------------------------------------------------------------
+# Custom prompt overrides
+# ---------------------------------------------------------------------------
+
+# Override default system prompts for any LLM-using module.
+# Each key is a module name; nested "system" holds the replacement prompt.
+# custom_prompts:
+#   summarize:
+#     system: "You are a legal document summarizer. Be precise and cite clauses."
+#   classify:
+#     system: "Classify the text into exactly one of the provided labels. Be conservative."
+#   extract:
+#     system: "Extract structured data from the text. Return valid JSON only."
+#   generate:
+#     system: "You are a technical writer. Be concise and accurate."
+#   moderate:
+#     system: "You are a content moderator. Flag harmful content."
+#   qa:
+#     system: "You are a code expert. Answer questions using the provided context."
+#   chat:
+#     system: "You are a helpful assistant."
+
+# ---------------------------------------------------------------------------
 # Logging
 # ---------------------------------------------------------------------------
 
