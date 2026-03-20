@@ -122,27 +122,41 @@ class BaseModule(ABC):
     are handled by ``_call_llm()`` and ``_call_embedding()`` provided here.
     """
 
-    def __init__(self, **kwargs: Any) -> None:  # noqa: ANN401
+    def __init__(self, *, quality: str | None = None, **kwargs: Any) -> None:  # noqa: ANN401
+        """Initialise the module.
+
+        Args:
+            quality: Optional quality tier (``"high"``, ``"medium"``,
+                ``"low"``).  When provided (and ``MODEL_ROUTER_ENABLED``
+                is true), the model router selects the cheapest model
+                meeting this tier for the configured provider.  Falls
+                back to ``DEFAULT_QUALITY`` if omitted.
+            **kwargs: Forwarded to ``AIForgeSettings`` as overrides.
+        """
         # Lazy imports to avoid circular deps at class-definition time.
         from aiforge.infra.config import AIForgeSettings, get_settings
         from aiforge.infra.cost_tracker import CostTracker
 
         import structlog
 
-        # Pop quality before passing to AIForgeSettings (not a settings field).
-        quality = kwargs.pop("quality", None)
         explicit_model = "MODEL" in kwargs
 
         # Use the global singleton when no overrides are provided so that all
         # module instances share one consistent settings object.
         self.settings: AIForgeSettings = AIForgeSettings(**kwargs) if kwargs else get_settings()
 
+        # Fall back to configured DEFAULT_QUALITY when caller omits quality=.
+        if quality is None and self.settings.MODEL_ROUTER_ENABLED and not explicit_model:
+            quality = self.settings.DEFAULT_QUALITY
+
         # Model routing: quality= selects the cheapest model meeting the tier.
         if quality is not None and not explicit_model and self.settings.MODEL_ROUTER_ENABLED:
             from aiforge.core.model_router import ModelRouter
 
             try:
-                selected = ModelRouter().select(
+                selected = ModelRouter(
+                    custom_models=self.settings.CUSTOM_MODELS or None,
+                ).select(
                     quality=quality,
                     provider=self.settings.PROVIDER,
                     prefer_local=self.settings.PREFER_LOCAL,

@@ -265,13 +265,29 @@ class TestBaseModuleRouterIntegration:
         # Keeps the default model since router is disabled
         assert clf.settings.MODEL == default_model
 
-    def test_no_quality_keeps_default_model(self) -> None:
-        """No quality= → settings.MODEL is unchanged."""
-        from aiforge.infra.config import get_settings
+    def test_no_quality_uses_default_quality(self) -> None:
+        """No quality= → DEFAULT_QUALITY is used as fallback."""
         from aiforge.modules.classify import Classifier
 
+        # DEFAULT_QUALITY defaults to "medium"; with openai provider → gpt-4o-mini
         clf = Classifier(labels=["a", "b"])
-        assert clf.settings.MODEL == get_settings().MODEL
+        assert clf.settings.MODEL == "gpt-4o-mini"
+
+    def test_no_quality_with_high_default(self) -> None:
+        """DEFAULT_QUALITY='high' routes even without explicit quality=."""
+        from aiforge.modules.classify import Classifier
+
+        clf = Classifier(labels=["a", "b"], DEFAULT_QUALITY="high")
+        assert clf.settings.MODEL == "gpt-4o"
+
+    def test_no_quality_router_disabled_keeps_original(self) -> None:
+        """No quality= + MODEL_ROUTER_ENABLED=False → settings.MODEL unchanged."""
+        from aiforge.infra.config import AIForgeSettings
+        from aiforge.modules.classify import Classifier
+
+        default_model = AIForgeSettings().MODEL
+        clf = Classifier(labels=["a", "b"], MODEL_ROUTER_ENABLED=False)
+        assert clf.settings.MODEL == default_model
 
     def test_quality_with_anthropic_provider(self) -> None:
         """quality='medium' + PROVIDER='anthropic' → claude-3-haiku."""
@@ -307,3 +323,139 @@ class TestBaseModuleRouterIntegration:
         ):
             clf = Classifier(labels=["a", "b"], quality="high")
             assert clf.settings.MODEL == default_model
+
+
+# ---------------------------------------------------------------------------
+# Quality validation
+# ---------------------------------------------------------------------------
+
+
+class TestQualityValidation:
+    """Ensure invalid quality tiers are rejected."""
+
+    def test_invalid_quality_raises(self) -> None:
+        router = ModelRouter()
+        with pytest.raises(ValueError, match="Invalid quality tier"):
+            router.select(quality="ultra")
+
+    def test_invalid_quality_typo_raises(self) -> None:
+        router = ModelRouter()
+        with pytest.raises(ValueError, match="Invalid quality tier"):
+            router.select(quality="hgih")
+
+    def test_invalid_default_quality_config_raises(self) -> None:
+        """DEFAULT_QUALITY field validator rejects invalid tiers."""
+        from pydantic import ValidationError as PydanticValidationError
+
+        with patch.dict("os.environ", {"AIFORGE_OPENAI_API_KEY": "test-key"}, clear=False):
+            from aiforge.infra.config import AIForgeSettings
+
+            with pytest.raises(PydanticValidationError, match="DEFAULT_QUALITY"):
+                AIForgeSettings(DEFAULT_QUALITY="ultra")
+
+
+# ---------------------------------------------------------------------------
+# Custom models config
+# ---------------------------------------------------------------------------
+
+
+class TestCustomModels:
+    """Verify CUSTOM_MODELS config is merged into the router catalog."""
+
+    def test_custom_model_is_selectable(self) -> None:
+        custom = [
+            {
+                "name": "my-fine-tuned",
+                "provider": "openai",
+                "tier": "high",
+                "input_cost_per_m": 1.0,
+                "output_cost_per_m": 2.0,
+                "context_window": 128_000,
+            }
+        ]
+        router = ModelRouter(custom_models=custom)
+        # my-fine-tuned is high tier at $1.0 — cheaper than gpt-4o ($5.0)
+        model = router.select("high", provider="openai")
+        assert model == "my-fine-tuned"
+
+    def test_custom_model_via_settings(self) -> None:
+        """CUSTOM_MODELS in settings flows through to BaseModule routing."""
+        from aiforge.modules.classify import Classifier
+
+        clf = Classifier(
+            labels=["a", "b"],
+            quality="high",
+            CUSTOM_MODELS=[
+                {
+                    "name": "my-tuned",
+                    "provider": "openai",
+                    "tier": "high",
+                    "input_cost_per_m": 0.5,
+                    "output_cost_per_m": 1.0,
+                    "context_window": 64_000,
+                }
+            ],
+        )
+        assert clf.settings.MODEL == "my-tuned"
+
+    def test_invalid_custom_model_skipped(self) -> None:
+        """Malformed custom model entry is skipped without crashing."""
+        custom = [{"bad": "entry"}]  # missing required 'name' and 'provider'
+        router = ModelRouter(custom_models=custom)
+        # Router still works with built-in catalog
+        model = router.select("medium")
+        assert model is not None
+
+    def test_custom_model_empty_list(self) -> None:
+        """Empty CUSTOM_MODELS list is fine."""
+        router = ModelRouter(custom_models=[])
+        model = router.select("medium")
+        assert model is not None
+
+
+# ---------------------------------------------------------------------------
+# Estimate cost delegation
+# ---------------------------------------------------------------------------
+
+
+class TestEstimateCostDelegation:
+    """Verify estimate_cost delegates to pricing.calculate_cost."""
+
+    def test_matches_pricing_module(self) -> None:
+        """Router estimate_cost returns same value as pricing.calculate_cost."""
+        from aiforge.core.pricing import calculate_cost
+
+        router = ModelRouter()
+        for model in ("gpt-4o", "gpt-4o-mini", "claude-3-5-sonnet-20241022"):
+            router_cost = router.estimate_cost(model, 1_000_000, 500_000)
+            pricing_cost = calculate_cost(model, 1_000_000, 500_000)
+            assert router_cost == pytest.approx(pricing_cost), f"Mismatch for {model}"
+
+    def test_respects_pricing_overrides(self) -> None:
+        """estimate_cost picks up runtime pricing overrides."""
+        from aiforge.core.pricing import _pricing_overrides
+
+        router = ModelRouter()
+        # Override gpt-4o price
+        _pricing_overrides["gpt-4o"] = {"input": 1.0, "output": 2.0}
+        try:
+            cost = router.estimate_cost("gpt-4o", 1_000_000, 1_000_000)
+            assert cost == pytest.approx(3.0)  # 1.0 + 2.0
+        finally:
+            _pricing_overrides.pop("gpt-4o", None)
+
+
+# ---------------------------------------------------------------------------
+# Public API exports
+# ---------------------------------------------------------------------------
+
+
+class TestPublicExports:
+    """Verify ModelRouter is importable from top-level package."""
+
+    def test_import_model_router(self) -> None:
+        from aiforge import MODEL_CATALOG, ModelRouter, ModelSpec
+
+        assert ModelRouter is not None
+        assert ModelSpec is not None
+        assert len(MODEL_CATALOG) >= 7

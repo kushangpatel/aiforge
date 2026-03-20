@@ -7,7 +7,7 @@ from typing import Any, Literal
 
 import structlog
 
-from aiforge.core.pricing import MODEL_CONTEXT_WINDOWS, PRICING
+from aiforge.core.pricing import calculate_cost
 
 logger = structlog.get_logger()
 
@@ -65,9 +65,30 @@ class ModelRouter:
         self,
         catalog: list[ModelSpec] | None = None,
         available_providers: list[str] | None = None,
+        custom_models: list[dict[str, Any]] | None = None,
     ) -> None:
         self._catalog = list(MODEL_CATALOG) if catalog is None else catalog
         self._available_providers = available_providers
+
+        # Merge user-defined custom models into the catalog.
+        if custom_models:
+            for entry in custom_models:
+                try:
+                    spec = ModelSpec(
+                        name=entry["name"],
+                        provider=entry["provider"],
+                        tier=entry.get("tier", "medium"),
+                        input_cost_per_m=float(entry.get("input_cost_per_m", 0.0)),
+                        output_cost_per_m=float(entry.get("output_cost_per_m", 0.0)),
+                        context_window=int(entry.get("context_window", 8_192)),
+                    )
+                    self._catalog.append(spec)
+                except (KeyError, TypeError, ValueError) as exc:
+                    logger.warning(
+                        "model_router.invalid_custom_model",
+                        entry=entry,
+                        error=str(exc),
+                    )
 
     def select(
         self,
@@ -92,7 +113,13 @@ class ModelRouter:
         Raises:
             ValueError: if no model satisfies the constraints.
         """
-        min_rank = _TIER_RANK.get(quality, 2)
+        if quality not in _TIER_RANK:
+            raise ValueError(
+                f"Invalid quality tier: {quality!r}. "
+                f"Must be one of {sorted(_TIER_RANK)}"
+            )
+
+        min_rank = _TIER_RANK[quality]
         candidates = [
             m
             for m in self._catalog
@@ -138,14 +165,12 @@ class ModelRouter:
         input_tokens: int,
         output_tokens: int = 0,
     ) -> float:
-        """Estimate cost in USD for a given model and token count."""
-        spec = next((m for m in self._catalog if m.name == model), None)
-        if spec is None:
-            return 0.0
-        return (
-            spec.input_cost_per_m * input_tokens / 1_000_000
-            + spec.output_cost_per_m * output_tokens / 1_000_000
-        )
+        """Estimate cost in USD for a given model and token count.
+
+        Delegates to ``aiforge.core.pricing.calculate_cost`` so that
+        runtime pricing overrides are respected.
+        """
+        return calculate_cost(model, input_tokens, output_tokens)
 
     def list_models(
         self,

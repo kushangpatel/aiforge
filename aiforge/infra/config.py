@@ -161,6 +161,7 @@ class AIForgeSettings(BaseSettings):
     MODEL_ROUTER_ENABLED: bool = True
     DEFAULT_QUALITY: str = "medium"  # "high" | "medium" | "low"
     PREFER_LOCAL: bool = False
+    CUSTOM_MODELS: list[dict[str, Any]] = []
 
     # ------------------------------------------------------------------
     # Validators
@@ -172,6 +173,16 @@ class AIForgeSettings(BaseSettings):
         allowed = {"openai", "anthropic", "ollama", "azure"}
         if v not in allowed:
             raise ValueError(f"AIFORGE_PROVIDER must be one of {allowed}, got {v!r}")
+        return v
+
+    @field_validator("DEFAULT_QUALITY")
+    @classmethod
+    def validate_default_quality(cls, v: str) -> str:
+        allowed = {"high", "medium", "low"}
+        if v not in allowed:
+            raise ValueError(
+                f"AIFORGE_DEFAULT_QUALITY must be one of {allowed}, got {v!r}"
+            )
         return v
 
     @field_validator("TEMPERATURE")

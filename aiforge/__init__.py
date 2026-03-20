@@ -24,6 +24,7 @@ from aiforge.core.types import (
     ValidationError,
     VectorStoreError,
 )
+from aiforge.core.model_router import MODEL_CATALOG, ModelRouter, ModelSpec
 from aiforge.infra.config import AIForgeSettings, get_settings
 from aiforge.infra.cost_tracker import CostTracker
 from aiforge.infra.logging import configure_logging
@@ -107,6 +108,10 @@ __all__ = [
     "AIForgeSettings",
     "get_settings",
     "CostTracker",
+    # Model router
+    "ModelRouter",
+    "ModelSpec",
+    "MODEL_CATALOG",
     # Providers
     "get_provider",
     "get_embedding_provider",

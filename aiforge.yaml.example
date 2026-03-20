@@ -109,6 +109,16 @@ default_quality: "medium"
 # Prefer local Ollama models over cloud models at the same tier.
 prefer_local: false
 
+# Custom models added to the built-in catalog.
+# Each entry needs at minimum: name, provider.
+# custom_models:
+#   - name: "my-finetuned-model"
+#     provider: "openai"
+#     tier: "high"
+#     input_cost_per_m: 6.00
+#     output_cost_per_m: 18.00
+#     context_window: 128000
+
 # ---------------------------------------------------------------------------
 # Custom prompt overrides
 # ---------------------------------------------------------------------------
