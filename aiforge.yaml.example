@@ -95,6 +95,21 @@ tracing_backend: langsmith
 # otel_exporter_endpoint: http://localhost:4317
 
 # ---------------------------------------------------------------------------
+# Model router
+# ---------------------------------------------------------------------------
+
+# Enable automatic model selection based on quality tiers.
+# When enabled and no explicit model is set, the router picks the cheapest
+# model that meets the requested quality tier.
+model_router_enabled: true
+
+# Default quality tier for auto-selection: high | medium | low
+default_quality: "medium"
+
+# Prefer local Ollama models over cloud models at the same tier.
+prefer_local: false
+
+# ---------------------------------------------------------------------------
 # Custom prompt overrides
 # ---------------------------------------------------------------------------
 

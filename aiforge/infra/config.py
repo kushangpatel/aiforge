@@ -156,6 +156,13 @@ class AIForgeSettings(BaseSettings):
     CUSTOM_PROMPTS: dict[str, dict[str, str]] = {}
 
     # ------------------------------------------------------------------
+    # Model router
+    # ------------------------------------------------------------------
+    MODEL_ROUTER_ENABLED: bool = True
+    DEFAULT_QUALITY: str = "medium"  # "high" | "medium" | "low"
+    PREFER_LOCAL: bool = False
+
+    # ------------------------------------------------------------------
     # Validators
     # ------------------------------------------------------------------
 
