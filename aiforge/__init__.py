@@ -32,6 +32,14 @@ from aiforge.infra.tracing import setup_tracing
 from aiforge.pipeline.pipeline import Pipeline
 from aiforge.pipeline.router import Router
 from aiforge.providers import get_embedding_provider, get_provider, register_provider
+from aiforge.registry import (
+    get_module,
+    get_vectorstore,
+    list_modules,
+    list_vectorstores,
+    register_module,
+    register_vectorstore,
+)
 
 # Initialise logging as early as possible (uses defaults; can be reconfigured later)
 configure_logging(
@@ -88,6 +96,30 @@ try:
 except ImportError:
     Moderator = None  # type: ignore[assignment,misc]
 
+# ---------------------------------------------------------------------------
+# Auto-register built-in modules and vector stores
+# ---------------------------------------------------------------------------
+
+_BUILTIN_MODULES: dict[str, type | None] = {
+    "summarize": Summarizer,
+    "qa": DocQA,
+    "extract": Extractor,
+    "classify": Classifier,
+    "search": SemanticSearch,
+    "generate": Generator,
+    "chat": ChatAgent,
+    "moderate": Moderator,
+}
+
+for _name, _cls in _BUILTIN_MODULES.items():
+    if _cls is not None:
+        register_module(_name, _cls)
+
+# Built-in vector stores
+from aiforge.core.vectorstore import ChromaVectorStore  # noqa: E402
+
+register_vectorstore("chroma", ChromaVectorStore)
+
 __all__ = [
     "__version__",
     # Core types
@@ -116,6 +148,14 @@ __all__ = [
     "get_provider",
     "get_embedding_provider",
     "register_provider",
+    # Registry (plugin system)
+    "register_module",
+    "get_module",
+    "list_modules",
+    "register_vectorstore",
+    "get_vectorstore",
+    "list_vectorstores",
+    "ChromaVectorStore",
     # Pipeline
     "Pipeline",
     "Router",

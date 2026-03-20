@@ -55,6 +55,20 @@ def reset_provider_registry() -> None:
     _reg._REGISTRY.update(snapshot)
 
 
+@pytest.fixture(autouse=True)
+def reset_plugin_registry() -> None:
+    """Prevent test-registered modules/vectorstores from leaking."""
+    import copy
+    import aiforge.registry as _reg
+    mod_snapshot = copy.copy(_reg._module_registry)
+    vs_snapshot = copy.copy(_reg._vectorstore_registry)
+    yield
+    _reg._module_registry.clear()
+    _reg._module_registry.update(mod_snapshot)
+    _reg._vectorstore_registry.clear()
+    _reg._vectorstore_registry.update(vs_snapshot)
+
+
 # ---------------------------------------------------------------------------
 # Cost tracker — reset between tests
 # ---------------------------------------------------------------------------
