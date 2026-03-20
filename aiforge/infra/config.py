@@ -185,10 +185,24 @@ class AIForgeSettings(BaseSettings):
     @field_validator("PROVIDER")
     @classmethod
     def validate_provider(cls, v: str) -> str:
-        allowed = {"openai", "anthropic", "ollama", "azure"}
-        if v not in allowed:
-            raise ValueError(f"AIFORGE_PROVIDER must be one of {allowed}, got {v!r}")
-        return v
+        # Built-in providers are always accepted.
+        builtin = {"openai", "anthropic", "ollama", "azure"}
+        if v in builtin:
+            return v
+        # For custom providers, check the runtime registry.
+        # Import lazily to avoid circular deps (config ← providers).
+        try:
+            from aiforge.providers import _REGISTRY, _ensure_registered
+
+            _ensure_registered()
+            if v in _REGISTRY:
+                return v
+        except ImportError:
+            pass
+        raise ValueError(
+            f"AIFORGE_PROVIDER must be a built-in ({sorted(builtin)}) "
+            f"or registered via register_provider(). Got {v!r}"
+        )
 
     @field_validator("VECTOR_STORE")
     @classmethod

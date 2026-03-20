@@ -122,10 +122,14 @@ class BaseModule(ABC):
     are handled by ``_call_llm()`` and ``_call_embedding()`` provided here.
     """
 
-    def __init__(self, *, quality: str | None = None, **kwargs: Any) -> None:  # noqa: ANN401
+    def __init__(self, *, quality: str | None = None, provider: str | None = None, **kwargs: Any) -> None:  # noqa: ANN401
         """Initialise the module.
 
         Args:
+            provider: Optional provider name (e.g. ``"openai"``,
+                ``"internal_gateway"``).  Must be a built-in provider or
+                previously registered via ``register_provider()``.  When
+                omitted, falls back to ``settings.PROVIDER``.
             quality: Optional quality tier (``"high"``, ``"medium"``,
                 ``"low"``).  When provided (and ``MODEL_ROUTER_ENABLED``
                 is true), the model router selects the cheapest model
@@ -133,6 +137,9 @@ class BaseModule(ABC):
                 back to ``DEFAULT_QUALITY`` if omitted.
             **kwargs: Forwarded to ``AIForgeSettings`` as overrides.
         """
+        # Map the friendly provider= kwarg to the settings field name.
+        if provider is not None:
+            kwargs["PROVIDER"] = provider
         # Lazy imports to avoid circular deps at class-definition time.
         from aiforge.infra.config import AIForgeSettings, get_settings
         from aiforge.infra.cost_tracker import CostTracker

@@ -345,3 +345,55 @@ class TestNameValidation:
     def test_empty_name_on_get_raises(self) -> None:
         with pytest.raises(ValueError, match="non-empty"):
             get_module("")
+
+
+# ---------------------------------------------------------------------------
+# Custom provider end-to-end: register → settings → BaseModule
+# ---------------------------------------------------------------------------
+
+
+class TestCustomProviderEndToEnd:
+    """Verify that register_provider() + Summarizer(provider=...) works."""
+
+    def test_config_accepts_registered_provider(self) -> None:
+        """AIForgeSettings should accept a custom provider name that is in the registry."""
+        from aiforge.registry import register_provider
+        from aiforge.infra.config import AIForgeSettings
+
+        class _DummyLLM:
+            pass
+
+        class _DummyEmbed:
+            pass
+
+        register_provider("test_gateway", _DummyLLM, _DummyEmbed)
+        # Must NOT raise ValidationError
+        settings = AIForgeSettings(PROVIDER="test_gateway")
+        assert settings.PROVIDER == "test_gateway"
+
+    def test_config_rejects_unregistered_provider(self) -> None:
+        """An unknown provider name that's not registered should still be rejected."""
+        from aiforge.infra.config import AIForgeSettings
+
+        with pytest.raises(Exception, match="register_provider"):
+            AIForgeSettings(PROVIDER="totally_unknown_xyz")
+
+    def test_base_module_provider_kwarg(self) -> None:
+        """BaseModule(provider='x') should set settings.PROVIDER to 'x'."""
+        from aiforge.registry import register_provider
+
+        class _DummyLLM:
+            pass
+
+        class _DummyEmbed:
+            pass
+
+        register_provider("my_custom", _DummyLLM, _DummyEmbed)
+
+        instance = _StubModule(provider="my_custom")
+        assert instance.settings.PROVIDER == "my_custom"
+
+    def test_base_module_provider_kwarg_invalid_raises(self) -> None:
+        """BaseModule(provider='nonexistent') should raise during settings creation."""
+        with pytest.raises(Exception):
+            _StubModule(provider="nonexistent_provider_xyz")
