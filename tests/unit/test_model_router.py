@@ -212,3 +212,98 @@ class TestConfigKeys:
             assert s.MODEL_ROUTER_ENABLED is False
             assert s.DEFAULT_QUALITY == "high"
             assert s.PREFER_LOCAL is True
+
+
+# ---------------------------------------------------------------------------
+# BaseModule integration — quality= wiring
+# ---------------------------------------------------------------------------
+
+
+class TestBaseModuleRouterIntegration:
+    """Verify that quality= in BaseModule.__init__ routes via ModelRouter."""
+
+    def test_quality_routes_model(self) -> None:
+        """quality='medium' + PROVIDER='openai' → gpt-4o-mini."""
+        from aiforge.modules.classify import Classifier
+
+        clf = Classifier(labels=["a", "b"], quality="medium")
+        assert clf.settings.MODEL == "gpt-4o-mini"
+
+    def test_quality_high_routes_model(self) -> None:
+        """quality='high' + PROVIDER='openai' → gpt-4o."""
+        from aiforge.modules.classify import Classifier
+
+        clf = Classifier(labels=["a", "b"], quality="high")
+        assert clf.settings.MODEL == "gpt-4o"
+
+    def test_quality_low_routes_model(self) -> None:
+        """quality='low' + PROVIDER='openai' → cheapest low-or-above model."""
+        from aiforge.modules.classify import Classifier
+
+        clf = Classifier(labels=["a", "b"], quality="low")
+        # gpt-4o-mini ($0.15) is cheapest openai model at low-or-above tier
+        assert clf.settings.MODEL == "gpt-4o-mini"
+
+    def test_explicit_model_overrides_quality(self) -> None:
+        """Explicit MODEL= takes priority over quality=."""
+        from aiforge.modules.classify import Classifier
+
+        clf = Classifier(labels=["a", "b"], quality="low", MODEL="gpt-4o")
+        assert clf.settings.MODEL == "gpt-4o"
+
+    def test_router_disabled_ignores_quality(self) -> None:
+        """MODEL_ROUTER_ENABLED=False → quality= is ignored."""
+        from aiforge.infra.config import AIForgeSettings
+        from aiforge.modules.classify import Classifier
+
+        default_model = AIForgeSettings().MODEL
+        clf = Classifier(
+            labels=["a", "b"],
+            quality="low",
+            MODEL_ROUTER_ENABLED=False,
+        )
+        # Keeps the default model since router is disabled
+        assert clf.settings.MODEL == default_model
+
+    def test_no_quality_keeps_default_model(self) -> None:
+        """No quality= → settings.MODEL is unchanged."""
+        from aiforge.infra.config import get_settings
+        from aiforge.modules.classify import Classifier
+
+        clf = Classifier(labels=["a", "b"])
+        assert clf.settings.MODEL == get_settings().MODEL
+
+    def test_quality_with_anthropic_provider(self) -> None:
+        """quality='medium' + PROVIDER='anthropic' → claude-3-haiku."""
+        from aiforge.modules.classify import Classifier
+
+        clf = Classifier(
+            labels=["a", "b"],
+            quality="medium",
+            PROVIDER="anthropic",
+            ANTHROPIC_API_KEY="sk-fake",
+            EMBEDDING_MODEL="voyage-3",
+        )
+        assert clf.settings.MODEL == "claude-3-haiku-20240307"
+
+    def test_quality_does_not_mutate_singleton(self) -> None:
+        """Routing creates a private settings copy, not mutating the global."""
+        from aiforge.infra.config import get_settings
+        from aiforge.modules.classify import Classifier
+
+        original_model = get_settings().MODEL
+        clf = Classifier(labels=["a", "b"], quality="low")
+        assert get_settings().MODEL == original_model
+
+    def test_no_matching_model_falls_back(self) -> None:
+        """If router can't match, keeps default model."""
+        from aiforge.infra.config import AIForgeSettings
+        from aiforge.modules.classify import Classifier
+
+        default_model = AIForgeSettings().MODEL
+        with patch(
+            "aiforge.core.model_router.ModelRouter.select",
+            side_effect=ValueError("No model found"),
+        ):
+            clf = Classifier(labels=["a", "b"], quality="high")
+            assert clf.settings.MODEL == default_model

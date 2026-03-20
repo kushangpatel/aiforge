@@ -129,9 +129,29 @@ class BaseModule(ABC):
 
         import structlog
 
+        # Pop quality before passing to AIForgeSettings (not a settings field).
+        quality = kwargs.pop("quality", None)
+        explicit_model = "MODEL" in kwargs
+
         # Use the global singleton when no overrides are provided so that all
         # module instances share one consistent settings object.
         self.settings: AIForgeSettings = AIForgeSettings(**kwargs) if kwargs else get_settings()
+
+        # Model routing: quality= selects the cheapest model meeting the tier.
+        if quality is not None and not explicit_model and self.settings.MODEL_ROUTER_ENABLED:
+            from aiforge.core.model_router import ModelRouter
+
+            try:
+                selected = ModelRouter().select(
+                    quality=quality,
+                    provider=self.settings.PROVIDER,
+                    prefer_local=self.settings.PREFER_LOCAL,
+                )
+                # Avoid mutating the shared singleton — create a private copy.
+                self.settings = self.settings.model_copy(update={"MODEL": selected})
+            except ValueError:
+                pass  # No matching model — keep current settings.MODEL
+
         self.cost_tracker: CostTracker = CostTracker.get_session()
         self.logger = structlog.get_logger(module=self.__class__.__name__)
 
