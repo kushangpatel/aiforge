@@ -190,6 +190,14 @@ class AIForgeSettings(BaseSettings):
             raise ValueError(f"AIFORGE_PROVIDER must be one of {allowed}, got {v!r}")
         return v
 
+    @field_validator("VECTOR_STORE")
+    @classmethod
+    def validate_vector_store(cls, v: str) -> str:
+        v = v.strip().lower()
+        if not v:
+            raise ValueError("AIFORGE_VECTOR_STORE must not be empty")
+        return v
+
     @field_validator("DEFAULT_QUALITY")
     @classmethod
     def validate_default_quality(cls, v: str) -> str:

@@ -75,16 +75,20 @@ def _estimate_tokens(texts: list[str]) -> int:
 
 
 class SemanticSearch(BaseModule):
-    """Semantic search module backed by ChromaDB (default) or any VectorStoreAdapter.
+    """Semantic search module backed by a configurable vector store.
+
+    The backend is selected via ``AIFORGE_VECTOR_STORE`` (default: ``chroma``).
+    Any registered :class:`VectorStoreAdapter` can be used — see
+    :func:`~aiforge.registry.register_vectorstore`.
 
     Embed documents once with :meth:`index`, then retrieve similar ones with
     :meth:`query`.  All embedding costs are tracked and returned in every
     response.
 
     Args:
-        collection:   ChromaDB collection name.  Leading/trailing whitespace
-                      is stripped.
-        persist_dir:  Directory for ChromaDB's SQLite backing store.
+        collection:   Vector store collection name.  Leading/trailing
+                      whitespace is stripped.
+        persist_dir:  Data directory (used by ChromaDB; ignored by other backends).
         top_k:        Default number of results returned per query.  Can be
                       overridden per-call.
         store:        Optional pre-built :class:`VectorStoreAdapter`.

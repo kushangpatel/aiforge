@@ -44,8 +44,8 @@ class DocQA(BaseModule):
     """Document Q&A module with RAG pipeline and agentic refinement.
 
     Args:
-        collection:    ChromaDB collection name.
-        persist_dir:   Directory for ChromaDB's SQLite backing store.
+        collection:    Vector store collection name.
+        persist_dir:   Data directory (used by ChromaDB; ignored by other backends).
         chunk_size:    Override default chunk size for the text splitter.
         chunk_overlap: Override default chunk overlap for the text splitter.
         retrieval_k:   Number of chunks to retrieve per agent iteration.

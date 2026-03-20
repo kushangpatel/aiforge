@@ -7,6 +7,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from aiforge.core.types import ConfigError
 from aiforge.core.vectorstore import VectorStoreAdapter
 from aiforge.core.vectorstore_factory import build_vectorstore
 from aiforge.infra.config import AIForgeSettings
@@ -150,13 +151,34 @@ class TestBuildVectorstorePgvector:
         store = build_vectorstore(collection_name="docs", settings=settings)
         assert store.collection_name == "docs"
 
-    def test_pgvector_no_dsn(self) -> None:
-        """When DSN not set, dsn kwarg is omitted (adapter gets None)."""
+    def test_pgvector_no_dsn_raises(self) -> None:
+        """When DSN not set, ConfigError is raised early."""
         register_vectorstore("pgvector", _PgStub)
         settings = AIForgeSettings(VECTOR_STORE="pgvector")
+        with pytest.raises(ConfigError, match="AIFORGE_PGVECTOR_DSN"):
+            build_vectorstore(settings=settings)
+
+    def test_pgvector_uses_config_collection(self) -> None:
+        """PGVECTOR_COLLECTION from settings is used as the collection name."""
+        register_vectorstore("pgvector", _PgStub)
+        settings = AIForgeSettings(
+            VECTOR_STORE="pgvector",
+            PGVECTOR_DSN="postgresql://u:p@localhost/db",
+            PGVECTOR_COLLECTION="my_table",
+        )
         store = build_vectorstore(settings=settings)
-        assert isinstance(store, _PgStub)
-        assert store.dsn is None
+        assert store.collection_name == "my_table"
+
+    def test_pgvector_config_collection_overridden_by_arg(self) -> None:
+        """collection_name arg takes precedence when PGVECTOR_COLLECTION is empty."""
+        register_vectorstore("pgvector", _PgStub)
+        settings = AIForgeSettings(
+            VECTOR_STORE="pgvector",
+            PGVECTOR_DSN="postgresql://u:p@localhost/db",
+            PGVECTOR_COLLECTION="",
+        )
+        store = build_vectorstore(collection_name="from_arg", settings=settings)
+        assert store.collection_name == "from_arg"
 
 
 class TestBuildVectorstorePinecone:
@@ -196,9 +218,19 @@ class TestBuildVectorstoreQdrant:
 
     def test_qdrant_falls_back_to_arg_collection(self) -> None:
         register_vectorstore("qdrant", _QdrantStub)
-        settings = AIForgeSettings(VECTOR_STORE="qdrant")
+        settings = AIForgeSettings(
+            VECTOR_STORE="qdrant",
+            QDRANT_URL="http://localhost:6333",
+        )
         store = build_vectorstore(collection_name="fallback", settings=settings)
         assert store.collection_name == "fallback"
+
+    def test_qdrant_no_url_raises(self) -> None:
+        """ConfigError raised when QDRANT_URL is missing."""
+        register_vectorstore("qdrant", _QdrantStub)
+        settings = AIForgeSettings(VECTOR_STORE="qdrant")
+        with pytest.raises(ConfigError, match="AIFORGE_QDRANT_URL"):
+            build_vectorstore(settings=settings)
 
 
 class TestBuildVectorstoreCustom:
@@ -254,8 +286,12 @@ class TestConfigField:
         from aiforge.infra.config import get_settings
 
         monkeypatch.setenv("AIFORGE_VECTOR_STORE", "pgvector")
+        # Ensure no yaml file interferes (yaml sets vector_store: chroma)
+        monkeypatch.delenv("AIFORGE_VECTOR_STORE", raising=False)
+        monkeypatch.setenv("AIFORGE_VECTOR_STORE", "pgvector")
         get_settings.cache_clear()
-        settings = get_settings()
+        # Direct constructor bypasses yaml → reads env directly
+        settings = AIForgeSettings()
         assert settings.VECTOR_STORE == "pgvector"
 
     def test_pgvector_dsn_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -274,3 +310,73 @@ class TestPublicExport:
         from aiforge import build_vectorstore as bvs
 
         assert callable(bvs)
+
+
+# ---------------------------------------------------------------------------
+# Credential validation
+# ---------------------------------------------------------------------------
+
+
+class TestCredentialValidation:
+    """Required credentials raise ConfigError early."""
+
+    def test_pgvector_missing_dsn(self) -> None:
+        register_vectorstore("pgvector", _PgStub)
+        settings = AIForgeSettings(VECTOR_STORE="pgvector")
+        with pytest.raises(ConfigError, match="AIFORGE_PGVECTOR_DSN"):
+            build_vectorstore(settings=settings)
+
+    def test_pinecone_missing_api_key(self) -> None:
+        register_vectorstore("pinecone", _PineconeStub)
+        settings = AIForgeSettings(VECTOR_STORE="pinecone")
+        with pytest.raises(ConfigError, match="AIFORGE_PINECONE_API_KEY"):
+            build_vectorstore(settings=settings)
+
+    def test_qdrant_missing_url(self) -> None:
+        register_vectorstore("qdrant", _QdrantStub)
+        settings = AIForgeSettings(VECTOR_STORE="qdrant")
+        with pytest.raises(ConfigError, match="AIFORGE_QDRANT_URL"):
+            build_vectorstore(settings=settings)
+
+    def test_chroma_no_credential_check(self, tmp_path: Any) -> None:
+        """Chroma needs no credentials — no ConfigError raised."""
+        settings = AIForgeSettings(
+            VECTOR_STORE="chroma",
+            CHROMA_PERSIST_DIR=str(tmp_path / "data"),
+        )
+        store = build_vectorstore(settings=settings)
+        assert store is not None
+
+    def test_custom_no_credential_check(self) -> None:
+        """Custom adapters have no credential requirements in the factory."""
+        register_vectorstore("myvec", _StubStore)
+        settings = AIForgeSettings(VECTOR_STORE="myvec")
+        store = build_vectorstore(settings=settings)
+        assert store is not None
+
+
+# ---------------------------------------------------------------------------
+# VECTOR_STORE validator
+# ---------------------------------------------------------------------------
+
+
+class TestVectorStoreValidator:
+    """VECTOR_STORE field validator normalises and rejects empty strings."""
+
+    def test_normalises_to_lowercase(self) -> None:
+        settings = AIForgeSettings(VECTOR_STORE="Chroma")
+        assert settings.VECTOR_STORE == "chroma"
+
+    def test_strips_whitespace(self) -> None:
+        settings = AIForgeSettings(VECTOR_STORE="  pgvector  ")
+        assert settings.VECTOR_STORE == "pgvector"
+
+    def test_rejects_empty(self) -> None:
+        import pydantic
+        with pytest.raises(pydantic.ValidationError, match="must not be empty"):
+            AIForgeSettings(VECTOR_STORE="")
+
+    def test_rejects_whitespace_only(self) -> None:
+        import pydantic
+        with pytest.raises(pydantic.ValidationError, match="must not be empty"):
+            AIForgeSettings(VECTOR_STORE="   ")
