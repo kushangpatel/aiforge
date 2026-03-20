@@ -242,7 +242,7 @@ class Moderator(BaseModule):
             model = model or llm.model
             flags.extend(self._parse_injection(llm.text))
 
-        return self._build_response(flags, input_tokens, output_tokens, model, t0)
+        return self._build_response(flags, input_tokens, output_tokens, model, t0, text)
 
     async def acheck(self, text: str, *, system_prompt: str | None = None) -> ModerateResponse:
         """Async version of :meth:`check`."""
@@ -294,7 +294,7 @@ class Moderator(BaseModule):
             model = model or llm.model
             flags.extend(self._parse_injection(llm.text))
 
-        return self._build_response(flags, input_tokens, output_tokens, model, t0)
+        return self._build_response(flags, input_tokens, output_tokens, model, t0, text)
 
     def redact(self, text: str) -> RedactResponse:
         """Redact PII from *text*.  Regex-only — no LLM calls.
@@ -416,6 +416,7 @@ class Moderator(BaseModule):
         output_tokens: int,
         model: str,
         t0: float,
+        text: str = "",
     ) -> ModerateResponse:
         from aiforge.core.pricing import calculate_cost
 
@@ -423,6 +424,7 @@ class Moderator(BaseModule):
         return ModerateResponse(
             flagged=bool(flags),
             flags=flags,
+            input_text=text,
             cost=cost,
             input_tokens=input_tokens,
             output_tokens=output_tokens,

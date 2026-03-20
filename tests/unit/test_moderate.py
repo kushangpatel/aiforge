@@ -201,8 +201,14 @@ class TestPipelineCompatibility:
         assert isinstance(result, ModerateResponse)
         assert result.flagged is True
 
-    def test_to_text_clean(self) -> None:
+    def test_to_text_clean_no_input(self) -> None:
+        """Without input_text stored, falls back to 'clean'."""
         assert ModerateResponse(flagged=False, flags=[]).to_text() == "clean"
+
+    def test_to_text_clean_passes_through_input(self) -> None:
+        """When clean, to_text() returns the original input for pipeline chaining."""
+        resp = ModerateResponse(flagged=False, flags=[], input_text="Hello world")
+        assert resp.to_text() == "Hello world"
 
     def test_to_text_flagged_includes_span(self) -> None:
         resp = ModerateResponse(

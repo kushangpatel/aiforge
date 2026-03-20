@@ -32,6 +32,10 @@ class ModerateResponse(ModuleResponse):
 
     flagged: bool = False
     flags: list[ModerationFlag] = Field(default_factory=list)
+    input_text: str = Field(
+        default="",
+        description="Original input text — passed through by to_text() when clean.",
+    )
 
     @property
     def label(self) -> str:
@@ -39,9 +43,9 @@ class ModerateResponse(ModuleResponse):
         return "flagged" if self.flagged else "clean"
 
     def to_text(self) -> str:
-        """Human-readable flag summary for pipeline chaining."""
+        """Pipeline chaining: pass original text through when clean, flag summary when flagged."""
         if not self.flagged:
-            return "clean"
+            return self.input_text or "clean"
         parts = []
         for f in self.flags:
             lbl = f"{f.type}:{f.subtype}" if f.subtype else f.type
