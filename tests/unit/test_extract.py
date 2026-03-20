@@ -60,7 +60,9 @@ def _ext(
     settings = MagicMock()
     settings.RATE_LIMIT_RPM = 500
     settings.RATE_LIMIT_TPM = 150_000
+    settings.CUSTOM_PROMPTS = {}
     e.settings = settings
+    e._system_prompt_override = None
     from aiforge.infra.cost_tracker import CostTracker
 
     e.cost_tracker = CostTracker.get_session()

@@ -41,7 +41,9 @@ def _clf(
     settings = MM()
     settings.RATE_LIMIT_RPM = 500
     settings.RATE_LIMIT_TPM = 150_000
+    settings.CUSTOM_PROMPTS = {}
     c.settings = settings
+    c._system_prompt_override = None
     from aiforge.infra.cost_tracker import CostTracker
     c.cost_tracker = CostTracker.get_session()
     return c

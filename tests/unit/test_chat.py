@@ -60,6 +60,7 @@ def _agent(
     settings.RATE_LIMIT_RPM = 500
     settings.RATE_LIMIT_TPM = 150_000
     settings.MODEL = "gpt-4o-mini"
+    settings.CUSTOM_PROMPTS = {}
     agent.settings = settings
     from aiforge.infra.cost_tracker import CostTracker
 

@@ -33,6 +33,7 @@ import re
 import time
 from typing import Any, Callable
 
+from aiforge.core.prompt_override import resolve_prompt
 from aiforge.core.types import BaseModule
 from aiforge.modules.generate.prompts import (
     GENERATE_RETRY,
@@ -117,6 +118,7 @@ class Generator(BaseModule):
         max_tokens: int = 1024,
         temperature: float = 0.7,
         competitors: list[str] | None = None,
+        system_prompt: str | None = None,
         **kwargs: Any,
     ) -> None:
         super().__init__(**kwargs)
@@ -129,12 +131,13 @@ class Generator(BaseModule):
         self.max_tokens = max_tokens
         self.temperature = temperature
         self.competitors: list[str] = competitors or []
+        self._system_prompt_override: str | None = system_prompt
 
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
 
-    def generate(self, prompt: str | None = None, **variables: Any) -> GenerateResponse:
+    def generate(self, prompt: str | None = None, *, system_prompt: str | None = None, **variables: Any) -> GenerateResponse:
         """Generate content synchronously.
 
         Either *self.template* (with ``**variables``) **or** *prompt* must
@@ -142,13 +145,25 @@ class Generator(BaseModule):
         """
         t0 = time.monotonic()
         final_prompt = self._resolve_prompt(prompt, variables)
-        return self._generate_loop(final_prompt, t0)
+        resolved_system = resolve_prompt(
+            call_override=system_prompt,
+            instance_override=self._system_prompt_override,
+            config_override=self.settings.CUSTOM_PROMPTS.get("generate", {}).get("system"),
+            default=GENERATE_SYSTEM,
+        )
+        return self._generate_loop(final_prompt, t0, resolved_system)
 
-    async def agenerate(self, prompt: str | None = None, **variables: Any) -> GenerateResponse:
+    async def agenerate(self, prompt: str | None = None, *, system_prompt: str | None = None, **variables: Any) -> GenerateResponse:
         """Async version of :meth:`generate`."""
         t0 = time.monotonic()
         final_prompt = self._resolve_prompt(prompt, variables)
-        return await self._agenerate_loop(final_prompt, t0)
+        resolved_system = resolve_prompt(
+            call_override=system_prompt,
+            instance_override=self._system_prompt_override,
+            config_override=self.settings.CUSTOM_PROMPTS.get("generate", {}).get("system"),
+            default=GENERATE_SYSTEM,
+        )
+        return await self._agenerate_loop(final_prompt, t0, resolved_system)
 
     # Pipeline interface -----------------------------------------------
 
@@ -157,11 +172,13 @@ class Generator(BaseModule):
 
         *text* is treated as a freeform prompt.
         """
-        return self.generate(prompt=text, **kwargs)
+        sp = kwargs.pop("system_prompt", None)
+        return self.generate(prompt=text, system_prompt=sp, **kwargs)
 
     async def arun(self, text: str, **kwargs: Any) -> GenerateResponse:
         """Pipeline entry point (async)."""
-        return await self.agenerate(prompt=text, **kwargs)
+        sp = kwargs.pop("system_prompt", None)
+        return await self.agenerate(prompt=text, system_prompt=sp, **kwargs)
 
     # ------------------------------------------------------------------
     # Prompt resolution
@@ -194,7 +211,7 @@ class Generator(BaseModule):
     # Generate-and-guard loop
     # ------------------------------------------------------------------
 
-    def _generate_loop(self, final_prompt: str, t0: float) -> GenerateResponse:
+    def _generate_loop(self, final_prompt: str, t0: float, system: str) -> GenerateResponse:
         """Synchronous generate → check guardrails → retry loop."""
         total_in = total_out = 0
         total_cost = 0.0
@@ -206,7 +223,7 @@ class Generator(BaseModule):
         for attempt in range(_MAX_RETRIES + 1):
             llm = self._call_llm(
                 [
-                    {"role": "system", "content": GENERATE_SYSTEM},
+                    {"role": "system", "content": system},
                     {"role": "user", "content": current_prompt},
                 ],
                 max_tokens=self.max_tokens,
@@ -251,7 +268,7 @@ class Generator(BaseModule):
             latency_ms=(time.monotonic() - t0) * 1000,
         )
 
-    async def _agenerate_loop(self, final_prompt: str, t0: float) -> GenerateResponse:
+    async def _agenerate_loop(self, final_prompt: str, t0: float, system: str) -> GenerateResponse:
         """Async generate → check guardrails → retry loop."""
         total_in = total_out = 0
         total_cost = 0.0
@@ -263,7 +280,7 @@ class Generator(BaseModule):
         for attempt in range(_MAX_RETRIES + 1):
             llm = await self._acall_llm(
                 [
-                    {"role": "system", "content": GENERATE_SYSTEM},
+                    {"role": "system", "content": system},
                     {"role": "user", "content": current_prompt},
                 ],
                 max_tokens=self.max_tokens,

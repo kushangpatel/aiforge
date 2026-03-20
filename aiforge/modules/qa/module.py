@@ -29,6 +29,7 @@ import uuid
 from typing import Any
 
 from aiforge.core.pricing import calculate_cost
+from aiforge.core.prompt_override import resolve_prompt
 from aiforge.core.types import AIForgeError, BaseModule
 from aiforge.core.vectorstore import VectorStoreAdapter
 from aiforge.modules.qa.schemas import IngestResponse, QAResponse
@@ -62,6 +63,7 @@ class DocQA(BaseModule):
         retrieval_k: int = 6,
         max_iterations: int = 3,
         store: VectorStoreAdapter | None = None,
+        system_prompt: str | None = None,
         **kwargs: Any,
     ) -> None:
         super().__init__(**kwargs)
@@ -80,6 +82,7 @@ class DocQA(BaseModule):
         self.retrieval_k: int = retrieval_k
         self.max_iterations: int = max_iterations
         self._store: VectorStoreAdapter = store or self._build_store()
+        self._system_prompt_override: str | None = system_prompt
 
     # ------------------------------------------------------------------
     # Ingestion
@@ -305,6 +308,7 @@ class DocQA(BaseModule):
         *,
         filter_repo: str | None = None,
         include_trace: bool = False,
+        system_prompt: str | None = None,
     ) -> QAResponse:
         """Ask a question against ingested documents using a LangGraph agent.
 
@@ -337,7 +341,7 @@ class DocQA(BaseModule):
             )
 
         graph = build_qa_graph(
-            llm_fn=self._make_llm_fn(),
+            llm_fn=self._make_llm_fn(system_prompt=system_prompt),
             retrieve_fn=self._make_retrieve_fn(),
             retrieval_k=self.retrieval_k,
         )
@@ -351,6 +355,7 @@ class DocQA(BaseModule):
         *,
         filter_repo: str | None = None,
         include_trace: bool = False,
+        system_prompt: str | None = None,
     ) -> QAResponse:
         """Async version of :meth:`ask`."""
         if not query or not query.strip():
@@ -367,7 +372,7 @@ class DocQA(BaseModule):
             )
 
         graph = build_qa_graph(
-            llm_fn=self._make_llm_fn(),
+            llm_fn=self._make_llm_fn(system_prompt=system_prompt),
             retrieve_fn=self._make_retrieve_fn(),
             retrieval_k=self.retrieval_k,
         )
@@ -419,11 +424,21 @@ class DocQA(BaseModule):
             collection_name=self.collection,
         )
 
-    def _make_llm_fn(self):
+    def _make_llm_fn(self, *, system_prompt: str | None = None):
         """Return a ``(prompt: str) → CompletionResult`` closure."""
+        resolved = resolve_prompt(
+            call_override=system_prompt,
+            instance_override=self._system_prompt_override,
+            config_override=self.settings.CUSTOM_PROMPTS.get("qa", {}).get("system"),
+            default="",
+        )
 
         def _llm(prompt: str):
-            return self._call_llm([{"role": "user", "content": prompt}])
+            messages: list[dict[str, str]] = []
+            if resolved:
+                messages.append({"role": "system", "content": resolved})
+            messages.append({"role": "user", "content": prompt})
+            return self._call_llm(messages)
 
         return _llm
 

@@ -22,6 +22,7 @@ import re
 import time
 from typing import Any
 
+from aiforge.core.prompt_override import resolve_prompt
 from aiforge.core.types import BaseModule
 from aiforge.modules.moderate.prompts import (
     INJECTION_SYSTEM,
@@ -165,6 +166,7 @@ class Moderator(BaseModule):
         self,
         checks: list[str] | None = None,
         pii_types: list[str] | None = None,
+        system_prompt: str | None = None,
         **kwargs: Any,
     ) -> None:
         super().__init__(**kwargs)
@@ -174,6 +176,7 @@ class Moderator(BaseModule):
         self.pii_types: list[str] = (
             pii_types if pii_types is not None else ["email", "phone", "ssn", "credit_card"]
         )
+        self._system_prompt_override: str | None = system_prompt
         bad_checks = set(self.checks) - _VALID_CHECKS
         if bad_checks:
             raise ValueError(f"Unknown check types: {bad_checks}. Valid: {_VALID_CHECKS}")
@@ -185,7 +188,7 @@ class Moderator(BaseModule):
     # Public API
     # ------------------------------------------------------------------
 
-    def check(self, text: str) -> ModerateResponse:
+    def check(self, text: str, *, system_prompt: str | None = None) -> ModerateResponse:
         """Scan *text* synchronously and return a :class:`ModerateResponse`.
 
         PII checks are regex-only (< 1 ms).  Toxicity and prompt-injection
@@ -200,9 +203,15 @@ class Moderator(BaseModule):
             flags.extend(self._run_pii(text))
 
         if "toxicity" in self.checks:
+            tox_sys = resolve_prompt(
+                call_override=system_prompt,
+                instance_override=self._system_prompt_override,
+                config_override=self.settings.CUSTOM_PROMPTS.get("moderate", {}).get("system"),
+                default=TOXICITY_SYSTEM,
+            )
             llm = self._call_llm(
                 [
-                    {"role": "system", "content": TOXICITY_SYSTEM},
+                    {"role": "system", "content": tox_sys},
                     {"role": "user", "content": TOXICITY_USER.format(text=text)},
                 ],
                 temperature=0.0,
@@ -213,9 +222,15 @@ class Moderator(BaseModule):
             flags.extend(self._parse_toxicity(llm.text))
 
         if "prompt_injection" in self.checks:
+            inj_sys = resolve_prompt(
+                call_override=system_prompt,
+                instance_override=self._system_prompt_override,
+                config_override=self.settings.CUSTOM_PROMPTS.get("moderate", {}).get("system"),
+                default=INJECTION_SYSTEM,
+            )
             llm = self._call_llm(
                 [
-                    {"role": "system", "content": INJECTION_SYSTEM},
+                    {"role": "system", "content": inj_sys},
                     {"role": "user", "content": INJECTION_USER.format(text=text)},
                 ],
                 temperature=0.0,
@@ -227,7 +242,7 @@ class Moderator(BaseModule):
 
         return self._build_response(flags, input_tokens, output_tokens, model, t0)
 
-    async def acheck(self, text: str) -> ModerateResponse:
+    async def acheck(self, text: str, *, system_prompt: str | None = None) -> ModerateResponse:
         """Async version of :meth:`check`."""
         t0 = time.monotonic()
         flags: list[ModerationFlag] = []
@@ -238,9 +253,15 @@ class Moderator(BaseModule):
             flags.extend(self._run_pii(text))
 
         if "toxicity" in self.checks:
+            tox_sys = resolve_prompt(
+                call_override=system_prompt,
+                instance_override=self._system_prompt_override,
+                config_override=self.settings.CUSTOM_PROMPTS.get("moderate", {}).get("system"),
+                default=TOXICITY_SYSTEM,
+            )
             llm = await self._acall_llm(
                 [
-                    {"role": "system", "content": TOXICITY_SYSTEM},
+                    {"role": "system", "content": tox_sys},
                     {"role": "user", "content": TOXICITY_USER.format(text=text)},
                 ],
                 temperature=0.0,
@@ -251,9 +272,15 @@ class Moderator(BaseModule):
             flags.extend(self._parse_toxicity(llm.text))
 
         if "prompt_injection" in self.checks:
+            inj_sys = resolve_prompt(
+                call_override=system_prompt,
+                instance_override=self._system_prompt_override,
+                config_override=self.settings.CUSTOM_PROMPTS.get("moderate", {}).get("system"),
+                default=INJECTION_SYSTEM,
+            )
             llm = await self._acall_llm(
                 [
-                    {"role": "system", "content": INJECTION_SYSTEM},
+                    {"role": "system", "content": inj_sys},
                     {"role": "user", "content": INJECTION_USER.format(text=text)},
                 ],
                 temperature=0.0,
@@ -284,19 +311,15 @@ class Moderator(BaseModule):
         """Async version of :meth:`redact` (no I/O — runs synchronously)."""
         return self.redact(text)
 
-    def run(self, text: str, **_kwargs: Any) -> ModerateResponse:
-        """Pipeline-compatible entry point — delegates to :meth:`check`.
+    def run(self, text: str, **kwargs: Any) -> ModerateResponse:
+        """Pipeline-compatible entry point — delegates to :meth:`check`."""
+        sp = kwargs.pop("system_prompt", None)
+        return self.check(text, system_prompt=sp)
 
-        Note: ``**_kwargs`` accepted for ABC compatibility but unused by Moderator.
-        """
-        return self.check(text)
-
-    async def arun(self, text: str, **_kwargs: Any) -> ModerateResponse:
-        """Async pipeline entry point — delegates to :meth:`acheck`.
-
-        Note: ``**_kwargs`` accepted for ABC compatibility but unused by Moderator.
-        """
-        return await self.acheck(text)
+    async def arun(self, text: str, **kwargs: Any) -> ModerateResponse:
+        """Async pipeline entry point — delegates to :meth:`acheck`."""
+        sp = kwargs.pop("system_prompt", None)
+        return await self.acheck(text, system_prompt=sp)
 
     # ------------------------------------------------------------------
     # Private helpers

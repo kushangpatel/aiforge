@@ -33,6 +33,7 @@ import uuid
 from typing import Any, AsyncGenerator, Iterator
 
 from aiforge.core.pricing import calculate_cost
+from aiforge.core.prompt_override import resolve_prompt
 from aiforge.core.types import BaseModule
 from aiforge.modules.chat.prompts import (
     DEFAULT_SYSTEM_PROMPT,
@@ -81,7 +82,12 @@ class ChatAgent(BaseModule):
         self.conversation_id: str = uuid.uuid4().hex[:16]
 
         # Build the effective system prompt
-        base_prompt = system_prompt or DEFAULT_SYSTEM_PROMPT
+        base_prompt = resolve_prompt(
+            call_override=None,
+            instance_override=system_prompt,
+            config_override=self.settings.CUSTOM_PROMPTS.get("chat", {}).get("system"),
+            default=DEFAULT_SYSTEM_PROMPT,
+        )
         if tools:
             tool_descs = "\n".join(
                 f"- {t.name}: {t.description}" for t in self.tools

@@ -49,7 +49,9 @@ def _qa(
     settings.RATE_LIMIT_RPM = 500
     settings.RATE_LIMIT_TPM = 150_000
     settings.MODEL = "gpt-4o-mini"
+    settings.CUSTOM_PROMPTS = {}
     qa.settings = settings
+    qa._system_prompt_override = None
     from aiforge.infra.cost_tracker import CostTracker
 
     qa.cost_tracker = CostTracker.get_session()

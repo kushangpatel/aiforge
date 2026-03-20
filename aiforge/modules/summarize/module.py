@@ -5,6 +5,7 @@ from __future__ import annotations
 import time
 from typing import Any
 
+from aiforge.core.prompt_override import resolve_prompt
 from aiforge.core.types import BaseModule
 from aiforge.modules.summarize.prompts import (
     SUMMARIZE_BULLET_POINTS,
@@ -86,6 +87,7 @@ class Summarizer(BaseModule):
         style: SummarizeStyle = "concise",
         max_length: int = 500,
         temperature: float = 0.0,
+        system_prompt: str | None = None,
         **kwargs: Any,
     ) -> None:
         super().__init__(**kwargs)
@@ -98,6 +100,7 @@ class Summarizer(BaseModule):
         self.style: SummarizeStyle = style
         self.max_length: int = max_length
         self.temperature: float = temperature
+        self._system_prompt_override: str | None = system_prompt
 
     # ------------------------------------------------------------------
     # Public API
@@ -108,6 +111,7 @@ class Summarizer(BaseModule):
         text: str,
         *,
         strategy: str | None = None,
+        system_prompt: str | None = None,
     ) -> SummarizeResponse:
         """Summarize *text* synchronously.
 
@@ -115,29 +119,33 @@ class Summarizer(BaseModule):
             text:     Source text to summarise.
             strategy: Force ``"stuff"`` or ``"map_reduce"``.  ``None`` auto-
                       selects based on token count vs. context window.
+            system_prompt: Per-call system prompt override.
         """
         if not text or not text.strip():
             raise ValueError("text must not be empty or whitespace-only")
         t0 = time.monotonic()
         chosen = self._choose_strategy(text, strategy)
+        resolved = self._resolve_system_prompt(system_prompt)
         if chosen == "stuff":
-            return self._stuff(text, t0)
-        return self._map_reduce(text, t0)
+            return self._stuff(text, t0, resolved)
+        return self._map_reduce(text, t0, resolved)
 
     async def asummarize(
         self,
         text: str,
         *,
         strategy: str | None = None,
+        system_prompt: str | None = None,
     ) -> SummarizeResponse:
         """Async version of :meth:`summarize`."""
         if not text or not text.strip():
             raise ValueError("text must not be empty or whitespace-only")
         t0 = time.monotonic()
         chosen = self._choose_strategy(text, strategy)
+        resolved = self._resolve_system_prompt(system_prompt)
         if chosen == "stuff":
-            return await self._astuff(text, t0)
-        return await self._amap_reduce(text, t0)
+            return await self._astuff(text, t0, resolved)
+        return await self._amap_reduce(text, t0, resolved)
 
     def run(self, text: str, **kwargs: Any) -> SummarizeResponse:
         """Pipeline entry point (sync)."""
@@ -164,20 +172,32 @@ class Summarizer(BaseModule):
         return "map_reduce" if token_count > threshold else "stuff"
 
     # ------------------------------------------------------------------
+    # Prompt override resolution
+    # ------------------------------------------------------------------
+
+    def _resolve_system_prompt(self, call_override: str | None = None) -> str:
+        return resolve_prompt(
+            call_override=call_override,
+            instance_override=self._system_prompt_override,
+            config_override=self.settings.CUSTOM_PROMPTS.get("summarize", {}).get("system"),
+            default=SUMMARIZE_SYSTEM,
+        )
+
+    # ------------------------------------------------------------------
     # Stuff strategy (single call)
     # ------------------------------------------------------------------
 
-    def _build_stuff_messages(self, text: str) -> list[dict[str, str]]:
+    def _build_stuff_messages(self, text: str, system: str) -> list[dict[str, str]]:
         """Construct messages for a single-call summarisation."""
         template = _STYLE_PROMPTS[self.style]
         user_content = template.format(text=text, max_length=self.max_length)
         return [
-            {"role": "system", "content": SUMMARIZE_SYSTEM},
+            {"role": "system", "content": system},
             {"role": "user", "content": user_content},
         ]
 
-    def _stuff(self, text: str, t0: float) -> SummarizeResponse:
-        messages = self._build_stuff_messages(text)
+    def _stuff(self, text: str, t0: float, system: str) -> SummarizeResponse:
+        messages = self._build_stuff_messages(text, system)
         llm = self._call_llm(messages, temperature=self.temperature)
         from aiforge.core.pricing import calculate_cost
         cost = calculate_cost(llm.model, llm.input_tokens, llm.output_tokens)
@@ -192,8 +212,8 @@ class Summarizer(BaseModule):
             latency_ms=(time.monotonic() - t0) * 1000,
         )
 
-    async def _astuff(self, text: str, t0: float) -> SummarizeResponse:
-        messages = self._build_stuff_messages(text)
+    async def _astuff(self, text: str, t0: float, system: str) -> SummarizeResponse:
+        messages = self._build_stuff_messages(text, system)
         llm = await self._acall_llm(messages, temperature=self.temperature)
         from aiforge.core.pricing import calculate_cost
         cost = calculate_cost(llm.model, llm.input_tokens, llm.output_tokens)
@@ -217,23 +237,23 @@ class Summarizer(BaseModule):
         ctx = get_context_window(self.settings.MODEL)
         return int(ctx * _CHUNK_SIZE_RATIO)
 
-    def _build_map_messages(self, chunk: str) -> list[dict[str, str]]:
+    def _build_map_messages(self, chunk: str, system: str) -> list[dict[str, str]]:
         user_content = SUMMARIZE_MAP.format(chunk=chunk)
         return [
-            {"role": "system", "content": SUMMARIZE_SYSTEM},
+            {"role": "system", "content": system},
             {"role": "user", "content": user_content},
         ]
 
-    def _build_reduce_messages(self, summaries: str) -> list[dict[str, str]]:
+    def _build_reduce_messages(self, summaries: str, system: str) -> list[dict[str, str]]:
         user_content = SUMMARIZE_REDUCE.format(
             summaries=summaries, max_length=self.max_length,
         )
         return [
-            {"role": "system", "content": SUMMARIZE_SYSTEM},
+            {"role": "system", "content": system},
             {"role": "user", "content": user_content},
         ]
 
-    def _map_reduce(self, text: str, t0: float) -> SummarizeResponse:
+    def _map_reduce(self, text: str, t0: float, system: str) -> SummarizeResponse:
         chunk_size = self._get_chunk_size()
         chunks = _split_text(text, chunk_size)
 
@@ -244,7 +264,7 @@ class Summarizer(BaseModule):
 
         # Map phase
         for chunk in chunks:
-            messages = self._build_map_messages(chunk)
+            messages = self._build_map_messages(chunk, system)
             llm = self._call_llm(messages, temperature=self.temperature)
             from aiforge.core.pricing import calculate_cost
             cost = calculate_cost(llm.model, llm.input_tokens, llm.output_tokens)
@@ -256,7 +276,7 @@ class Summarizer(BaseModule):
 
         # Reduce phase
         combined = "\n\n".join(chunk_summaries)
-        messages = self._build_reduce_messages(combined)
+        messages = self._build_reduce_messages(combined, system)
         llm = self._call_llm(messages, temperature=self.temperature)
         from aiforge.core.pricing import calculate_cost
         cost = calculate_cost(llm.model, llm.input_tokens, llm.output_tokens)
@@ -276,7 +296,7 @@ class Summarizer(BaseModule):
             latency_ms=(time.monotonic() - t0) * 1000,
         )
 
-    async def _amap_reduce(self, text: str, t0: float) -> SummarizeResponse:
+    async def _amap_reduce(self, text: str, t0: float, system: str) -> SummarizeResponse:
         chunk_size = self._get_chunk_size()
         chunks = _split_text(text, chunk_size)
 
@@ -287,7 +307,7 @@ class Summarizer(BaseModule):
 
         # Map phase
         for chunk in chunks:
-            messages = self._build_map_messages(chunk)
+            messages = self._build_map_messages(chunk, system)
             llm = await self._acall_llm(messages, temperature=self.temperature)
             from aiforge.core.pricing import calculate_cost
             cost = calculate_cost(llm.model, llm.input_tokens, llm.output_tokens)
@@ -297,9 +317,9 @@ class Summarizer(BaseModule):
             model = llm.model
             chunk_summaries.append(llm.text.strip())
 
-        # Reduce phase
+        # Reduce phase (async)
         combined = "\n\n".join(chunk_summaries)
-        messages = self._build_reduce_messages(combined)
+        messages = self._build_reduce_messages(combined, system)
         llm = await self._acall_llm(messages, temperature=self.temperature)
         from aiforge.core.pricing import calculate_cost
         cost = calculate_cost(llm.model, llm.input_tokens, llm.output_tokens)

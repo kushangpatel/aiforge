@@ -11,6 +11,7 @@ Layered priority (low → high):
 
 from __future__ import annotations
 
+import json
 import os
 from functools import lru_cache
 from pathlib import Path
@@ -150,6 +151,11 @@ class AIForgeSettings(BaseSettings):
     PLAYGROUND_PORT: int = 8501
 
     # ------------------------------------------------------------------
+    # Custom prompt overrides (from aiforge.yaml custom_prompts: section)
+    # ------------------------------------------------------------------
+    CUSTOM_PROMPTS: dict[str, dict[str, str]] = {}
+
+    # ------------------------------------------------------------------
     # Validators
     # ------------------------------------------------------------------
 
@@ -215,7 +221,7 @@ class AIForgeSettings(BaseSettings):
         old_env: dict[str, str | None] = {}
         for k, v in yaml_data.items():
             old_env[k] = os.environ.get(k)
-            os.environ[k] = str(v)
+            os.environ[k] = json.dumps(v) if isinstance(v, (dict, list)) else str(v)
         try:
             instance = cls(**overrides)
         finally:

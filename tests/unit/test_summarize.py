@@ -50,7 +50,9 @@ def _sum(
     settings.RATE_LIMIT_RPM = 500
     settings.RATE_LIMIT_TPM = 150_000
     settings.MODEL = "gpt-4o-mini"
+    settings.CUSTOM_PROMPTS = {}
     s.settings = settings
+    s._system_prompt_override = None
     from aiforge.infra.cost_tracker import CostTracker
 
     s.cost_tracker = CostTracker.get_session()
@@ -484,7 +486,7 @@ class TestPipelineInterface:
 class TestBuildMessages:
     def test_stuff_concise_messages(self) -> None:
         s = _sum(style="concise", max_length=200)
-        msgs = s._build_stuff_messages("Hello world.")
+        msgs = s._build_stuff_messages("Hello world.", SUMMARIZE_SYSTEM)
         assert msgs[0]["role"] == "system"
         assert msgs[0]["content"] == SUMMARIZE_SYSTEM
         assert "200" in msgs[1]["content"]
@@ -492,18 +494,18 @@ class TestBuildMessages:
 
     def test_stuff_detailed_messages(self) -> None:
         s = _sum(style="detailed")
-        msgs = s._build_stuff_messages("Text.")
+        msgs = s._build_stuff_messages("Text.", SUMMARIZE_SYSTEM)
         assert "detailed" in msgs[1]["content"].lower()
 
     def test_map_messages(self) -> None:
         s = _sum()
-        msgs = s._build_map_messages("chunk content")
+        msgs = s._build_map_messages("chunk content", SUMMARIZE_SYSTEM)
         assert msgs[0]["content"] == SUMMARIZE_SYSTEM
         assert "chunk content" in msgs[1]["content"]
 
     def test_reduce_messages(self) -> None:
         s = _sum(max_length=300)
-        msgs = s._build_reduce_messages("summary 1\n\nsummary 2")
+        msgs = s._build_reduce_messages("summary 1\n\nsummary 2", SUMMARIZE_SYSTEM)
         assert "300" in msgs[1]["content"]
         assert "summary 1" in msgs[1]["content"]
 

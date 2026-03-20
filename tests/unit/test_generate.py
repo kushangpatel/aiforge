@@ -51,7 +51,9 @@ def _gen(
     settings.RATE_LIMIT_RPM = 500
     settings.RATE_LIMIT_TPM = 150_000
     settings.MODEL = "gpt-4o-mini"
+    settings.CUSTOM_PROMPTS = {}
     g.settings = settings
+    g._system_prompt_override = None
     from aiforge.infra.cost_tracker import CostTracker
 
     g.cost_tracker = CostTracker.get_session()

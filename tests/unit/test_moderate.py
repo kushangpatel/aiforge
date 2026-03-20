@@ -28,7 +28,9 @@ def _mod(checks: list[str] | None = None, pii_types: list[str] | None = None) ->
     settings = MM()
     settings.RATE_LIMIT_RPM = 500
     settings.RATE_LIMIT_TPM = 150_000
+    settings.CUSTOM_PROMPTS = {}
     m.settings = settings
+    m._system_prompt_override = None
     from aiforge.infra.cost_tracker import CostTracker
     m.cost_tracker = CostTracker.get_session()
     return m

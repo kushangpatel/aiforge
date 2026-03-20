@@ -9,6 +9,7 @@ from typing import Any
 from pydantic import BaseModel
 from pydantic import ValidationError as PydanticValidationError
 
+from aiforge.core.prompt_override import resolve_prompt
 from aiforge.core.types import BaseModule
 from aiforge.modules.extract.prompts import EXTRACT_RETRY, EXTRACT_SYSTEM, EXTRACT_USER
 from aiforge.modules.extract.schemas import ExtractExample, ExtractResponse
@@ -73,18 +74,19 @@ class Extractor(BaseModule):
         examples: list[ExtractExample] | None = None,
         max_retries: int = _MAX_RETRIES,
         temperature: float = 0.0,
+        system_prompt: str | None = None,
         **kwargs: Any,
     ) -> None:
         super().__init__(**kwargs)
         if not 0.0 <= temperature <= 2.0:
             raise ValueError("temperature must be in [0.0, 2.0]")
         if output_schema is not None:
-            # Validate early so callers get an immediate error
             _schema_to_description(output_schema)
         self.output_schema: type[BaseModel] | dict[str, Any] | None = output_schema
         self.examples: list[ExtractExample] = examples or []
         self.max_retries: int = max(1, max_retries)
         self.temperature: float = temperature
+        self._system_prompt_override: str | None = system_prompt
 
     # ------------------------------------------------------------------
     # Public API
@@ -95,6 +97,8 @@ class Extractor(BaseModule):
         text: str,
         output_schema: type[BaseModel] | dict[str, Any] | None = None,
         examples: list[ExtractExample] | None = None,
+        *,
+        system_prompt: str | None = None,
     ) -> ExtractResponse:
         """Extract structured data from *text* synchronously."""
         if not text or not text.strip():
@@ -104,13 +108,15 @@ class Extractor(BaseModule):
             raise ValueError("output_schema must be provided either in constructor or extract() call")
         exs = examples if examples is not None else self.examples
         t0 = time.monotonic()
-        return self._extract_loop(text, schema, exs, t0)
+        return self._extract_loop(text, schema, exs, t0, system_prompt=system_prompt)
 
     async def aextract(
         self,
         text: str,
         output_schema: type[BaseModel] | dict[str, Any] | None = None,
         examples: list[ExtractExample] | None = None,
+        *,
+        system_prompt: str | None = None,
     ) -> ExtractResponse:
         """Async version of extract()."""
         if not text or not text.strip():
@@ -120,7 +126,7 @@ class Extractor(BaseModule):
             raise ValueError("output_schema must be provided either in constructor or extract() call")
         exs = examples if examples is not None else self.examples
         t0 = time.monotonic()
-        return await self._aextract_loop(text, schema, exs, t0)
+        return await self._aextract_loop(text, schema, exs, t0, system_prompt=system_prompt)
 
     def run(self, text: str, **kwargs: Any) -> ExtractResponse:
         """Pipeline entry point (sync)."""
@@ -140,8 +146,16 @@ class Extractor(BaseModule):
         schema: type[BaseModel] | dict[str, Any],
         examples: list[ExtractExample],
         t0: float,
+        *,
+        system_prompt: str | None = None,
     ) -> ExtractResponse:
         """Synchronous extraction with retry-on-validation-failure."""
+        resolved_system = resolve_prompt(
+            call_override=system_prompt,
+            instance_override=self._system_prompt_override,
+            config_override=self.settings.CUSTOM_PROMPTS.get("extract", {}).get("system"),
+            default=EXTRACT_SYSTEM,
+        )
         schema_desc = _schema_to_description(schema)
         examples_section = _format_examples(examples)
         total_in = total_out = 0
@@ -152,6 +166,7 @@ class Extractor(BaseModule):
         for attempt in range(self.max_retries):
             messages = self._build_messages(
                 text, schema_desc, examples_section, attempt, raw_json, error_msg,
+                system=resolved_system,
             )
             llm = self._call_llm(messages, temperature=self.temperature)
             from aiforge.core.pricing import calculate_cost
@@ -200,8 +215,16 @@ class Extractor(BaseModule):
         schema: type[BaseModel] | dict[str, Any],
         examples: list[ExtractExample],
         t0: float,
+        *,
+        system_prompt: str | None = None,
     ) -> ExtractResponse:
         """Async extraction with retry-on-validation-failure."""
+        resolved_system = resolve_prompt(
+            call_override=system_prompt,
+            instance_override=self._system_prompt_override,
+            config_override=self.settings.CUSTOM_PROMPTS.get("extract", {}).get("system"),
+            default=EXTRACT_SYSTEM,
+        )
         schema_desc = _schema_to_description(schema)
         examples_section = _format_examples(examples)
         total_in = total_out = 0
@@ -212,6 +235,7 @@ class Extractor(BaseModule):
         for attempt in range(self.max_retries):
             messages = self._build_messages(
                 text, schema_desc, examples_section, attempt, raw_json, error_msg,
+                system=resolved_system,
             )
             llm = await self._acall_llm(messages, temperature=self.temperature)
             from aiforge.core.pricing import calculate_cost
@@ -265,6 +289,8 @@ class Extractor(BaseModule):
         attempt: int,
         previous_output: str,
         error_msg: str,
+        *,
+        system: str = EXTRACT_SYSTEM,
     ) -> list[dict[str, str]]:
         """Construct system + user messages for an extraction attempt."""
         if attempt == 0:
@@ -281,7 +307,7 @@ class Extractor(BaseModule):
                 previous_output=previous_output,
             )
         return [
-            {"role": "system", "content": EXTRACT_SYSTEM},
+            {"role": "system", "content": system},
             {"role": "user", "content": user_content},
         ]
 

@@ -35,6 +35,7 @@ import json
 import time
 from typing import Any
 
+from aiforge.core.prompt_override import resolve_prompt
 from aiforge.core.types import BaseModule
 from aiforge.modules.classify.prompts import (
     CLASSIFY_SYSTEM,
@@ -104,6 +105,7 @@ class Classifier(BaseModule):
         multi_label: bool = False,
         temperature: float = 0.0,
         min_confidence: float = 0.0,
+        system_prompt: str | None = None,
         **kwargs: Any,
     ) -> None:
         super().__init__(**kwargs)
@@ -128,6 +130,7 @@ class Classifier(BaseModule):
         self.multi_label: bool = multi_label
         self.temperature: float = temperature
         self.min_confidence: float = min_confidence
+        self._system_prompt_override: str | None = system_prompt
         # Validate that all examples reference known labels
         label_set = set(self.labels)
         bad = [ex.label for ex in self.examples if ex.label not in label_set]
@@ -138,12 +141,12 @@ class Classifier(BaseModule):
     # Public API
     # ------------------------------------------------------------------
 
-    def classify(self, text: str) -> ClassifyResponse:
+    def classify(self, text: str, *, system_prompt: str | None = None) -> ClassifyResponse:
         """Classify *text* synchronously and return a :class:`ClassifyResponse`."""
         if not text or not text.strip():
             raise ValueError("text must not be empty or whitespace-only")
         t0 = time.monotonic()
-        llm = self._call_llm(self._build_messages(text), temperature=self.temperature)
+        llm = self._call_llm(self._build_messages(text, system_prompt=system_prompt), temperature=self.temperature)
         result = self._parse_response(llm.text)
         from aiforge.core.pricing import calculate_cost
         cost = calculate_cost(llm.model, llm.input_tokens, llm.output_tokens)
@@ -158,12 +161,12 @@ class Classifier(BaseModule):
             latency_ms=(time.monotonic() - t0) * 1000,
         )
 
-    async def aclassify(self, text: str) -> ClassifyResponse:
+    async def aclassify(self, text: str, *, system_prompt: str | None = None) -> ClassifyResponse:
         """Async version of :meth:`classify`."""
         if not text or not text.strip():
             raise ValueError("text must not be empty or whitespace-only")
         t0 = time.monotonic()
-        llm = await self._acall_llm(self._build_messages(text), temperature=self.temperature)
+        llm = await self._acall_llm(self._build_messages(text, system_prompt=system_prompt), temperature=self.temperature)
         result = self._parse_response(llm.text)
         from aiforge.core.pricing import calculate_cost
         cost = calculate_cost(llm.model, llm.input_tokens, llm.output_tokens)
@@ -178,20 +181,28 @@ class Classifier(BaseModule):
             latency_ms=(time.monotonic() - t0) * 1000,
         )
 
-    def run(self, text: str, **_kwargs: Any) -> ClassifyResponse:
-        """Pipeline entry point \u2014 delegates to :meth:`classify`."""
-        return self.classify(text)
+    def run(self, text: str, **kwargs: Any) -> ClassifyResponse:
+        """Pipeline entry point — delegates to :meth:`classify`."""
+        sp = kwargs.pop("system_prompt", None)
+        return self.classify(text, system_prompt=sp)
 
-    async def arun(self, text: str, **_kwargs: Any) -> ClassifyResponse:
-        """Async pipeline entry point \u2014 delegates to :meth:`aclassify`."""
-        return await self.aclassify(text)
+    async def arun(self, text: str, **kwargs: Any) -> ClassifyResponse:
+        """Async pipeline entry point — delegates to :meth:`aclassify`."""
+        sp = kwargs.pop("system_prompt", None)
+        return await self.aclassify(text, system_prompt=sp)
 
     # ------------------------------------------------------------------
     # Private helpers
     # ------------------------------------------------------------------
 
-    def _build_messages(self, text: str) -> list[dict[str, str]]:
+    def _build_messages(self, text: str, *, system_prompt: str | None = None) -> list[dict[str, str]]:
         """Construct the system + user message list for the LLM call."""
+        resolved_system = resolve_prompt(
+            call_override=system_prompt,
+            instance_override=self._system_prompt_override,
+            config_override=self.settings.CUSTOM_PROMPTS.get("classify", {}).get("system"),
+            default=CLASSIFY_SYSTEM,
+        )
         labels_list = _fmt_labels(self.labels)
         if self.multi_label:
             if self.examples:
@@ -218,7 +229,7 @@ class Classifier(BaseModule):
                     text=text,
                 )
         return [
-            {"role": "system", "content": CLASSIFY_SYSTEM},
+            {"role": "system", "content": resolved_system},
             {"role": "user", "content": user_content},
         ]
 
