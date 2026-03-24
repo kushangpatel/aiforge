@@ -241,6 +241,12 @@ print(result["summarize"].summary)
 aiforge serve --host 0.0.0.0 --port 8000
 ```
 
+> **SDK or API?** If your code is Python, import the SDK directly for zero
+> overhead and full type safety.  Use the HTTP API when non-Python services need
+> access or you want a shared deployment.  See the
+> [SDK vs HTTP API](api-server.md#sdk-vs-http-api--when-to-use-which) guide for
+> details.
+
 ## Launch Playground UI
 
 ```bash

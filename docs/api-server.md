@@ -4,6 +4,52 @@ AIForge can run as a **standalone REST API** exposing all modules as HTTP endpoi
 
 ---
 
+## SDK vs HTTP API — When to Use Which
+
+AIForge offers two integration paths: **import the Python SDK** directly, or
+**call the HTTP API**.  Choose based on your use-case:
+
+| Scenario | Recommended | Why |
+|----------|-------------|-----|
+| Python service / script | **SDK** (`from aiforge import …`) | Zero network overhead, full type safety, direct access to `Result` objects |
+| Non-Python service (Node, Go, Java, etc.) | **HTTP API** | Language-agnostic JSON interface over HTTP |
+| Microservice / sidecar architecture | **HTTP API** | Deploy AIForge independently, scale separately |
+| Jupyter notebooks / quick experiments | **SDK** | Fastest feedback loop, inline results |
+| Streamlit / Playground prototyping | **SDK** (built-in) | `aiforge playground` already uses the SDK internally |
+| CI/CD pipeline step | Either | SDK if the pipeline is Python; HTTP if it's a shell/curl step |
+| Multiple consumers (frontend + backend) | **HTTP API** | Single deployment, shared config and cost tracking |
+| Fine-grained control (custom retry, streaming callbacks) | **SDK** | Direct access to LangChain internals and module options |
+
+**Rule of thumb:** if your code is Python and runs in the same process, use the
+SDK.  If anything else needs to call AIForge — or you want a single shared
+deployment — use the HTTP API.
+
+### SDK Example
+
+```python
+from aiforge import Summarizer
+
+s = Summarizer(style="concise")
+result = s.run("Long article text here...")
+print(result.summary)
+print(f"Cost: ${result.cost:.4f}")
+```
+
+### HTTP API Equivalent
+
+```bash
+curl -X POST http://localhost:8000/summarize \
+  -H "Authorization: Bearer $AIFORGE_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"text": "Long article text here...", "style": "concise"}'
+```
+
+Both paths share the same configuration (`aiforge.yaml` / `.env`), provider
+routing, cost tracking, and observability — the API server is a thin HTTP
+wrapper around the SDK.
+
+---
+
 ## Launch
 
 ```bash
