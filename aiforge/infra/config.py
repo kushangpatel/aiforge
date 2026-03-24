@@ -139,6 +139,15 @@ class AIForgeSettings(BaseSettings):
     COST_WARN_THRESHOLD: float = 1.0  # USD per single call
 
     # ------------------------------------------------------------------
+    # Request cache
+    # ------------------------------------------------------------------
+    CACHE_ENABLED: bool = True
+    CACHE_TTL: int = 3600  # seconds
+    CACHE_BACKEND: str = "memory"  # "memory" | "redis"
+    CACHE_MAX_ENTRIES: int = 1000
+    CACHE_REDIS_URL: str = "redis://localhost:6379/0"
+
+    # ------------------------------------------------------------------
     # Tracing / observability
     # ------------------------------------------------------------------
     TRACING_ENABLED: bool = False

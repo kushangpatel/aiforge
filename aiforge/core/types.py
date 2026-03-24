@@ -282,13 +282,51 @@ class BaseModule(ABC):
     # Internal helpers used by module implementations
     # ------------------------------------------------------------------
 
+    _cache: Any = None  # class-level singleton — set via set_cache()
+
+    @classmethod
+    def set_cache(cls, cache: Any) -> None:
+        """Set the shared request cache for all modules."""
+        cls._cache = cache
+
+    def _get_cache(self) -> Any:
+        """Return the active cache (auto-initialise from settings if needed)."""
+        if BaseModule._cache is not None:
+            return BaseModule._cache
+        if self.settings.CACHE_ENABLED:
+            from aiforge.infra.cache import MemoryBackend, RequestCache
+
+            BaseModule._cache = RequestCache(
+                backend=MemoryBackend(max_entries=self.settings.CACHE_MAX_ENTRIES),
+                ttl_seconds=self.settings.CACHE_TTL,
+                enabled=True,
+            )
+            return BaseModule._cache
+        return None
+
     def _call_llm(
         self,
         messages: list[dict[str, str]],
         **kwargs: Any,
     ) -> CompletionResult:
-        """Synchronous LLM call with retry + rate-limiting + cost tracking."""
+        """Synchronous LLM call with cache + retry + rate-limiting + cost tracking."""
         from aiforge.infra.rate_limiter import RateLimiter
+
+        use_cache = kwargs.pop("use_cache", True)
+        cache = self._get_cache()
+        cache_key: str | None = None
+
+        if cache and cache.enabled and use_cache:
+            cache_key = cache.build_key(
+                model=self.settings.MODEL,
+                messages=messages,
+                temperature=kwargs.get("temperature", self.settings.TEMPERATURE),
+                max_tokens=kwargs.get("max_tokens", self.settings.MAX_TOKENS),
+                module=self.__class__.__name__.lower(),
+            )
+            cached = cache.get(cache_key)
+            if cached is not None:
+                return CompletionResult(**cached)
 
         RateLimiter.get_instance(
             rpm=self.settings.RATE_LIMIT_RPM,
@@ -296,6 +334,10 @@ class BaseModule(ABC):
         ).acquire(tokens=0)  # acquire 1 request slot; TPM acquired after we know token count
         result = self.provider.complete(messages, **kwargs)
         self._record_cost(result)
+
+        if cache and cache_key is not None:
+            cache.put(cache_key, result.model_dump())
+
         return result
 
     async def _acall_llm(
@@ -303,10 +345,26 @@ class BaseModule(ABC):
         messages: list[dict[str, str]],
         **kwargs: Any,
     ) -> CompletionResult:
-        """Async LLM call with retry + rate-limiting + cost tracking."""
+        """Async LLM call with cache + retry + rate-limiting + cost tracking."""
         import asyncio
 
         from aiforge.infra.rate_limiter import RateLimiter
+
+        use_cache = kwargs.pop("use_cache", True)
+        cache = self._get_cache()
+        cache_key: str | None = None
+
+        if cache and cache.enabled and use_cache:
+            cache_key = cache.build_key(
+                model=self.settings.MODEL,
+                messages=messages,
+                temperature=kwargs.get("temperature", self.settings.TEMPERATURE),
+                max_tokens=kwargs.get("max_tokens", self.settings.MAX_TOKENS),
+                module=self.__class__.__name__.lower(),
+            )
+            cached = cache.get(cache_key)
+            if cached is not None:
+                return CompletionResult(**cached)
 
         limiter = RateLimiter.get_instance(
             rpm=self.settings.RATE_LIMIT_RPM,
@@ -316,6 +374,10 @@ class BaseModule(ABC):
         await asyncio.get_event_loop().run_in_executor(None, limiter.acquire, 0)
         result = await self.provider.complete_async(messages, **kwargs)
         self._record_cost(result)
+
+        if cache and cache_key is not None:
+            cache.put(cache_key, result.model_dump())
+
         return result
 
     def _call_embedding(self, texts: list[str]) -> list[list[float]]:
