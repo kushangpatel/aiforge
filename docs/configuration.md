@@ -475,6 +475,7 @@ If a model isn't in the table and no override is set, cost is reported as `0.0` 
 
 ## See Also
 
+- [API Authentication](api-auth.md) — Bearer token setup, error responses, security properties
 - [Providers](providers.md) — Provider-specific configuration
 - [Cost Tracking](cost-tracking.md) — Cost tracking and pricing configuration
 - [API Server](api-server.md) — Server-specific settings (auth, CORS, shutdown)

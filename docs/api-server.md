@@ -310,6 +310,7 @@ async def summarize(req: SummarizeRequest):
 
 ## See Also
 
+- [API Authentication](api-auth.md) — Bearer token setup, error responses, security properties
 - [Configuration](configuration.md) — Auth, CORS, and server settings
 - [Playground](playground.md) — Interactive UI that connects to the API server
 - [Quick Start](quickstart.md) — Getting started
