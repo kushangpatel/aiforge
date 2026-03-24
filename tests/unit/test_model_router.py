@@ -313,10 +313,10 @@ class TestBaseModuleRouterIntegration:
 
     def test_no_matching_model_falls_back(self) -> None:
         """If router can't match, keeps default model."""
-        from aiforge.infra.config import AIForgeSettings
+        from aiforge.infra.config import get_settings
         from aiforge.modules.classify import Classifier
 
-        default_model = AIForgeSettings().MODEL
+        default_model = get_settings().MODEL
         with patch(
             "aiforge.core.model_router.ModelRouter.select",
             side_effect=ValueError("No model found"),

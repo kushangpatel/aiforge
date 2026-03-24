@@ -99,6 +99,38 @@ cost_tracking_enabled: true
 cost_warn_threshold: 1.0
 
 # ---------------------------------------------------------------------------
+# Request cache
+# ---------------------------------------------------------------------------
+
+# Enable LLM response caching. Identical prompts return cached results.
+cache_enabled: true
+
+# Time-to-live for cached responses in seconds.
+cache_ttl: 3600
+
+# Cache storage backend. Options: memory | redis
+cache_backend: memory
+
+# Maximum number of entries for the in-memory cache.
+cache_max_entries: 1000
+
+# Redis connection URL (only used when cache_backend=redis).
+# cache_redis_url: redis://localhost:6379/0
+
+# ---------------------------------------------------------------------------
+# Webhooks
+# ---------------------------------------------------------------------------
+
+# Enable webhook delivery for async job completion (search/ingest).
+webhook_enabled: true
+
+# Timeout in seconds for webhook HTTP delivery.
+webhook_timeout: 10.0
+
+# Allow http:// (non-TLS) webhook URLs. Set to true only in development.
+webhook_allow_insecure: false
+
+# ---------------------------------------------------------------------------
 # Tracing / observability
 # ---------------------------------------------------------------------------
 
