@@ -355,3 +355,60 @@ class TestBaseModuleCacheIntegration:
         cache = mod._get_cache()
         assert cache is not None
         assert cache.hits == 1
+
+    def test_disabled_cache_ignores_existing_singleton(self) -> None:
+        """If CACHE_ENABLED=False, _get_cache() returns None even when a
+        previous module already initialised the singleton cache (BUG-2 fix)."""
+        from aiforge.core.types import BaseModule
+
+        # Module A enables cache → auto-initialises singleton
+        mod_a = self._make_module(cache_enabled=True)
+        cache_a = mod_a._get_cache()
+        assert cache_a is not None
+        assert BaseModule._cache is not None  # singleton is set
+
+        # Module B disables cache → must get None
+        mod_b = self._make_module(cache_enabled=False)
+        assert mod_b._get_cache() is None
+
+    def test_redis_backend_selected_from_settings(self) -> None:
+        """When CACHE_BACKEND='redis', _get_cache() should create a
+        RedisBackend (BUG-1 fix).  We mock Redis to avoid a real connection."""
+        from aiforge.infra.cache import RedisBackend
+        from aiforge.core.types import BaseModule, CompletionResult, ModuleResponse
+
+        class _Stub(BaseModule):
+            def run(self, text: str, **kw: Any) -> ModuleResponse:
+                return ModuleResponse()
+            async def arun(self, text: str, **kw: Any) -> ModuleResponse:
+                return ModuleResponse()
+
+        with patch.dict("os.environ", {"AIFORGE_OPENAI_API_KEY": "test-key"}), \
+             patch("aiforge.infra.cache.RedisBackend.__init__", return_value=None):
+            instance = _Stub(CACHE_BACKEND="redis", CACHE_REDIS_URL="redis://fake:6379/0")
+            cache = instance._get_cache()
+            assert cache is not None
+            assert isinstance(cache._backend, RedisBackend)
+
+
+class TestCacheBackendValidator:
+    """CACHE_BACKEND field validator rejects invalid values (BUG-3 fix)."""
+
+    def test_valid_memory(self) -> None:
+        with patch.dict("os.environ", {"AIFORGE_OPENAI_API_KEY": "test-key"}):
+            from aiforge.infra.config import AIForgeSettings
+            s = AIForgeSettings(CACHE_BACKEND="memory")
+            assert s.CACHE_BACKEND == "memory"
+
+    def test_valid_redis(self) -> None:
+        with patch.dict("os.environ", {"AIFORGE_OPENAI_API_KEY": "test-key"}):
+            from aiforge.infra.config import AIForgeSettings
+            s = AIForgeSettings(CACHE_BACKEND="redis")
+            assert s.CACHE_BACKEND == "redis"
+
+    def test_invalid_backend_rejected(self) -> None:
+        import pydantic
+        with patch.dict("os.environ", {"AIFORGE_OPENAI_API_KEY": "test-key"}):
+            from aiforge.infra.config import AIForgeSettings
+            with pytest.raises(pydantic.ValidationError, match="AIFORGE_CACHE_BACKEND"):
+                AIForgeSettings(CACHE_BACKEND="memcached")

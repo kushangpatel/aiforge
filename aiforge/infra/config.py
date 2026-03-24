@@ -221,6 +221,16 @@ class AIForgeSettings(BaseSettings):
             raise ValueError("AIFORGE_VECTOR_STORE must not be empty")
         return v
 
+    @field_validator("CACHE_BACKEND")
+    @classmethod
+    def validate_cache_backend(cls, v: str) -> str:
+        allowed = {"memory", "redis"}
+        if v not in allowed:
+            raise ValueError(
+                f"AIFORGE_CACHE_BACKEND must be one of {sorted(allowed)}, got {v!r}"
+            )
+        return v
+
     @field_validator("DEFAULT_QUALITY")
     @classmethod
     def validate_default_quality(cls, v: str) -> str:

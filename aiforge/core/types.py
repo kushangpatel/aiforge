@@ -291,18 +291,26 @@ class BaseModule(ABC):
 
     def _get_cache(self) -> Any:
         """Return the active cache (auto-initialise from settings if needed)."""
+        if not self.settings.CACHE_ENABLED:
+            return None
         if BaseModule._cache is not None:
             return BaseModule._cache
-        if self.settings.CACHE_ENABLED:
-            from aiforge.infra.cache import MemoryBackend, RequestCache
+        from aiforge.infra.cache import MemoryBackend, RequestCache
 
-            BaseModule._cache = RequestCache(
-                backend=MemoryBackend(max_entries=self.settings.CACHE_MAX_ENTRIES),
-                ttl_seconds=self.settings.CACHE_TTL,
-                enabled=True,
-            )
-            return BaseModule._cache
-        return None
+        backend_name = self.settings.CACHE_BACKEND
+        if backend_name == "redis":
+            from aiforge.infra.cache import RedisBackend
+
+            backend = RedisBackend(url=self.settings.CACHE_REDIS_URL)
+        else:
+            backend = MemoryBackend(max_entries=self.settings.CACHE_MAX_ENTRIES)
+
+        BaseModule._cache = RequestCache(
+            backend=backend,
+            ttl_seconds=self.settings.CACHE_TTL,
+            enabled=True,
+        )
+        return BaseModule._cache
 
     def _call_llm(
         self,
