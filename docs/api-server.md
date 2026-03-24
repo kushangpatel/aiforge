@@ -38,6 +38,7 @@ docker run -p 8000:8000 \
 | POST | `/moderate` | Moderator | Content check |
 | POST | `/moderate/redact` | Moderator | PII redaction |
 | POST | `/pipeline` | Pipeline | Run a named pipeline |
+| GET | `/jobs/{job_id}` | Webhooks | Poll async job status |
 | GET | `/health` | — | Health + status |
 | GET | `/docs` | — | OpenAPI/Swagger UI (auto) |
 
@@ -58,17 +59,70 @@ If the key is missing or wrong, the API returns `401 Unauthorized`. When `AIFORG
 
 ---
 
+## Async Jobs & Webhooks
+
+The `/qa/ingest` and `/search/index` endpoints support **async execution** with webhook notifications. Pass a `webhook_url` field in the request body to opt in:
+
+```bash
+curl -X POST http://localhost:8000/search/index \
+  -H "Content-Type: application/json" \
+  -d '{
+    "documents": [{"id": "1", "text": "..."}],
+    "collection": "products",
+    "webhook_url": "https://example.com/hooks/aiforge"
+  }'
+
+# Returns immediately:
+# HTTP 202 Accepted
+# {"job_id": "abc-123-def", "status": "accepted"}
+```
+
+### Polling Job Status
+
+```bash
+curl http://localhost:8000/jobs/abc-123-def
+
+# {"job_id": "abc-123-def", "status": "completed", "result": {...}}
+# Status values: accepted | running | completed | failed
+```
+
+### Webhook Delivery
+
+On completion (or failure), AIForge sends a POST to the `webhook_url`:
+
+```json
+{
+  "job_id": "abc-123-def",
+  "status": "completed",
+  "result": { ... }
+}
+```
+
+### SSRF Protection
+
+- Private/internal IPs (`10.x`, `172.16-31.x`, `192.168.x`, `127.x`, `::1`) are **blocked by default**.
+- `http://` URLs are blocked unless `webhook_allow_insecure` is `true` in `aiforge.yaml`.
+
+### Webhook Configuration
+
+```yaml
+# aiforge.yaml
+webhook_enabled: true
+webhook_timeout: 10.0         # seconds for delivery timeout
+webhook_allow_insecure: false  # allow http:// URLs (dev only)
+```
+
+---
+
 ## CORS
 
-CORS middleware is enabled by default for the Playground UI. Configurable via environment variables:
+CORS middleware is enabled by default for the Playground UI. The allowed origin defaults to `http://localhost:8501` (the Playground port).
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `AIFORGE_CORS_ORIGINS` | `["http://localhost:8501"]` | Allowed origins (JSON array or comma-separated) |
-| `AIFORGE_CORS_ALLOW_CREDENTIALS` | `true` | Allow credentials |
-| `AIFORGE_CORS_ALLOW_METHODS` | `["*"]` | Allowed HTTP methods |
+For production, restrict origins by overriding via environment variable:
 
-For production, restrict `AIFORGE_CORS_ORIGINS` to your actual frontend domain.
+```bash
+export AIFORGE_CORS_ORIGINS=https://your-frontend.example.com
+```
 
 ---
 

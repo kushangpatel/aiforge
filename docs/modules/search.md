@@ -129,4 +129,5 @@ aiforge/modules/search/
 - [Quick Start](../quickstart.md) — Basic search example
 - [Pipelines](../pipelines.md) — Chain with other modules
 - [API Server](../api-server.md) — `POST /search/index` and `POST /search/query` endpoints
+- [API Server > Webhooks](../api-server.md#async-jobs--webhooks) — Async indexing with webhook notifications
 - [Cost Tracking](../cost-tracking.md) — Embedding cost tracking

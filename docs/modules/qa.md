@@ -211,3 +211,4 @@ aiforge/modules/qa/
 - [Quick Start](../quickstart.md) — Basic Q&A example
 - [Pipelines](../pipelines.md) — Chain with other modules
 - [API Server](../api-server.md) — `POST /qa/ingest` and `POST /qa/ask` endpoints
+- [API Server > Webhooks](../api-server.md#async-jobs--webhooks) — Async ingestion with webhook notifications

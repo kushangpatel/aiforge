@@ -9,14 +9,18 @@ AIForge uses a layered configuration system. Later layers override earlier ones.
 ```
 1. Defaults (hardcoded sensible defaults)
       ↓ overridden by
-2. aiforge.yaml (project-level config file)
+2. aiforge.yaml (project-level config file — main config)
       ↓ overridden by
-3. .env file
+3. .env file (secrets & API keys ONLY)
       ↓ overridden by
 4. Environment variables (AIFORGE_*)
       ↓ overridden by
 5. Constructor arguments (code-level)
 ```
+
+> **Convention:** `.env` holds **secrets and API keys only**. All other
+> configuration belongs in `aiforge.yaml`. See `aiforge.yaml.example`
+> for the full list of supported settings.
 
 Constructor arguments **always win**:
 
@@ -29,113 +33,168 @@ s = Summarizer(model="gpt-4o-mini", temperature=0.5)
 
 ## Settings Model
 
+All fields use the `AIFORGE_` env-var prefix (added automatically by Pydantic Settings).
+Field names in `config.py` do **not** include the prefix.
+
 ```python
-# aiforge/infra/config.py
-from pydantic_settings import BaseSettings
+# aiforge/infra/config.py  (simplified — see source for full model)
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class AIForgeSettings(BaseSettings):
-    # Provider
-    AIFORGE_PROVIDER: str = "openai"                    # openai | anthropic | ollama | azure
-    AIFORGE_MODEL: str = "gpt-4o"
-    AIFORGE_TEMPERATURE: float = 0.0
-    AIFORGE_EMBEDDING_MODEL: str = "text-embedding-3-small"
+    model_config = SettingsConfigDict(
+        env_prefix="AIFORGE_",
+        env_file=".env",
+        extra="ignore",
+    )
 
-    # Provider credentials
-    AIFORGE_OPENAI_API_KEY: str = ""
-    AIFORGE_ANTHROPIC_API_KEY: str = ""
-    AIFORGE_VOYAGE_API_KEY: str = ""                    # Required for Anthropic embeddings (Voyage AI)
-    AIFORGE_AZURE_OPENAI_ENDPOINT: str = ""
-    AIFORGE_AZURE_OPENAI_API_KEY: str = ""
-    AIFORGE_OLLAMA_BASE_URL: str = "http://localhost:11434"
+    # Provider & model
+    PROVIDER: str = "openai"                    # openai | anthropic | ollama | azure
+    MODEL: str = "gpt-4o"
+    TEMPERATURE: float = 0.0
+    MAX_TOKENS: int | None = None
+    EMBEDDING_MODEL: str = "text-embedding-3-small"
+
+    # API keys (secrets — keep in .env)
+    OPENAI_API_KEY: str | None = None
+    ANTHROPIC_API_KEY: str | None = None
+    VOYAGE_API_KEY: str | None = None
+    AZURE_OPENAI_API_KEY: str | None = None
+    AZURE_OPENAI_ENDPOINT: str | None = None
+    AZURE_OPENAI_DEPLOYMENT: str | None = None
+    AZURE_OPENAI_API_VERSION: str = "2024-02-01"
+    PINECONE_API_KEY: str | None = None
+    QDRANT_API_KEY: str | None = None
+    LANGSMITH_API_KEY: str | None = None
+    API_KEY: str | None = None                  # Bearer token for REST API auth
+
+    # Ollama
+    OLLAMA_BASE_URL: str = "http://localhost:11434"
 
     # Vector store
-    AIFORGE_VECTOR_STORE: str = "chroma"                # chroma | pgvector | pinecone | qdrant
-    AIFORGE_CHROMA_PERSIST_DIR: str = "./aiforge_data"
-
-    # pgvector
-    AIFORGE_PGVECTOR_DSN: str = ""                       # e.g. postgresql://user:pass@host:5432/db
-    AIFORGE_PGVECTOR_COLLECTION: str = "default"
-
-    # Pinecone
-    AIFORGE_PINECONE_API_KEY: str = ""
-    AIFORGE_PINECONE_INDEX: str = ""
-
-    # Qdrant
-    AIFORGE_QDRANT_URL: str = ""                         # e.g. http://localhost:6333
-    AIFORGE_QDRANT_API_KEY: str = ""
-    AIFORGE_QDRANT_COLLECTION: str = ""
-
-    # Observability
-    AIFORGE_TRACING_ENABLED: bool = False
-    AIFORGE_TRACING_PROVIDER: str = "langsmith"         # langsmith | otel | console
-    AIFORGE_LANGSMITH_API_KEY: str = ""
-    AIFORGE_COST_TRACKING_ENABLED: bool = True
-    AIFORGE_COST_WARN_THRESHOLD: float = 1.0
+    VECTOR_STORE: str = "chroma"                # chroma | pgvector | pinecone | qdrant
+    CHROMA_PERSIST_DIR: str = "./aiforge_data"
+    PGVECTOR_DSN: str | None = None
+    PGVECTOR_COLLECTION: str = "default"
+    PINECONE_INDEX: str | None = None
+    QDRANT_URL: str | None = None
+    QDRANT_COLLECTION: str | None = None
 
     # Rate limiting
-    AIFORGE_RATE_LIMIT_RPM: int = 500                   # requests per minute
-    AIFORGE_RATE_LIMIT_TPM: int = 150000                # tokens per minute
+    RATE_LIMIT_RPM: int = 500
+    RATE_LIMIT_TPM: int = 150_000
 
-    # Server
-    AIFORGE_API_HOST: str = "0.0.0.0"
-    AIFORGE_API_PORT: int = 8000
-    AIFORGE_API_KEY: str = ""                           # If set, enables Bearer token auth
-    AIFORGE_CORS_ORIGINS: str = "http://localhost:8501"  # Comma-separated or JSON array
+    # Cost tracking
+    COST_TRACKING_ENABLED: bool = True
+    COST_WARN_THRESHOLD: float = 1.0            # USD per single call
 
-    class Config:
-        env_file = ".env"
-        yaml_file = "aiforge.yaml"
+    # Request cache
+    CACHE_ENABLED: bool = True
+    CACHE_TTL: int = 3600                       # seconds
+    CACHE_BACKEND: str = "memory"               # memory | redis
+    CACHE_MAX_ENTRIES: int = 1000
+    CACHE_REDIS_URL: str = "redis://localhost:6379/0"
+
+    # Webhooks
+    WEBHOOK_ENABLED: bool = True
+    WEBHOOK_TIMEOUT: float = 10.0               # seconds
+    WEBHOOK_ALLOW_INSECURE: bool = False         # allow http:// URLs (dev only)
+
+    # Tracing / observability
+    TRACING_ENABLED: bool = False
+    TRACING_BACKEND: str = "langsmith"          # langsmith | otel | console
+    LANGSMITH_PROJECT: str = "aiforge"
+    OTEL_EXPORTER_ENDPOINT: str | None = None
+
+    # Logging
+    LOG_LEVEL: str = "INFO"
+    LOG_FORMAT: str = "json"                    # json | console
+
+    # API server
+    API_HOST: str = "0.0.0.0"
+    API_PORT: int = 8000
+
+    # Playground
+    PLAYGROUND_PORT: int = 8501
+
+    # Model router
+    MODEL_ROUTER_ENABLED: bool = True
+    DEFAULT_QUALITY: str = "medium"             # high | medium | low
+    PREFER_LOCAL: bool = False
+    CUSTOM_MODELS: list[dict] = []
+
+    # Custom prompt overrides
+    CUSTOM_PROMPTS: dict[str, dict[str, str]] = {}
 ```
 
 ---
 
 ## Example `aiforge.yaml`
 
+All keys are **flat** (no nesting). The YAML loader auto-adds the `AIFORGE_` prefix.
+Secrets (API keys) belong in `.env`, not here.
+
 ```yaml
 # aiforge.yaml
+
+# Provider & model
 provider: openai
 model: gpt-4o
-temperature: 0
+temperature: 0.0
 embedding_model: text-embedding-3-small
-vector_store: chroma                # chroma | pgvector | pinecone | qdrant
-chroma_persist_dir: ./aiforge_data  # only used when vector_store=chroma
 
+# Vector store
+vector_store: chroma                # chroma | pgvector | pinecone | qdrant
+chroma_persist_dir: ./aiforge_data
 # pgvector_dsn: postgresql://user:pass@localhost:5432/aiforge
 # pgvector_collection: default
-# pinecone_index: my-index           # prefer API key in .env
+# pinecone_index: my-index
 # qdrant_url: http://localhost:6333
 # qdrant_collection: default
 
-# Provider credentials (prefer env vars for secrets)
-# openai_api_key: sk-...      # DON'T put keys here — use env vars
+# Rate limiting
+rate_limit_rpm: 500
+rate_limit_tpm: 150000
 
-# Module defaults
-summarize:
-  style: concise
-  max_length: 500
+# Cost tracking
+cost_tracking_enabled: true
+cost_warn_threshold: 1.00
 
-qa:
-  chunk_size: 1500
-  chunk_overlap: 200
-  retrieval_k: 6
-  max_iterations: 3
+# Request cache
+cache_enabled: true
+cache_ttl: 3600                     # seconds
+cache_backend: memory               # memory | redis
+cache_max_entries: 1000
+# cache_redis_url: redis://localhost:6379/0
 
-classify:
-  multi_label: false
+# Webhooks
+webhook_enabled: true
+webhook_timeout: 10.0               # delivery timeout in seconds
+webhook_allow_insecure: false        # allow http:// URLs (dev only)
 
-chat:
-  memory: buffer
-  memory_k: 20
+# Tracing / observability
+tracing_enabled: false
+tracing_backend: langsmith          # langsmith | otel | console
+langsmith_project: aiforge
 
-# Observability
-tracing:
-  enabled: false
-  provider: langsmith           # "langsmith" | "otel" | "console"
+# Logging
+log_level: INFO
+log_format: json                    # json | console
 
-cost_tracking:
-  enabled: true
-  warn_threshold: 1.00          # warn if single call > $1
+# API server
+api_host: "0.0.0.0"
+api_port: 8000
+
+# Playground
+playground_port: 8501
+
+# Model router
+model_router_enabled: true
+default_quality: medium             # high | medium | low
+prefer_local: false
 ```
+
+> See `aiforge.yaml.example` for the full annotated reference with all options including
+> custom models, custom prompts, Ollama, and all vector store backends.
 
 ---
 
@@ -183,10 +242,10 @@ AIForge supports four vector store backends. The default is **ChromaDB** (zero i
 
 No extra install needed — ChromaDB is a core dependency.
 
-```bash
-# .env
-AIFORGE_VECTOR_STORE=chroma
-AIFORGE_CHROMA_PERSIST_DIR=./aiforge_data
+```yaml
+# aiforge.yaml
+vector_store: chroma
+chroma_persist_dir: ./aiforge_data
 ```
 
 ### pgvector (PostgreSQL)
@@ -195,11 +254,11 @@ AIFORGE_CHROMA_PERSIST_DIR=./aiforge_data
 pip install aiforge[pgvector]
 ```
 
-```bash
-# .env
-AIFORGE_VECTOR_STORE=pgvector
-AIFORGE_PGVECTOR_DSN=postgresql://user:pass@localhost:5432/aiforge
-AIFORGE_PGVECTOR_COLLECTION=default   # optional — maps to table name
+```yaml
+# aiforge.yaml
+vector_store: pgvector
+pgvector_dsn: postgresql://user:pass@localhost:5432/aiforge
+pgvector_collection: default          # optional — maps to table name
 ```
 
 The adapter auto-creates the `vector` extension, collection table, and IVFFlat index on first use. Each collection maps to a separate table prefixed with `aiforge_`.
@@ -210,11 +269,15 @@ The adapter auto-creates the `vector` extension, collection table, and IVFFlat i
 pip install aiforge[pinecone]
 ```
 
+```yaml
+# aiforge.yaml
+vector_store: pinecone
+pinecone_index: my-index
+```
+
 ```bash
-# .env
-AIFORGE_VECTOR_STORE=pinecone
+# .env (secret)
 AIFORGE_PINECONE_API_KEY=pk-...
-AIFORGE_PINECONE_INDEX=my-index
 ```
 
 Each AIForge "collection" maps to a Pinecone **namespace** within the configured index. Text is stored in `metadata["_text"]` since Pinecone is a pure-vector store.
@@ -225,12 +288,16 @@ Each AIForge "collection" maps to a Pinecone **namespace** within the configured
 pip install aiforge[qdrant]
 ```
 
+```yaml
+# aiforge.yaml
+vector_store: qdrant
+qdrant_url: http://localhost:6333
+qdrant_collection: default            # optional
+```
+
 ```bash
-# .env
-AIFORGE_VECTOR_STORE=qdrant
-AIFORGE_QDRANT_URL=http://localhost:6333
-AIFORGE_QDRANT_API_KEY=               # optional — only needed for Qdrant Cloud
-AIFORGE_QDRANT_COLLECTION=default     # optional
+# .env (secret — only needed for Qdrant Cloud)
+# AIFORGE_QDRANT_API_KEY=
 ```
 
 The adapter auto-creates the Qdrant collection (cosine similarity) on first use if it doesn't exist.

@@ -35,9 +35,8 @@ Configure a per-call cost warning:
 
 ```yaml
 # aiforge.yaml
-cost_tracking:
-  enabled: true
-  warn_threshold: 1.00          # warn if single call > $1
+cost_tracking_enabled: true
+cost_warn_threshold: 1.00          # warn if single call > $1
 ```
 
 Or via environment variable:
@@ -99,9 +98,8 @@ The built-in pricing table is a best-effort snapshot at release time. If provide
 
 ```yaml
 # aiforge.yaml
-tracing:
-  enabled: true
-  provider: langsmith
+tracing_enabled: true
+tracing_backend: langsmith
 ```
 
 Or via environment variables:
@@ -122,17 +120,15 @@ print(result.trace_id)  # "run-abc-123-def-456"
 ### OpenTelemetry Tracing
 
 ```yaml
-tracing:
-  enabled: true
-  provider: otel
+tracing_enabled: true
+tracing_backend: otel
 ```
 
 ### Console Tracing (Development)
 
 ```yaml
-tracing:
-  enabled: true
-  provider: console
+tracing_enabled: true
+tracing_backend: console
 ```
 
 ---
@@ -167,7 +163,7 @@ API keys never appear in logs — `structlog` filter strips `*_API_KEY` fields a
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `AIFORGE_TRACING_ENABLED` | `false` | Enable tracing |
-| `AIFORGE_TRACING_PROVIDER` | `langsmith` | Tracing backend: `langsmith`, `otel`, or `console` |
+| `AIFORGE_TRACING_BACKEND` | `langsmith` | Tracing backend: `langsmith`, `otel`, or `console` |
 | `AIFORGE_LANGSMITH_API_KEY` | — | LangSmith API key |
 | `AIFORGE_COST_TRACKING_ENABLED` | `true` | Enable cost tracking |
 | `AIFORGE_COST_WARN_THRESHOLD` | `1.00` | Warn if single call exceeds this USD amount |
