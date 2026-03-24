@@ -11,7 +11,7 @@ from aiforge.core.pricing import (
     apply_context_window_overrides,
     apply_pricing_overrides,
 )
-from aiforge.core.types import CompletionResult
+from aiforge.core.types import APIConnectionError, CompletionResult, ProviderError
 
 
 class TestPricing:
@@ -191,3 +191,21 @@ class TestCompletionResult:
         assert result.finish_reason == "stop"
         assert result.latency_ms == 0.0
         assert result.raw_response is None
+
+
+class TestOllamaErrorWrapper:
+    """Verify _wrap_ollama_error is a callable module-level function."""
+
+    def test_connection_error_returns_api_connection_error(self) -> None:
+        from aiforge.providers.ollama import _wrap_ollama_error
+
+        err = _wrap_ollama_error(ConnectionError("Connection refused"))
+        assert isinstance(err, APIConnectionError)
+        assert "Connection refused" in str(err)
+
+    def test_generic_error_returns_provider_error(self) -> None:
+        from aiforge.providers.ollama import _wrap_ollama_error
+
+        err = _wrap_ollama_error(RuntimeError("model not found"))
+        assert isinstance(err, ProviderError)
+        assert "model not found" in str(err)

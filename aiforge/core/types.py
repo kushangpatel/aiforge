@@ -339,8 +339,15 @@ class BaseModule(ABC):
         RateLimiter.get_instance(
             rpm=self.settings.RATE_LIMIT_RPM,
             tpm=self.settings.RATE_LIMIT_TPM,
-        ).acquire(tokens=0)  # acquire 1 request slot; TPM acquired after we know token count
+        ).acquire(tokens=0)  # acquire 1 request slot; TPM accounted post-hoc
         result = self.provider.complete(messages, **kwargs)
+
+        # Post-hoc TPM accounting — now we know the actual token count
+        RateLimiter.get_instance(
+            rpm=self.settings.RATE_LIMIT_RPM,
+            tpm=self.settings.RATE_LIMIT_TPM,
+        ).record_tokens(result.input_tokens + result.output_tokens)
+
         self._record_cost(result)
 
         if cache and cache_key is not None:
@@ -381,6 +388,12 @@ class BaseModule(ABC):
         # Run blocking acquire in a thread pool to avoid blocking the event loop
         await asyncio.get_event_loop().run_in_executor(None, limiter.acquire, 0)
         result = await self.provider.complete_async(messages, **kwargs)
+
+        # Post-hoc TPM accounting
+        await asyncio.get_event_loop().run_in_executor(
+            None, limiter.record_tokens, result.input_tokens + result.output_tokens,
+        )
+
         self._record_cost(result)
 
         if cache and cache_key is not None:

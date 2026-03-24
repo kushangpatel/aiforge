@@ -155,6 +155,10 @@ def _extract_tokens(response: Any, messages_text: str, response_text: str) -> tu
         input_tokens = _count_tokens_fallback(messages_text)
         output_tokens = _count_tokens_fallback(response_text)
     return input_tokens, output_tokens
+
+
+def _wrap_ollama_error(exc: Exception) -> ProviderError:
+    """Convert an Ollama exception into the appropriate AIForge error type."""
     msg = str(exc).lower()
     if "connection" in msg or "refused" in msg:
         return APIConnectionError(

@@ -173,7 +173,7 @@ class ChatAgent(BaseModule):
         self._messages.append({"role": "user", "content": message})
 
         graph = build_chat_graph(
-            llm_fn=self._make_async_llm_fn(),
+            llm_fn=self._make_llm_fn(),
             tools=self.tools,
         )
         final = await graph.ainvoke(self._initial_state(message))
@@ -201,7 +201,7 @@ class ChatAgent(BaseModule):
         self._messages.append({"role": "user", "content": message})
 
         graph = build_chat_graph(
-            llm_fn=self._make_async_llm_fn(),
+            llm_fn=self._make_llm_fn(),
             tools=self.tools,
         )
 
@@ -332,19 +332,12 @@ class ChatAgent(BaseModule):
     # ------------------------------------------------------------------
 
     def _make_llm_fn(self):
-        """Return a closure wrapping ``_call_llm`` for the graph."""
+        """Return a closure wrapping ``_call_llm`` for the LangGraph nodes.
 
-        def _fn(messages: list[dict[str, str]]) -> Any:
-            return self._call_llm(messages)
-
-        return _fn
-
-    def _make_async_llm_fn(self):
-        """Return an async closure wrapping ``_acall_llm`` for the graph.
-
-        Note: Since build_chat_graph expects a sync callable, the async
-        variant is still invoked synchronously in the graph nodes. True
-        async streaming uses ``graph.astream()``.
+        Both sync (``chat``) and async (``achat``, ``chat_stream``) paths
+        use this same sync closure.  LangGraph's ``ainvoke`` /
+        ``astream`` automatically runs sync node functions in a thread
+        pool, so the event loop is not blocked.
         """
 
         def _fn(messages: list[dict[str, str]]) -> Any:

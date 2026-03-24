@@ -41,6 +41,18 @@ class _TokenBucket:
 
     def consume(self, n: int = 1) -> None:
         """Consume *n* tokens, blocking until tokens are available."""
+        if n <= 0:
+            return
+        # Clamp to capacity to prevent infinite blocking when a single
+        # request exceeds the bucket size (e.g. 200K tokens vs 150K TPM).
+        if n > self._capacity:
+            _logger.warning(
+                "Rate limit: request exceeds bucket capacity, clamping",
+                bucket=self._label,
+                requested=n,
+                capacity=self._capacity,
+            )
+            n = self._capacity
         while True:
             with self._lock:
                 self._replenish()
@@ -117,6 +129,15 @@ class RateLimiter:
         Blocks until both quota buckets have capacity.
         """
         self._rpm_bucket.consume(1)
+        if tokens > 0:
+            self._tpm_bucket.consume(tokens)
+
+    def record_tokens(self, tokens: int) -> None:
+        """Post-hoc TPM accounting — consume tokens after the actual count is known.
+
+        Call this *after* a provider response to enforce TPM limits on
+        subsequent requests.
+        """
         if tokens > 0:
             self._tpm_bucket.consume(tokens)
 
