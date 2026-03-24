@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections import OrderedDict
 from typing import Any
 
 from fastapi import APIRouter, HTTPException
@@ -13,7 +14,16 @@ router = APIRouter(prefix="/chat", tags=["chat"])
 # ---------------------------------------------------------------------------
 # In-memory conversation store (MVP; production would use Redis/DB)
 # ---------------------------------------------------------------------------
-_conversations: dict[str, Any] = {}
+_MAX_CONVERSATIONS = 200
+_conversations: OrderedDict[str, Any] = OrderedDict()
+
+
+def _store_conversation(conversation_id: str, agent: Any) -> None:
+    """Store an agent and evict oldest when over capacity."""
+    _conversations[conversation_id] = agent
+    _conversations.move_to_end(conversation_id)
+    while len(_conversations) > _MAX_CONVERSATIONS:
+        _conversations.popitem(last=False)
 
 
 # ---------------------------------------------------------------------------
@@ -59,7 +69,7 @@ class ResetResponseOut(BaseModel):
 
 
 @router.post("", response_model=ChatResponseOut)
-async def chat(req: ChatRequest) -> ChatResponseOut:
+async def chat(req: ChatRequest) -> ChatResponseOut | StreamingResponse:
     """Send a chat message. Creates a new conversation if none exists."""
     from aiforge.modules.chat.module import ChatAgent
 
@@ -73,7 +83,7 @@ async def chat(req: ChatRequest) -> ChatResponseOut:
                 memory=req.memory,
                 memory_k=req.memory_k,
             )
-            _conversations[agent.conversation_id] = agent
+            _store_conversation(agent.conversation_id, agent)
 
         if req.stream:
 
@@ -110,7 +120,7 @@ async def reset_chat(req: ResetRequest) -> ResetResponseOut:
         raise HTTPException(status_code=404, detail="Conversation not found")
     agent = _conversations.pop(req.conversation_id)
     agent.reset()
-    _conversations[agent.conversation_id] = agent
+    _store_conversation(agent.conversation_id, agent)
     return ResetResponseOut(
         status="reset",
         conversation_id=agent.conversation_id,

@@ -6,6 +6,7 @@ import json
 import time
 from typing import Any
 
+import jsonschema
 from pydantic import BaseModel
 from pydantic import ValidationError as PydanticValidationError
 
@@ -337,5 +338,9 @@ class Extractor(BaseModule):
             except PydanticValidationError as exc:
                 return None, str(exc)
 
-        # Raw dict schema — no further validation, accept the parsed dict
+        # Raw dict schema — validate against JSON Schema
+        try:
+            jsonschema.validate(instance=parsed, schema=schema)
+        except jsonschema.ValidationError as exc:
+            return None, str(exc.message)
         return parsed, ""

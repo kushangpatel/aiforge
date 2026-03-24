@@ -224,20 +224,20 @@ def _web_search(query: str, max_results: int = 5) -> str:
 
 
 def _knowledge_search(query: str) -> str:
-    """Search ingested knowledge sources via AIForge SearchAgent."""
+    """Search ingested knowledge sources via AIForge SemanticSearch."""
     try:
-        from aiforge.modules.search.module import SearchAgent
+        from aiforge.modules.search.module import SemanticSearch
 
-        agent = SearchAgent()
-        result = agent.run(query)
-        if not result.results:
+        ss = SemanticSearch()
+        result = ss.query(query)
+        if not result.hits:
             return ""
 
         lines: list[str] = []
-        for i, r in enumerate(result.results[:5], 1):
-            source = r.metadata.get("source", "unknown")
-            score = f" (score: {r.score:.2f})" if r.score else ""
-            lines.append(f"[{i}] {source}{score}\n{r.text[:500]}")
+        for i, hit in enumerate(result.hits[:5], 1):
+            source = hit.metadata.get("source", "unknown")
+            score = f" (score: {hit.score:.2f})" if hit.score else ""
+            lines.append(f"[{i}] {source}{score}\n{hit.text[:500]}")
         return "\n\n".join(lines)
     except ImportError:
         return ""

@@ -254,6 +254,30 @@ class TestValidateMethod:
         assert data == {"anything": "goes"}
         assert err == ""
 
+    def test_dict_schema_rejects_invalid(self) -> None:
+        """Dict JSON schemas should now actually validate the parsed JSON."""
+        raw = '{"wrong_field": "value"}'
+        schema = {
+            "type": "object",
+            "properties": {"name": {"type": "string"}},
+            "required": ["name"],
+        }
+        data, err = Extractor._validate(raw, schema)
+        assert data is None
+        assert "name" in err
+
+    def test_dict_schema_validates_property_types(self) -> None:
+        """Dict JSON schemas should reject wrong property types."""
+        raw = '{"name": 123}'
+        schema = {
+            "type": "object",
+            "properties": {"name": {"type": "string"}},
+            "required": ["name"],
+        }
+        data, err = Extractor._validate(raw, schema)
+        assert data is None
+        assert err != ""
+
     def test_fenced_json_extracted_before_validation(self) -> None:
         raw = '```json\n{"name": "Bob", "age": 25}\n```'
         data, err = Extractor._validate(raw, PersonSchema)

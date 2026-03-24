@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import threading
 import time
 from abc import ABC, abstractmethod
 from typing import Any
@@ -60,33 +61,39 @@ class MemoryBackend(CacheBackend):
     def __init__(self, max_entries: int = 1000) -> None:
         self._store: dict[str, tuple[dict[str, Any], float]] = {}
         self._max_entries = max_entries
+        self._lock = threading.Lock()
 
     def get(self, key: str) -> dict[str, Any] | None:
-        entry = self._store.get(key)
-        if entry is None:
-            return None
-        value, expires_at = entry
-        if time.monotonic() > expires_at:
-            del self._store[key]
-            return None
-        return value
+        with self._lock:
+            entry = self._store.get(key)
+            if entry is None:
+                return None
+            value, expires_at = entry
+            if time.monotonic() > expires_at:
+                del self._store[key]
+                return None
+            return value
 
     def set(self, key: str, value: dict[str, Any], ttl_seconds: int) -> None:
-        # Evict oldest entry when at capacity (FIFO / insertion-order).
-        if len(self._store) >= self._max_entries and key not in self._store:
-            oldest_key = next(iter(self._store))
-            del self._store[oldest_key]
-        expires_at = time.monotonic() + ttl_seconds
-        self._store[key] = (value, expires_at)
+        with self._lock:
+            # Evict oldest entry when at capacity (FIFO / insertion-order).
+            if len(self._store) >= self._max_entries and key not in self._store:
+                oldest_key = next(iter(self._store))
+                del self._store[oldest_key]
+            expires_at = time.monotonic() + ttl_seconds
+            self._store[key] = (value, expires_at)
 
     def delete(self, key: str) -> None:
-        self._store.pop(key, None)
+        with self._lock:
+            self._store.pop(key, None)
 
     def clear(self) -> None:
-        self._store.clear()
+        with self._lock:
+            self._store.clear()
 
     def size(self) -> int:
-        return len(self._store)
+        with self._lock:
+            return len(self._store)
 
 
 # ---------------------------------------------------------------------------

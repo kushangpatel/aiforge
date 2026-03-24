@@ -131,6 +131,40 @@ class TestMemoryBackend:
         assert b.get("k1") == {"v": 99}
         assert b.get("k2") == {"v": 2}
 
+    def test_concurrent_access_thread_safe(self) -> None:
+        """MemoryBackend should be safe under concurrent access."""
+        import threading
+
+        b = MemoryBackend(max_entries=500)
+        errors: list[Exception] = []
+
+        def writer(start: int) -> None:
+            try:
+                for i in range(start, start + 100):
+                    b.set(f"k{i}", {"v": i}, ttl_seconds=60)
+            except Exception as exc:
+                errors.append(exc)
+
+        def reader(start: int) -> None:
+            try:
+                for i in range(start, start + 100):
+                    b.get(f"k{i}")
+                    b.size()
+            except Exception as exc:
+                errors.append(exc)
+
+        threads = [
+            threading.Thread(target=writer, args=(0,)),
+            threading.Thread(target=writer, args=(100,)),
+            threading.Thread(target=reader, args=(0,)),
+            threading.Thread(target=reader, args=(100,)),
+        ]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+        assert not errors
+
 
 # ======================================================================
 # CacheBackend ABC

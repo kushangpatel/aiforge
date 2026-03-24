@@ -231,3 +231,37 @@ class TestPipelineResultSerialization:
         json_str = result.model_dump_json()
         assert "hello" in json_str
         assert "step" in json_str
+
+
+# ===========================================================================
+# Pipeline route
+# ===========================================================================
+
+
+class TestPipelineRoute:
+    def test_empty_steps_rejected(self) -> None:
+        from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+        from aiforge.server.routes.pipeline import router
+
+        app = FastAPI()
+        app.include_router(router)
+        client = TestClient(app)
+
+        resp = client.post("/pipeline", json={"steps": [], "text": "hello"})
+        assert resp.status_code == 422
+
+    def test_unknown_module_rejected(self) -> None:
+        from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+        from aiforge.server.routes.pipeline import router
+
+        app = FastAPI()
+        app.include_router(router)
+        client = TestClient(app)
+
+        resp = client.post("/pipeline", json={
+            "steps": [{"name": "s1", "module": "nonexistent_xyz"}],
+            "text": "hello",
+        })
+        assert resp.status_code == 422

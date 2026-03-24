@@ -795,6 +795,26 @@ class TestRoutes:
         data = resp.json()
         assert data["count"] == 2
 
+    def test_conversation_eviction_at_max(self) -> None:
+        """_conversations should evict oldest when over _MAX_CONVERSATIONS."""
+        from aiforge.server.routes.chat import (
+            _conversations,
+            _store_conversation,
+            _MAX_CONVERSATIONS,
+        )
+
+        _conversations.clear()
+        for i in range(_MAX_CONVERSATIONS):
+            _store_conversation(f"id-{i}", MagicMock())
+        assert len(_conversations) == _MAX_CONVERSATIONS
+
+        # Adding one more should evict the oldest (id-0)
+        _store_conversation("new-id", MagicMock())
+        assert len(_conversations) == _MAX_CONVERSATIONS
+        assert "id-0" not in _conversations
+        assert "new-id" in _conversations
+        _conversations.clear()
+
 
 # ===========================================================================
 # Widget — safe calculator
