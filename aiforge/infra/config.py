@@ -148,6 +148,13 @@ class AIForgeSettings(BaseSettings):
     CACHE_REDIS_URL: str = "redis://localhost:6379/0"
 
     # ------------------------------------------------------------------
+    # Webhooks
+    # ------------------------------------------------------------------
+    WEBHOOK_ENABLED: bool = True
+    WEBHOOK_TIMEOUT: float = 10.0  # seconds
+    WEBHOOK_ALLOW_INSECURE: bool = False  # allow http:// URLs (dev only)
+
+    # ------------------------------------------------------------------
     # Tracing / observability
     # ------------------------------------------------------------------
     TRACING_ENABLED: bool = False

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, BackgroundTasks, HTTPException
 from pydantic import BaseModel, Field, field_validator
 
 router = APIRouter(prefix="/search", tags=["search"])
@@ -24,6 +24,7 @@ class _DocumentIn(BaseModel):
 class IndexRequest(BaseModel):
     documents: list[_DocumentIn]
     collection: str = "default"
+    webhook_url: str | None = None
 
     @field_validator("documents")
     @classmethod
@@ -72,9 +73,13 @@ class SearchResponseOut(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-@router.post("/index", response_model=IndexResponseOut)
-async def run_index(body: IndexRequest) -> Any:
-    """Embed and upsert documents into a vector store collection."""
+@router.post("/index")
+async def run_index(body: IndexRequest, background_tasks: BackgroundTasks) -> Any:
+    """Embed and upsert documents into a vector store collection.
+
+    If ``webhook_url`` is provided, returns 202 Accepted and delivers the result
+    asynchronously via HTTP POST.  Otherwise behaves synchronously.
+    """
     from aiforge.modules.search.module import SemanticSearch
     from aiforge.modules.search.schemas import SearchDocument
 
@@ -82,6 +87,47 @@ async def run_index(body: IndexRequest) -> Any:
         SearchDocument(id=d.id, text=d.text, metadata=d.metadata)
         for d in body.documents
     ]
+
+    if body.webhook_url:
+        from aiforge.infra.config import get_settings
+        from aiforge.server.webhooks import (
+            complete_job,
+            create_job,
+            fail_job,
+            validate_webhook_url,
+        )
+
+        settings = get_settings()
+        if not settings.WEBHOOK_ENABLED:
+            raise HTTPException(status_code=422, detail="Webhook support is disabled")
+
+        try:
+            validate_webhook_url(body.webhook_url, allow_insecure=settings.WEBHOOK_ALLOW_INSECURE)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc))
+
+        job = create_job(webhook_url=body.webhook_url)
+        webhook_timeout = settings.WEBHOOK_TIMEOUT
+
+        async def _process() -> None:
+            from aiforge.server.webhooks import mark_running
+
+            mark_running(job.job_id)
+            try:
+                ss = SemanticSearch(collection=body.collection)
+                result = await ss.aindex(docs)
+                await complete_job(job.job_id, result.model_dump(), timeout=webhook_timeout)
+            except Exception as exc:
+                await fail_job(job.job_id, str(exc), timeout=webhook_timeout)
+
+        background_tasks.add_task(_process)
+        from starlette.responses import JSONResponse
+
+        return JSONResponse(
+            status_code=202,
+            content={"job_id": job.job_id, "status": "accepted"},
+        )
+
     try:
         ss = SemanticSearch(collection=body.collection)
         result = await ss.aindex(docs)

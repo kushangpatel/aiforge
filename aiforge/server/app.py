@@ -46,6 +46,7 @@ def create_app() -> FastAPI:
         extract,
         generate,
         health,
+        jobs,
         moderate,
         pipeline,
         qa,
@@ -84,6 +85,7 @@ def create_app() -> FastAPI:
     application.include_router(chat.router)
     application.include_router(moderate.router)
     application.include_router(pipeline.router)
+    application.include_router(jobs.router)
 
     @application.exception_handler(Exception)
     async def _global_exception_handler(request: Request, exc: Exception) -> JSONResponse:

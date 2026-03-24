@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, BackgroundTasks, HTTPException
 from pydantic import BaseModel, Field
 
 router = APIRouter(prefix="/qa", tags=["qa"])
@@ -20,6 +20,7 @@ class IngestRequest(BaseModel):
     collection: str = "default"
     file_extensions: list[str] | None = None
     batch_size: int = Field(default=100, ge=1)
+    webhook_url: str | None = None
 
 
 class IngestResponseOut(BaseModel):
@@ -76,10 +77,58 @@ class DeletedOut(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-@router.post("/ingest", response_model=IngestResponseOut)
-async def ingest(body: IngestRequest) -> Any:
-    """Ingest documents into a collection."""
+@router.post("/ingest")
+async def ingest(body: IngestRequest, background_tasks: BackgroundTasks) -> Any:
+    """Ingest documents into a collection.
+
+    If ``webhook_url`` is provided, returns 202 Accepted and delivers the result
+    asynchronously via HTTP POST.  Otherwise behaves synchronously.
+    """
     from aiforge.modules.qa.module import DocQA
+
+    if body.webhook_url:
+        from aiforge.infra.config import get_settings
+        from aiforge.server.webhooks import (
+            complete_job,
+            create_job,
+            fail_job,
+            validate_webhook_url,
+        )
+
+        settings = get_settings()
+        if not settings.WEBHOOK_ENABLED:
+            raise HTTPException(status_code=422, detail="Webhook support is disabled")
+
+        try:
+            validate_webhook_url(body.webhook_url, allow_insecure=settings.WEBHOOK_ALLOW_INSECURE)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc))
+
+        job = create_job(webhook_url=body.webhook_url)
+        webhook_timeout = settings.WEBHOOK_TIMEOUT
+
+        async def _process() -> None:
+            from aiforge.server.webhooks import mark_running
+
+            mark_running(job.job_id)
+            try:
+                qa = DocQA(collection=body.collection)
+                result = await qa.aingest(
+                    body.source,
+                    file_extensions=body.file_extensions,
+                    batch_size=body.batch_size,
+                )
+                await complete_job(job.job_id, result.model_dump(), timeout=webhook_timeout)
+            except Exception as exc:
+                await fail_job(job.job_id, str(exc), timeout=webhook_timeout)
+
+        background_tasks.add_task(_process)
+        from starlette.responses import JSONResponse
+
+        return JSONResponse(
+            status_code=202,
+            content={"job_id": job.job_id, "status": "accepted"},
+        )
 
     try:
         qa = DocQA(collection=body.collection)
