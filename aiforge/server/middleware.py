@@ -9,6 +9,7 @@ Provides:
 
 from __future__ import annotations
 
+import secrets
 import time
 import uuid
 from typing import TYPE_CHECKING, Callable
@@ -51,8 +52,8 @@ class AuthMiddleware(BaseHTTPMiddleware):
                 content={"detail": "Missing or invalid Authorization header"},
             )
         token = auth_header.removeprefix("Bearer ").strip()
-        if token != self._api_key:
-            return JSONResponse(status_code=403, content={"detail": "Forbidden"})
+        if not secrets.compare_digest(token, self._api_key):
+            return JSONResponse(status_code=401, content={"detail": "Invalid API key"})
 
         return await call_next(request)
 
