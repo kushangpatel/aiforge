@@ -27,6 +27,7 @@ _logger = structlog.get_logger(__name__)
 # Paths that never require authentication
 _PUBLIC_PATHS: frozenset[str] = frozenset({
     "/health",
+    "/health/ready",
     "/docs",
     "/openapi.json",
     "/redoc",
@@ -36,7 +37,7 @@ _PUBLIC_PATHS: frozenset[str] = frozenset({
 class AuthMiddleware(BaseHTTPMiddleware):
     """Bearer-token authentication middleware.
 
-    Skips auth for the ``/health`` route so load-balancer probes always pass.
+    Skips auth for public paths (health probes, docs) so load-balancer probes always pass.
     Only active when ``AIFORGE_API_KEY`` is configured.
     """
 

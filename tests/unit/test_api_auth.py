@@ -28,6 +28,10 @@ def _make_app(api_key: str | None = None) -> TestClient:
     async def health():
         return {"status": "ok"}
 
+    @app.get("/health/ready")
+    async def health_ready():
+        return {"status": "ready"}
+
     @app.get("/docs", include_in_schema=False)
     async def docs_page():
         return {"page": "docs"}
@@ -151,6 +155,10 @@ class TestKeyConfigured:
         resp = client.get("/health")
         assert resp.status_code == 200
 
+    def test_health_ready_endpoint_always_open(self, client: TestClient) -> None:
+        resp = client.get("/health/ready")
+        assert resp.status_code == 200
+
     def test_docs_endpoint_always_open(self, client: TestClient) -> None:
         resp = client.get("/docs")
         assert resp.status_code == 200
@@ -190,4 +198,4 @@ class TestSecurityProperties:
     def test_public_paths_constant(self) -> None:
         """_PUBLIC_PATHS must be a frozenset with exactly the spec paths."""
         assert isinstance(_PUBLIC_PATHS, frozenset)
-        assert _PUBLIC_PATHS == {"/health", "/docs", "/openapi.json", "/redoc"}
+        assert _PUBLIC_PATHS == {"/health", "/health/ready", "/docs", "/openapi.json", "/redoc"}

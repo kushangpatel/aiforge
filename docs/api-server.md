@@ -29,24 +29,30 @@ docker run -p 8000:8000 \
 | POST | `/summarize` | Summarizer | Summarize text |
 | POST | `/qa/ingest` | DocQA | Ingest documents |
 | POST | `/qa/ask` | DocQA | Ask a question |
+| GET | `/qa/collections` | DocQA | List collections |
+| GET | `/qa/collections/{name}/stats` | DocQA | Collection statistics |
+| DELETE | `/qa/collections/{name}` | DocQA | Delete a collection |
 | POST | `/extract` | Extractor | Extract structured data |
 | POST | `/classify` | Classifier | Classify text |
 | POST | `/search/index` | SemanticSearch | Index documents |
 | POST | `/search/query` | SemanticSearch | Search |
 | POST | `/generate` | Generator | Generate content |
 | POST | `/chat` | ChatAgent | Chat message |
+| POST | `/chat/reset` | ChatAgent | Reset conversation |
+| GET | `/chat/conversations` | ChatAgent | List conversations |
 | POST | `/moderate` | Moderator | Content check |
-| POST | `/moderate/redact` | Moderator | PII redaction |
 | POST | `/pipeline` | Pipeline | Run a named pipeline |
 | GET | `/jobs/{job_id}` | Webhooks | Poll async job status |
-| GET | `/health` | — | Health + status |
+| GET | `/health` | — | Liveness probe |
+| GET | `/health/ready` | — | Readiness probe |
+| GET | `/stats` | — | Cost/token usage stats |
 | GET | `/docs` | — | OpenAPI/Swagger UI (auto) |
 
 ---
 
 ## Authentication
 
-When `AIFORGE_API_KEY` is set (non-empty), all endpoints except `/health` and `/docs` require a Bearer token:
+When `AIFORGE_API_KEY` is set (non-empty), all endpoints except the public paths (`/health`, `/health/ready`, `/docs`, `/openapi.json`, `/redoc`) require a Bearer token:
 
 ```bash
 curl -X POST http://localhost:8000/classify \
@@ -196,19 +202,8 @@ curl -X POST http://localhost:8000/qa/ask \
 GET /health
 
 {
-  "status": "healthy",
-  "version": "0.1.0",
-  "provider": "openai",
-  "model": "gpt-4o",
-  "modules_loaded": ["summarize", "qa", "extract", "classify", "search", "generate", "chat", "moderate"],
-  "vector_store": {
-    "type": "chroma",
-    "persist_dir": "./aiforge_data",
-    "total_documents": 4521
-  },
-  "uptime_seconds": 3600,
-  "total_requests": 142,
-  "total_cost": 0.87
+  "status": "ok",
+  "version": "0.1.0"
 }
 ```
 

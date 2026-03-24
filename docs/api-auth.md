@@ -147,7 +147,8 @@ remain accessible.
 
 | Path | Purpose |
 |------|---------|
-| `/health` | Health check / status |
+| `/health` | Liveness probe |
+| `/health/ready` | Readiness probe |
 | `/docs` | Swagger UI |
 | `/openapi.json` | OpenAPI spec (JSON) |
 | `/redoc` | ReDoc UI |
