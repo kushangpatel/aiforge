@@ -5,6 +5,12 @@ from __future__ import annotations
 import pytest
 
 from aiforge.core.pricing import calculate_cost, get_context_window, get_model_pricing
+from aiforge.core.pricing import (
+    _context_window_overrides,
+    _pricing_overrides,
+    apply_context_window_overrides,
+    apply_pricing_overrides,
+)
 from aiforge.core.types import CompletionResult
 
 
@@ -44,6 +50,69 @@ class TestContextWindow:
 
     def test_unknown_model_returns_default(self) -> None:
         assert get_context_window("some-unknown-model") == 8_192
+
+
+class TestCustomPricingOverrides:
+    """Custom pricing via apply_pricing_overrides."""
+
+    def setup_method(self) -> None:
+        _pricing_overrides.clear()
+
+    def teardown_method(self) -> None:
+        _pricing_overrides.clear()
+
+    def test_override_existing_model(self) -> None:
+        apply_pricing_overrides({"gpt-4o": {"input": 1.0, "output": 2.0}})
+        cost = calculate_cost("gpt-4o", input_tokens=1_000_000, output_tokens=1_000_000)
+        assert pytest.approx(cost) == 3.0
+
+    def test_add_new_model(self) -> None:
+        apply_pricing_overrides({"my-custom-model": {"input": 10.0, "output": 20.0}})
+        pricing = get_model_pricing("my-custom-model")
+        assert pricing == {"input": 10.0, "output": 20.0}
+        cost = calculate_cost("my-custom-model", input_tokens=1_000_000, output_tokens=500_000)
+        assert pytest.approx(cost) == 20.0  # 10.0 + (20.0 * 0.5)
+
+    def test_override_takes_precedence(self) -> None:
+        original = get_model_pricing("gpt-4o")
+        assert original is not None
+        assert original["input"] == 5.00
+        apply_pricing_overrides({"gpt-4o": {"input": 99.0, "output": 99.0}})
+        overridden = get_model_pricing("gpt-4o")
+        assert overridden is not None
+        assert overridden["input"] == 99.0
+
+    def test_override_with_fuzzy_match(self) -> None:
+        apply_pricing_overrides({"claude-3-5-sonnet": {"input": 1.0, "output": 5.0}})
+        pricing = get_model_pricing("claude-3-5-sonnet-20241022")
+        assert pricing is not None
+        assert pricing["input"] == 1.0
+
+
+class TestCustomContextWindowOverrides:
+    """Custom context windows via apply_context_window_overrides."""
+
+    def setup_method(self) -> None:
+        _context_window_overrides.clear()
+
+    def teardown_method(self) -> None:
+        _context_window_overrides.clear()
+
+    def test_override_existing_model(self) -> None:
+        apply_context_window_overrides({"gpt-4o": 256_000})
+        assert get_context_window("gpt-4o") == 256_000
+
+    def test_add_new_model(self) -> None:
+        apply_context_window_overrides({"my-custom-llm": 32_768})
+        assert get_context_window("my-custom-llm") == 32_768
+
+    def test_override_takes_precedence(self) -> None:
+        assert get_context_window("gpt-4o") == 128_000  # built-in
+        apply_context_window_overrides({"gpt-4o": 64_000})
+        assert get_context_window("gpt-4o") == 64_000
+
+    def test_unknown_still_returns_default(self) -> None:
+        assert get_context_window("totally-unknown") == 8_192
 
 
 class TestProviderRegistry:

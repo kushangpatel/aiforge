@@ -124,6 +124,10 @@ class AIForgeSettings(BaseSettings):
 
     # Custom prompt overrides
     CUSTOM_PROMPTS: dict[str, dict[str, str]] = {}
+
+    # Custom pricing overrides (USD per 1M tokens)
+    CUSTOM_PRICING: dict[str, dict[str, float]] = {}
+    CUSTOM_CONTEXT_WINDOWS: dict[str, int] = {}
 ```
 
 ---

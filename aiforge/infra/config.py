@@ -195,6 +195,12 @@ class AIForgeSettings(BaseSettings):
     CUSTOM_MODELS: list[dict[str, Any]] = []
 
     # ------------------------------------------------------------------
+    # Custom pricing overrides
+    # ------------------------------------------------------------------
+    CUSTOM_PRICING: dict[str, dict[str, float]] = {}
+    CUSTOM_CONTEXT_WINDOWS: dict[str, int] = {}
+
+    # ------------------------------------------------------------------
     # Validators
     # ------------------------------------------------------------------
 
@@ -323,5 +329,19 @@ def get_settings() -> AIForgeSettings:
     """
     yaml_path = Path("aiforge.yaml")
     if yaml_path.exists():
-        return AIForgeSettings.from_yaml(yaml_path)
-    return AIForgeSettings()
+        settings = AIForgeSettings.from_yaml(yaml_path)
+    else:
+        settings = AIForgeSettings()
+
+    # Apply custom pricing / context-window overrides from config
+    from aiforge.core.pricing import (
+        apply_context_window_overrides,
+        apply_pricing_overrides,
+    )
+
+    if settings.CUSTOM_PRICING:
+        apply_pricing_overrides(settings.CUSTOM_PRICING)
+    if settings.CUSTOM_CONTEXT_WINDOWS:
+        apply_context_window_overrides(settings.CUSTOM_CONTEXT_WINDOWS)
+
+    return settings

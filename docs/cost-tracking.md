@@ -68,13 +68,30 @@ PRICING = {
 
 The built-in pricing table is a best-effort snapshot at release time. If provider prices change:
 
-1. **Config override** (immediate): Override any model price in `aiforge.yaml`:
+1. **Config override** (immediate): Override or add pricing for any model in `aiforge.yaml`:
     ```yaml
-    pricing:
-      gpt-4o: {input: 2.50, output: 10.00}  # override built-in
+    # aiforge.yaml
+    custom_pricing:
+      gpt-4o:
+        input: 2.50             # USD per 1M tokens
+        output: 10.00
+      my-finetuned-model:       # add a model not in the built-in table
+        input: 6.00
+        output: 18.00
     ```
-2. **Patch release**: Pricing updates are included in PATCH releases (no breaking change).
-3. **Unknown models**: If a model isn't in the table and no override is set, cost is reported as `0.0` with a WARNING log: `"No pricing data for model 'X'. Cost tracking will be inaccurate."`
+    Custom pricing takes precedence over built-in defaults.
+
+2. **Context windows**: Override per-model context windows the same way:
+    ```yaml
+    # aiforge.yaml
+    custom_context_windows:
+      my-finetuned-model: 128000
+      custom-llama: 32768
+    ```
+    Used by the summarizer to decide stuff-vs-map_reduce strategy.
+
+3. **Patch release**: Pricing updates are included in PATCH releases (no breaking change).
+4. **Unknown models**: If a model isn't in the table and no override is set, cost is reported as `0.0` with a WARNING log: `"Unknown model 'X' — cost will be reported as $0.00"`
 
 ---
 

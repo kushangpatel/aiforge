@@ -148,6 +148,25 @@ tracing_backend: langsmith
 # otel_exporter_endpoint: http://localhost:4317
 
 # ---------------------------------------------------------------------------
+# Custom pricing overrides
+# ---------------------------------------------------------------------------
+
+# Override or add pricing for models not in the built-in table.
+# Prices are in USD per 1,000,000 tokens.
+# custom_pricing:
+#   my-finetuned-gpt4o:
+#     input: 6.00
+#     output: 18.00
+#   gpt-4o:                          # override a built-in model
+#     input: 4.50
+#     output: 13.50
+
+# Override or add context windows (max tokens) for models.
+# custom_context_windows:
+#   my-finetuned-gpt4o: 128000
+#   custom-llama: 32768
+
+# ---------------------------------------------------------------------------
 # Model router
 # ---------------------------------------------------------------------------
 
