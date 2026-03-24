@@ -6,7 +6,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from aiforge.server.middleware import AuthMiddleware
+from aiforge.server.middleware import AuthMiddleware, _PUBLIC_PATHS
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -19,6 +19,10 @@ def _make_app(api_key: str | None = None) -> TestClient:
     """Build a minimal FastAPI app with AuthMiddleware attached."""
     app = FastAPI()
     app.add_middleware(AuthMiddleware, api_key=api_key)
+
+    @app.get("/")
+    async def root():
+        return {"page": "root"}
 
     @app.get("/health")
     async def health():
@@ -128,6 +132,19 @@ class TestKeyConfigured:
         assert resp.status_code == 401
         assert "Invalid API key" in resp.json()["detail"]
 
+    def test_whitespace_padded_token_returns_401(self, client: TestClient) -> None:
+        """Tokens with leading/trailing whitespace must NOT match the key."""
+        resp = client.post(
+            "/classify",
+            headers={"Authorization": f"Bearer  {_SECRET} "},
+        )
+        assert resp.status_code == 401
+
+    def test_root_path_requires_auth(self, client: TestClient) -> None:
+        """Root ``/`` is NOT in the public-paths set and must require auth."""
+        resp = client.get("/")
+        assert resp.status_code == 401
+
     # ---- Public paths always open ----
 
     def test_health_endpoint_always_open(self, client: TestClient) -> None:
@@ -169,3 +186,8 @@ class TestSecurityProperties:
 
         source = inspect.getsource(AuthMiddleware)
         assert "secrets.compare_digest" in source
+
+    def test_public_paths_constant(self) -> None:
+        """_PUBLIC_PATHS must be a frozenset with exactly the spec paths."""
+        assert isinstance(_PUBLIC_PATHS, frozenset)
+        assert _PUBLIC_PATHS == {"/health", "/docs", "/openapi.json", "/redoc"}

@@ -24,6 +24,14 @@ if TYPE_CHECKING:
 
 _logger = structlog.get_logger(__name__)
 
+# Paths that never require authentication
+_PUBLIC_PATHS: frozenset[str] = frozenset({
+    "/health",
+    "/docs",
+    "/openapi.json",
+    "/redoc",
+})
+
 
 class AuthMiddleware(BaseHTTPMiddleware):
     """Bearer-token authentication middleware.
@@ -41,18 +49,30 @@ class AuthMiddleware(BaseHTTPMiddleware):
         if not self._api_key:
             return await call_next(request)
 
-        # Health check is always public
-        if request.url.path in ("/health", "/", "/docs", "/openapi.json", "/redoc"):
+        # Public paths are always open
+        if request.url.path in _PUBLIC_PATHS:
             return await call_next(request)
 
         auth_header = request.headers.get("Authorization", "")
         if not auth_header.startswith("Bearer "):
+            _logger.warning(
+                "Auth failure: missing or invalid header",
+                path=request.url.path,
+                method=request.method,
+                client=request.client.host if request.client else None,
+            )
             return JSONResponse(
                 status_code=401,
                 content={"detail": "Missing or invalid Authorization header"},
             )
-        token = auth_header.removeprefix("Bearer ").strip()
+        token = auth_header[len("Bearer "):]
         if not secrets.compare_digest(token, self._api_key):
+            _logger.warning(
+                "Auth failure: invalid API key",
+                path=request.url.path,
+                method=request.method,
+                client=request.client.host if request.client else None,
+            )
             return JSONResponse(status_code=401, content={"detail": "Invalid API key"})
 
         return await call_next(request)
