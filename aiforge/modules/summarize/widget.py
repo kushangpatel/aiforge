@@ -44,6 +44,9 @@ def render() -> None:
         except ValueError as exc:
             st.error(f"Configuration error: {exc}")
             return
+        except Exception as exc:
+            st.error(f"Summarization failed: {exc}")
+            return
 
     st.subheader("Summary")
     st.write(result.summary)

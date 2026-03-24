@@ -155,6 +155,11 @@ class AIForgeSettings(BaseSettings):
     WEBHOOK_ALLOW_INSECURE: bool = False  # allow http:// URLs (dev only)
 
     # ------------------------------------------------------------------
+    # CORS
+    # ------------------------------------------------------------------
+    CORS_ORIGINS: str = "*"  # Comma-separated origins, or "*" for open access
+
+    # ------------------------------------------------------------------
     # Tracing / observability
     # ------------------------------------------------------------------
     TRACING_ENABLED: bool = False

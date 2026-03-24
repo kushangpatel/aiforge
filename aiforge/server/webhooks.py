@@ -7,7 +7,9 @@ and POST the result to a caller-supplied ``webhook_url`` when finished.
 from __future__ import annotations
 
 import ipaddress
+import socket
 import uuid
+from collections import OrderedDict
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Any
@@ -91,6 +93,18 @@ def validate_webhook_url(url: str, *, allow_insecure: bool = False) -> str:
         # Re-raise our own validation errors; swallow parse errors for hostnames
         if "Webhook URL" in str(exc):
             raise
+        # hostname is not an IP literal — resolve DNS and check resolved addresses
+        try:
+            resolved = socket.getaddrinfo(hostname, None, proto=socket.IPPROTO_TCP)
+            for family, _type, _proto, _canon, sockaddr in resolved:
+                addr = ipaddress.ip_address(sockaddr[0])
+                for net in _PRIVATE_NETS:
+                    if addr in net:
+                        raise ValueError(
+                            f"Webhook URL hostname '{hostname}' resolves to private IP {addr}"
+                        )
+        except socket.gaierror:
+            pass  # DNS resolution failure handled at delivery time
     return url
 
 
@@ -98,13 +112,22 @@ def validate_webhook_url(url: str, *, allow_insecure: bool = False) -> str:
 # In-memory job store
 # ---------------------------------------------------------------------------
 
-_jobs: dict[str, JobRecord] = {}
+_MAX_JOBS = 10_000
+_jobs: OrderedDict[str, JobRecord] = OrderedDict()
 
 
 def create_job(webhook_url: str) -> JobRecord:
     """Register a new job and return its record."""
     job = JobRecord(webhook_url=webhook_url)
     _jobs[job.job_id] = job
+    # Evict oldest completed jobs when store exceeds limit
+    while len(_jobs) > _MAX_JOBS:
+        oldest_key = next(iter(_jobs))
+        oldest = _jobs[oldest_key]
+        if oldest.status in (JobStatus.COMPLETED, JobStatus.FAILED):
+            del _jobs[oldest_key]
+        else:
+            break  # Don't evict running/accepted jobs
     return job
 
 
@@ -137,11 +160,14 @@ async def fail_job(job_id: str, error: str, *, timeout: float = 10.0) -> None:
         await _deliver_webhook(job, timeout=timeout)
 
 
-async def _deliver_webhook(job: JobRecord, *, timeout: float = 10.0) -> None:
+async def _deliver_webhook(job: JobRecord, *, timeout: float = 10.0, max_retries: int = 3) -> None:
     """POST the job result to the webhook URL.
 
-    Single attempt with configurable timeout.  Failures are logged, not raised.
+    Retries up to *max_retries* times with exponential backoff.
+    Failures are logged, not raised.
     """
+    import asyncio
+
     import httpx
 
     payload = {
@@ -151,22 +177,34 @@ async def _deliver_webhook(job: JobRecord, *, timeout: float = 10.0) -> None:
         "error": job.error,
         "completed_at": job.completed_at.isoformat() if job.completed_at else None,
     }
-    try:
-        async with httpx.AsyncClient(timeout=timeout) as client:
-            resp = await client.post(str(job.webhook_url), json=payload)
-            logger.info(
-                "webhook.delivered",
+    for attempt in range(max_retries + 1):
+        try:
+            async with httpx.AsyncClient(timeout=timeout) as client:
+                resp = await client.post(str(job.webhook_url), json=payload)
+                logger.info(
+                    "webhook.delivered",
+                    job_id=job.job_id,
+                    webhook_url=job.webhook_url,
+                    status_code=resp.status_code,
+                    attempt=attempt + 1,
+                )
+                return
+        except Exception as exc:
+            logger.warning(
+                "webhook.delivery_attempt_failed",
                 job_id=job.job_id,
                 webhook_url=job.webhook_url,
-                status_code=resp.status_code,
+                error=str(exc),
+                attempt=attempt + 1,
             )
-    except Exception as exc:
-        logger.error(
-            "webhook.delivery_failed",
-            job_id=job.job_id,
-            webhook_url=job.webhook_url,
-            error=str(exc),
-        )
+            if attempt < max_retries:
+                await asyncio.sleep(2 ** attempt)  # 1s, 2s, 4s
+    logger.error(
+        "webhook.delivery_failed",
+        job_id=job.job_id,
+        webhook_url=job.webhook_url,
+        max_retries=max_retries,
+    )
 
 
 def mark_running(job_id: str) -> None:

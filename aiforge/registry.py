@@ -3,15 +3,20 @@ and vector store adapters by name."""
 
 from __future__ import annotations
 
+import logging
+import threading
 from typing import Any
 
 from aiforge.core.types import BaseModule
 from aiforge.core.vectorstore import VectorStoreAdapter
 
+_logger = logging.getLogger(__name__)
+
 # ---------------------------------------------------------------------------
 # Internal registries
 # ---------------------------------------------------------------------------
 
+_lock = threading.Lock()
 _module_registry: dict[str, type[BaseModule]] = {}
 _vectorstore_registry: dict[str, type[VectorStoreAdapter]] = {}
 
@@ -44,7 +49,10 @@ def register_module(name: str, cls: type[BaseModule]) -> None:
     key = _validate_name(name)
     if not (isinstance(cls, type) and issubclass(cls, BaseModule)):
         raise TypeError(f"{cls!r} must be a subclass of BaseModule")
-    _module_registry[key] = cls
+    with _lock:
+        if key in _module_registry:
+            _logger.warning("Overwriting module registration: %s", key)
+        _module_registry[key] = cls
 
 
 def get_module(name: str) -> type[BaseModule]:
@@ -64,7 +72,8 @@ def get_module(name: str) -> type[BaseModule]:
 
 def list_modules() -> list[str]:
     """Return names of all registered modules."""
-    return sorted(_module_registry)
+    with _lock:
+        return sorted(_module_registry)
 
 
 # ---------------------------------------------------------------------------
@@ -87,7 +96,10 @@ def register_vectorstore(name: str, cls: type[VectorStoreAdapter]) -> None:
     key = _validate_name(name)
     if not (isinstance(cls, type) and issubclass(cls, VectorStoreAdapter)):
         raise TypeError(f"{cls!r} must be a subclass of VectorStoreAdapter")
-    _vectorstore_registry[key] = cls
+    with _lock:
+        if key in _vectorstore_registry:
+            _logger.warning("Overwriting vectorstore registration: %s", key)
+        _vectorstore_registry[key] = cls
 
 
 def get_vectorstore(name: str) -> type[VectorStoreAdapter]:
@@ -107,7 +119,8 @@ def get_vectorstore(name: str) -> type[VectorStoreAdapter]:
 
 def list_vectorstores() -> list[str]:
     """Return names of all registered vector store adapters."""
-    return sorted(_vectorstore_registry)
+    with _lock:
+        return sorted(_vectorstore_registry)
 
 
 # ---------------------------------------------------------------------------

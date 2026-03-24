@@ -17,12 +17,15 @@ if TYPE_CHECKING:
 
 # Registry: provider_name -> (llm_class_factory, embedding_class_factory)
 _REGISTRY: dict[str, tuple[Any, Any]] = {}
+_BUILTINS_LOADED: bool = False
 
 
 def _ensure_registered() -> None:
     """Lazily populate the registry on first use to avoid import-time side-effects."""
-    if _REGISTRY:
+    global _BUILTINS_LOADED
+    if _BUILTINS_LOADED:
         return
+    _BUILTINS_LOADED = True
 
     from aiforge.providers.openai import OpenAIEmbeddingProvider, OpenAIProvider
 

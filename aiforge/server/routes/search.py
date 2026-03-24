@@ -133,6 +133,12 @@ async def run_index(body: IndexRequest, background_tasks: BackgroundTasks) -> An
         result = await ss.aindex(docs)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc))
+    except Exception as exc:
+        from aiforge.core.types import RateLimitError
+
+        if isinstance(exc, RateLimitError):
+            raise HTTPException(status_code=429, detail=str(exc))
+        raise HTTPException(status_code=503, detail=str(exc))
     return IndexResponseOut(
         indexed_count=result.indexed_count,
         collection=result.collection,
@@ -158,6 +164,12 @@ async def run_query(body: QueryRequest) -> Any:
         )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc))
+    except Exception as exc:
+        from aiforge.core.types import RateLimitError
+
+        if isinstance(exc, RateLimitError):
+            raise HTTPException(status_code=429, detail=str(exc))
+        raise HTTPException(status_code=503, detail=str(exc))
     return SearchResponseOut(
         hits=[
             _HitOut(

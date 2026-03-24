@@ -386,21 +386,23 @@ class TestProfessionalToneGuardrail:
         g = _gen()
         fake = _fake_llm("YES")
         with patch.object(g, "_call_llm", return_value=fake):
-            assert g._check_professional_tone("We appreciate your inquiry.") is True
+            is_pro, _in, _out, _cost = g._check_professional_tone("We appreciate your inquiry.")
+            assert is_pro is True
 
     def test_unprofessional_text(self) -> None:
         g = _gen()
         fake = _fake_llm("NO")
         with patch.object(g, "_call_llm", return_value=fake):
-            assert g._check_professional_tone("yo dude what's up lol") is False
+            is_pro, _in, _out, _cost = g._check_professional_tone("yo dude what's up lol")
+            assert is_pro is False
 
     @pytest.mark.asyncio
     async def test_async_professional_tone(self) -> None:
         g = _gen()
         fake = _fake_llm("YES")
         with patch.object(g, "_acall_llm", new_callable=AsyncMock, return_value=fake):
-            result = await g._acheck_professional_tone("Formal message.")
-        assert result is True
+            is_pro, _in, _out, _cost = await g._acheck_professional_tone("Formal message.")
+        assert is_pro is True
 
 
 # ---------------------------------------------------------------------------

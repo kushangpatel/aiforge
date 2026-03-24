@@ -122,6 +122,10 @@ def migrate(
             console.print(f"[green]✓[/green] Deleted collection '{delete}'.")
         return
 
+    if not (all or status or collection):
+        console.print("[yellow]No action specified.[/yellow] Use --all, --status, --collection, or --delete.")
+        raise typer.Exit()
+
     if all or status:
         collections = store.list_collections()
         if not collections:

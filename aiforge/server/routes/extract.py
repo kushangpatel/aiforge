@@ -34,6 +34,7 @@ class ExtractResponse(BaseModel):
     cost_usd: float = 0.0
     input_tokens: int = 0
     output_tokens: int = 0
+    model: str = ""
     latency_ms: float = 0.0
 
 
@@ -49,6 +50,12 @@ async def run_extract(body: ExtractRequest) -> Any:
         result = await e.aextract(body.text)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc))
+    except Exception as exc:
+        from aiforge.core.types import RateLimitError
+
+        if isinstance(exc, RateLimitError):
+            raise HTTPException(status_code=429, detail=str(exc))
+        raise HTTPException(status_code=503, detail=str(exc))
     return ExtractResponse(
         data=result.data,
         raw_json=result.raw_json,
@@ -57,6 +64,7 @@ async def run_extract(body: ExtractRequest) -> Any:
         cost_usd=result.cost,
         input_tokens=result.input_tokens,
         output_tokens=result.output_tokens,
+        model=result.model,
         latency_ms=result.latency_ms,
     )
 

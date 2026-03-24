@@ -50,6 +50,11 @@ class Pipeline:
         """
         self._steps = steps
         self._halt_on_flag = halt_on_flag
+        # Validate no duplicate step names
+        names = [name for name, _ in steps]
+        dupes = [n for n in names if names.count(n) > 1]
+        if dupes:
+            raise ValueError(f"Duplicate step names: {sorted(set(dupes))}")
 
     def run(
         self,

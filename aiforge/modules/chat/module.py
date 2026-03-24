@@ -213,10 +213,15 @@ class ChatAgent(BaseModule):
                 if msgs:
                     last = msgs[-1] if isinstance(msgs, list) else msgs
                     if isinstance(last, dict) and last.get("role") == "assistant":
-                        content = last["content"]
-                        new_text = content[len(full_response):]
+                        content = last.get("content") or ""
+                        if content.startswith(full_response):
+                            # Cumulative: extract only the new suffix
+                            new_text = content[len(full_response):]
+                        else:
+                            # Non-cumulative delta: treat entire content as new
+                            new_text = content
                         if new_text:
-                            full_response = content
+                            full_response += new_text
                             yield new_text
 
         if full_response:
@@ -261,7 +266,16 @@ class ChatAgent(BaseModule):
                 chunks.append(chunk)
             return chunks
 
-        return iter(asyncio.get_event_loop().run_until_complete(_collect()))
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+
+        if loop and loop.is_running():
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                return iter(pool.submit(asyncio.run, _collect()).result())
+        return iter(asyncio.run(_collect()))
 
     async def arun_stream(self, text: str, **kwargs: Any) -> AsyncGenerator[str, None]:
         """Async streaming — delegates to :meth:`chat_stream`."""

@@ -307,10 +307,15 @@ class Summarizer(BaseModule):
         model = ""
         chunk_summaries: list[str] = []
 
-        # Map phase
-        for chunk in chunks:
+        # Map phase — run chunk summarizations concurrently
+        import asyncio
+
+        async def _summarize_chunk(chunk: str) -> Any:
             messages = self._build_map_messages(chunk, system)
-            llm = await self._acall_llm(messages, temperature=self.temperature)
+            return await self._acall_llm(messages, temperature=self.temperature)
+
+        map_results = await asyncio.gather(*[_summarize_chunk(c) for c in chunks])
+        for llm in map_results:
             from aiforge.core.pricing import calculate_cost
             cost = calculate_cost(llm.model, llm.input_tokens, llm.output_tokens)
             total_in += llm.input_tokens

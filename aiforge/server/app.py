@@ -63,11 +63,13 @@ def create_app() -> FastAPI:
         lifespan=_lifespan,
     )
 
-    # CORS — open by default for dev; tighten in production via env vars
+    # CORS — open by default for dev; tighten in production via AIFORGE_CORS_ORIGINS
+    cors_origins = [o.strip() for o in settings.CORS_ORIGINS.split(",") if o.strip()]
+    allow_credentials = "*" not in cors_origins
     application.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
-        allow_credentials=True,
+        allow_origins=cors_origins,
+        allow_credentials=allow_credentials,
         allow_methods=["*"],
         allow_headers=["*"],
     )

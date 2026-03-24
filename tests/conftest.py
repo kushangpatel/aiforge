@@ -50,9 +50,11 @@ def reset_provider_registry() -> None:
     import copy
     import aiforge.providers as _reg
     snapshot = copy.copy(_reg._REGISTRY)
+    builtins_loaded = _reg._BUILTINS_LOADED
     yield
     _reg._REGISTRY.clear()
     _reg._REGISTRY.update(snapshot)
+    _reg._BUILTINS_LOADED = builtins_loaded
 
 
 @pytest.fixture(autouse=True)

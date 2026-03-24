@@ -269,7 +269,10 @@ class Classifier(BaseModule):
             scores: list[LabelScore] = []
             for entry in raw_entries:
                 lbl = str(entry.get("label", ""))
-                conf = max(0.0, min(1.0, float(entry.get("confidence", 1.0))))
+                try:
+                    conf = max(0.0, min(1.0, float(entry.get("confidence", 1.0))))
+                except (ValueError, TypeError):
+                    conf = 1.0
                 resolved = _resolve(lbl)
                 if resolved is not None:
                     if conf >= self.min_confidence:
@@ -281,7 +284,10 @@ class Classifier(BaseModule):
             return ClassifyResponse(label=top, scores=scores, rationale=rationale)
         else:
             raw_label = str(data.get("label", ""))
-            confidence = max(0.0, min(1.0, float(data.get("confidence", 1.0))))
+            try:
+                confidence = max(0.0, min(1.0, float(data.get("confidence", 1.0))))
+            except (ValueError, TypeError):
+                confidence = 1.0
             resolved = _resolve(raw_label)
             if resolved is None:
                 self.logger.warning(

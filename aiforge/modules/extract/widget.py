@@ -75,6 +75,9 @@ def render() -> None:
         except ValueError as exc:
             st.error(f"Configuration error: {exc}")
             return
+        except Exception as exc:
+            st.error(f"Extraction failed: {exc}")
+            return
 
     st.subheader("Extracted Data")
     if result.validation_passed:

@@ -41,6 +41,12 @@ async def summarize(body: SummarizeRequest) -> Any:
         result = await s.asummarize(body.text, strategy=body.strategy)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc))
+    except Exception as exc:
+        from aiforge.core.types import RateLimitError
+
+        if isinstance(exc, RateLimitError):
+            raise HTTPException(status_code=429, detail=str(exc))
+        raise HTTPException(status_code=503, detail=str(exc))
     return SummarizeRouteResponse(
         summary=result.summary,
         strategy_used=result.strategy_used,

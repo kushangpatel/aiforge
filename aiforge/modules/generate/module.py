@@ -91,6 +91,19 @@ def get_custom_guardrails() -> dict[str, Callable[[str], GuardrailResult]]:
     return dict(_CUSTOM_GUARDRAILS)
 
 
+# Module-level cached Moderator for PII checks (avoids re-creating per call)
+_pii_moderator: Any | None = None
+
+
+def _get_pii_moderator() -> Any:
+    global _pii_moderator
+    if _pii_moderator is None:
+        from aiforge.modules.moderate.module import Moderator
+
+        _pii_moderator = Moderator(checks=["pii"])
+    return _pii_moderator
+
+
 # ---------------------------------------------------------------------------
 # Generator class
 # ---------------------------------------------------------------------------
@@ -237,7 +250,10 @@ class Generator(BaseModule):
             model = llm.model
             generated_text = llm.text.strip()
 
-            violations = self._check_guardrails(generated_text)
+            violations, g_in, g_out, g_cost = self._check_guardrails(generated_text)
+            total_in += g_in
+            total_out += g_out
+            total_cost += g_cost
             if not violations:
                 return GenerateResponse(
                     text=generated_text,
@@ -294,7 +310,10 @@ class Generator(BaseModule):
             model = llm.model
             generated_text = llm.text.strip()
 
-            violations = await self._acheck_guardrails(generated_text)
+            violations, g_in, g_out, g_cost = await self._acheck_guardrails(generated_text)
+            total_in += g_in
+            total_out += g_out
+            total_cost += g_cost
             if not violations:
                 return GenerateResponse(
                     text=generated_text,
@@ -328,12 +347,14 @@ class Generator(BaseModule):
     # Guardrail checks
     # ------------------------------------------------------------------
 
-    def _check_guardrails(self, text: str) -> list[str]:
+    def _check_guardrails(self, text: str) -> tuple[list[str], int, int, float]:
         """Check all configured guardrails synchronously.
 
-        Returns the names of violated guardrails (empty ⇒ clean).
+        Returns ``(violations, input_tokens, output_tokens, cost)``.
         """
         violations: list[str] = []
+        g_in = g_out = 0
+        g_cost = 0.0
         for name in self.guardrails:
             if name == "no_pii":
                 if self._check_no_pii(text):
@@ -345,7 +366,11 @@ class Generator(BaseModule):
                 if self._check_pricing(text):
                     violations.append("no_pricing")
             elif name == "professional_tone":
-                if not self._check_professional_tone(text, sync=True):
+                is_ok, t_in, t_out, t_cost = self._check_professional_tone(text, sync=True)
+                g_in += t_in
+                g_out += t_out
+                g_cost += t_cost
+                if not is_ok:
                     violations.append("professional_tone")
             elif name in _CUSTOM_GUARDRAILS:
                 result = _CUSTOM_GUARDRAILS[name](text)
@@ -353,11 +378,13 @@ class Generator(BaseModule):
                     violations.append(name)
             else:
                 raise ValueError(f"Unknown guardrail: {name!r}")
-        return violations
+        return violations, g_in, g_out, g_cost
 
-    async def _acheck_guardrails(self, text: str) -> list[str]:
+    async def _acheck_guardrails(self, text: str) -> tuple[list[str], int, int, float]:
         """Async version of :meth:`_check_guardrails`."""
         violations: list[str] = []
+        g_in = g_out = 0
+        g_cost = 0.0
         for name in self.guardrails:
             if name == "no_pii":
                 if self._check_no_pii(text):
@@ -369,7 +396,11 @@ class Generator(BaseModule):
                 if self._check_pricing(text):
                     violations.append("no_pricing")
             elif name == "professional_tone":
-                if not await self._acheck_professional_tone(text):
+                is_ok, t_in, t_out, t_cost = await self._acheck_professional_tone(text)
+                g_in += t_in
+                g_out += t_out
+                g_cost += t_cost
+                if not is_ok:
                     violations.append("professional_tone")
             elif name in _CUSTOM_GUARDRAILS:
                 result = _CUSTOM_GUARDRAILS[name](text)
@@ -377,7 +408,7 @@ class Generator(BaseModule):
                     violations.append(name)
             else:
                 raise ValueError(f"Unknown guardrail: {name!r}")
-        return violations
+        return violations, g_in, g_out, g_cost
 
     # ------------------------------------------------------------------
     # Individual guardrail implementations
@@ -386,10 +417,7 @@ class Generator(BaseModule):
     @staticmethod
     def _check_no_pii(text: str) -> bool:
         """Return *True* if PII is detected (i.e. guardrail violated)."""
-        from aiforge.modules.moderate.module import Moderator
-
-        m = Moderator(checks=["pii"])
-        return m.check(text).flagged
+        return _get_pii_moderator().check(text).flagged
 
     def _check_competitor_mentions(self, text: str) -> bool:
         """Regex check for competitor names.  Returns *True* on match."""
@@ -403,25 +431,31 @@ class Generator(BaseModule):
         """Return *True* if currency / pricing patterns are found."""
         return any(p.search(text) for p in _PRICE_PATTERNS)
 
-    def _check_professional_tone(self, text: str, *, sync: bool = True) -> bool:
-        """LLM-based tone check.  Returns *True* when tone IS professional."""
+    def _check_professional_tone(self, text: str, *, sync: bool = True) -> tuple[bool, int, int, float]:
+        """LLM-based tone check.  Returns ``(is_professional, in_tokens, out_tokens, cost)``."""
         user_content = PROFESSIONAL_TONE_CHECK.format(text=text)
         llm = self._call_llm(
             [{"role": "user", "content": user_content}],
             temperature=0.0,
             max_tokens=8,
         )
-        return "YES" in llm.text.upper()
+        from aiforge.core.pricing import calculate_cost
 
-    async def _acheck_professional_tone(self, text: str) -> bool:
-        """Async professional-tone check."""
+        cost = calculate_cost(llm.model, llm.input_tokens, llm.output_tokens)
+        return "YES" in llm.text.upper(), llm.input_tokens, llm.output_tokens, cost
+
+    async def _acheck_professional_tone(self, text: str) -> tuple[bool, int, int, float]:
+        """Async professional-tone check.  Returns ``(is_professional, in_tokens, out_tokens, cost)``."""
         user_content = PROFESSIONAL_TONE_CHECK.format(text=text)
         llm = await self._acall_llm(
             [{"role": "user", "content": user_content}],
             temperature=0.0,
             max_tokens=8,
         )
-        return "YES" in llm.text.upper()
+        from aiforge.core.pricing import calculate_cost
+
+        cost = calculate_cost(llm.model, llm.input_tokens, llm.output_tokens)
+        return "YES" in llm.text.upper(), llm.input_tokens, llm.output_tokens, cost
 
     # ------------------------------------------------------------------
     # Retry prompt builder

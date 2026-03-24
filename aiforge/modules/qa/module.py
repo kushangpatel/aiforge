@@ -207,13 +207,18 @@ class DocQA(BaseModule):
         batch_size: int = 100,
     ) -> IngestResponse:
         """Async version of :meth:`ingest`."""
+        import asyncio
+
         from aiforge.core.doc_loader import DocLoader
         from aiforge.core.text_splitter import TextSplitter
 
         t0 = time.monotonic()
 
         loader = DocLoader(file_extensions=file_extensions)
-        documents, stats = loader.load(source)
+        loop = asyncio.get_running_loop()
+        documents, stats = await loop.run_in_executor(
+            None, loader.load, source,
+        )
 
         if not documents:
             return IngestResponse(

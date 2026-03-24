@@ -137,6 +137,8 @@ async def ingest(body: IngestRequest, background_tasks: BackgroundTasks) -> Any:
             file_extensions=body.file_extensions,
             batch_size=body.batch_size,
         )
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc))
     return IngestResponseOut(
