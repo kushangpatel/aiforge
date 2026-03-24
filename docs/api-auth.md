@@ -22,6 +22,24 @@ Request ──► AuthMiddleware
 
 ---
 
+## Generating a Key
+
+AIForge accepts any non-empty string as the API key — there is no built-in key
+management service.  Use a cryptographically random value:
+
+```bash
+# Python (recommended — 32 URL-safe bytes → 43 characters)
+python -c "import secrets; print(secrets.token_urlsafe(32))"
+
+# OpenSSL
+openssl rand -base64 32
+```
+
+Copy the output and store it as `AIFORGE_API_KEY` (see below).  Treat it like a
+password — do **not** commit it to version control.
+
+---
+
 ## Configuration
 
 Set the API key via `.env` or environment variable:
