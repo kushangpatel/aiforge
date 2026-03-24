@@ -2,7 +2,6 @@
 
 import streamlit as st
 
-st.set_page_config(page_title="Classify — AIForge", page_icon="🏷️")
 st.title("🏷️ Classify")
 st.caption("Zero/few-shot text classification against custom label taxonomies")
 

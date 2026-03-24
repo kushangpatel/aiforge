@@ -2,7 +2,6 @@
 
 import streamlit as st
 
-st.set_page_config(page_title="Chat — AIForge", page_icon="💬")
 st.title("💬 Chat")
 st.caption("Multi-turn conversational agent with memory and tool use")
 

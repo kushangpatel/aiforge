@@ -2,7 +2,6 @@
 
 import streamlit as st
 
-st.set_page_config(page_title="Moderate — AIForge", page_icon="🛡️")
 st.title("🛡️ Moderate")
 st.caption("Content safety, PII detection, and prompt injection scanning")
 

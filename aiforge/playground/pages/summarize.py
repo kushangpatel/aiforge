@@ -2,7 +2,6 @@
 
 import streamlit as st
 
-st.set_page_config(page_title="Summarize — AIForge", page_icon="📝")
 st.title("📝 Summarize")
 st.caption("Text summarisation with automatic stuff / map-reduce strategy selection")
 

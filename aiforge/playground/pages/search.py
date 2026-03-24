@@ -2,7 +2,6 @@
 
 import streamlit as st
 
-st.set_page_config(page_title="Search — AIForge", page_icon="🔍")
 st.title("🔍 Semantic Search")
 st.caption("Embed, index, and semantically query any text corpus")
 

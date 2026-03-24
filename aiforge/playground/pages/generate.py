@@ -2,7 +2,6 @@
 
 import streamlit as st
 
-st.set_page_config(page_title="Generate — AIForge", page_icon="✨")
 st.title("✨ Generate")
 st.caption("Template-based and freeform content generation with guardrails")
 

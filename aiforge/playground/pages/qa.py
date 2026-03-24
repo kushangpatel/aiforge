@@ -2,7 +2,6 @@
 
 import streamlit as st
 
-st.set_page_config(page_title="DocQA — AIForge", page_icon="❓")
 st.title("❓ DocQA")
 st.caption("Document Q&A with RAG pipeline and agentic refinement")
 
