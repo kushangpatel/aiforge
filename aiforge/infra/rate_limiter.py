@@ -1,10 +1,11 @@
 """
-Token-bucket rate limiter — thread-safe singleton per process.
+Fixed-window rate limiter — thread-safe singleton per process.
 
 Limits both:
   * RPM — requests per minute
   * TPM — tokens per minute
 
+Each bucket refills to full capacity every 60 seconds (fixed window).
 When a limit is hit the caller **blocks** (queues) rather than failing,
 matching the behaviour described in NFR-014.
 
@@ -87,11 +88,10 @@ class _TokenBucket:
 class RateLimiter:
     """Process-level rate limiter shared across all threads and module instances.
 
-    Wraps two token buckets: one for request count (RPM) and one for
+    Wraps two fixed-window buckets: one for request count (RPM) and one for
     token count (TPM).
     """
 
-    _instances: ClassVar[dict[str, "RateLimiter"]] = {}
     _class_lock: ClassVar[threading.Lock] = threading.Lock()
 
     def __init__(self, rpm: int = 500, tpm: int = 150_000) -> None:

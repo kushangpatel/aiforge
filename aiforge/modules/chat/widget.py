@@ -168,6 +168,11 @@ def _web_search(query: str, max_results: int = 5) -> str:
     """Search the web using DuckDuckGo Lite (HTML). No API key required.
 
     Returns a formatted string of search results, or empty string on failure.
+
+    Note:
+        Results are parsed via regex against DuckDuckGo Lite's HTML structure.
+        If DuckDuckGo changes its markup, parsing may silently return no
+        results.  The function degrades gracefully (returns "").
     """
     import re
     import urllib.parse

@@ -35,6 +35,7 @@ Usage::
 
 from __future__ import annotations
 
+import asyncio
 import time
 import uuid
 from typing import Any
@@ -367,6 +368,8 @@ class SemanticSearch(BaseModule):
         )
         total = self._store.collection_stats(self.collection_name).get("chunks", 0)
 
+        # NOTE: ``1.0 - distance`` assumes cosine distance (range 0-2, typically 0-1).
+        # Other metrics (L2, inner-product) need a different conversion.
         hits = [
             SearchHit(
                 id=h["id"],
@@ -421,14 +424,23 @@ class SemanticSearch(BaseModule):
             0,  # Embeddings have no output token cost
         )
 
-        raw_hits = self._store.query(
-            embedding=embedding,
-            top_k=k,
-            filter=filter,
-            include_embeddings=include_embeddings,
+        # Run sync store operations in a thread pool to avoid blocking the loop.
+        loop = asyncio.get_running_loop()
+        raw_hits = await loop.run_in_executor(
+            None,
+            lambda: self._store.query(
+                embedding=embedding,
+                top_k=k,
+                filter=filter,
+                include_embeddings=include_embeddings,
+            ),
         )
-        total = self._store.collection_stats(self.collection_name).get("chunks", 0)
+        total = await loop.run_in_executor(
+            None,
+            lambda: self._store.collection_stats(self.collection_name).get("chunks", 0),
+        )
 
+        # NOTE: ``1.0 - distance`` assumes cosine distance (range 0-2, typically 0-1).
         hits = [
             SearchHit(
                 id=h["id"],

@@ -30,6 +30,7 @@ Usage::
 from __future__ import annotations
 
 import re
+import threading
 import time
 from typing import Any, Callable
 
@@ -63,6 +64,7 @@ _PRICE_PATTERNS: list[re.Pattern[str]] = [
 # Custom guardrail registry (module-level singleton)
 # ---------------------------------------------------------------------------
 
+_GUARDRAIL_LOCK = threading.Lock()
 _CUSTOM_GUARDRAILS: dict[str, Callable[[str], GuardrailResult]] = {}
 
 
@@ -81,7 +83,8 @@ def register_guardrail(name: str) -> Callable[[Callable[[str], GuardrailResult]]
             return GuardrailResult(passed=ok, message="Too many words" if not ok else "")
     """
     def decorator(fn: Callable[[str], GuardrailResult]) -> Callable[[str], GuardrailResult]:
-        _CUSTOM_GUARDRAILS[name] = fn
+        with _GUARDRAIL_LOCK:
+            _CUSTOM_GUARDRAILS[name] = fn
         return fn
     return decorator
 

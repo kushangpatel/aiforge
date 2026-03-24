@@ -331,6 +331,7 @@ class BaseModule(ABC):
                 temperature=kwargs.get("temperature", self.settings.TEMPERATURE),
                 max_tokens=kwargs.get("max_tokens", self.settings.MAX_TOKENS),
                 module=self.__class__.__name__.lower(),
+                provider=self.settings.PROVIDER,
             )
             cached = cache.get(cache_key)
             if cached is not None:
@@ -376,6 +377,7 @@ class BaseModule(ABC):
                 temperature=kwargs.get("temperature", self.settings.TEMPERATURE),
                 max_tokens=kwargs.get("max_tokens", self.settings.MAX_TOKENS),
                 module=self.__class__.__name__.lower(),
+                provider=self.settings.PROVIDER,
             )
             cached = cache.get(cache_key)
             if cached is not None:

@@ -18,6 +18,7 @@ Usage::
 from __future__ import annotations
 
 import json
+import logging
 import re
 import time
 from typing import Any
@@ -44,12 +45,12 @@ _EMAIL_RE = re.compile(r"\b[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}\b")
 
 _SSN_RE = re.compile(r"\b\d{3}-\d{2}-\d{4}\b")
 
-# US + international phone — runs last to avoid over-matching digits in SSN/cards
+# US + international phone — requires area code (10+ digit) to avoid over-matching
 _PHONE_RE = re.compile(
     r"""
     (?:
-        (?:\+?1[-.\s]?)?                # optional US/CA country code
-        (?:\(\d{3}\)|\d{3})             # area code
+        (?:\+?1[-.\ s]?)?                # optional US/CA country code
+        (?:\(\d{3}\)|\d{3})             # area code (REQUIRED)
         [-.\s]?\d{3}[-.\s]?\d{4}       # local number
     |
         \+\d{1,3}[-.\s]\d{1,4}[-.\s]\d{1,4}[-.\s]\d{1,9}  # international
@@ -390,6 +391,9 @@ class Moderator(BaseModule):
         try:
             data = json.loads(_extract_json(llm_text))
         except json.JSONDecodeError:
+            logging.getLogger(__name__).warning(
+                "moderate.toxicity_parse_failed", extra={"raw": llm_text[:200]}
+            )
             return []
         if data.get("is_toxic"):
             return [ModerationFlag(type="toxicity", confidence=float(data.get("confidence", 1.0)))]
@@ -400,6 +404,9 @@ class Moderator(BaseModule):
         try:
             data = json.loads(_extract_json(llm_text))
         except json.JSONDecodeError:
+            logging.getLogger(__name__).warning(
+                "moderate.injection_parse_failed", extra={"raw": llm_text[:200]}
+            )
             return []
         if data.get("is_injection"):
             return [

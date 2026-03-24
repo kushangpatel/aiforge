@@ -93,7 +93,8 @@ class MemoryBackend(CacheBackend):
 
     def size(self) -> int:
         with self._lock:
-            return len(self._store)
+            now = time.monotonic()
+            return sum(1 for _, (_, exp) in self._store.items() if now <= exp)
 
 
 # ---------------------------------------------------------------------------
@@ -149,6 +150,7 @@ def _make_cache_key(
     temperature: float,
     max_tokens: int | None,
     module: str,
+    provider: str = "",
 ) -> str:
     """Produce a deterministic SHA-256 cache key from request parameters."""
     payload = json.dumps(
@@ -158,6 +160,7 @@ def _make_cache_key(
             "temperature": temperature,
             "max_tokens": max_tokens,
             "module": module,
+            "provider": provider,
         },
         sort_keys=True,
     )
@@ -195,6 +198,7 @@ class RequestCache:
         self._enabled = enabled
         self._hits = 0
         self._misses = 0
+        self._counter_lock = threading.Lock()
 
     # -- Properties --------------------------------------------------------
 
@@ -224,9 +228,10 @@ class RequestCache:
         temperature: float,
         max_tokens: int | None,
         module: str,
+        provider: str = "",
     ) -> str:
         """Build a deterministic cache key from request parameters."""
-        return _make_cache_key(model, messages, temperature, max_tokens, module)
+        return _make_cache_key(model, messages, temperature, max_tokens, module, provider)
 
     def get(self, key: str) -> dict[str, Any] | None:
         """Retrieve cached response.  Returns ``None`` on miss or if disabled."""
@@ -234,10 +239,12 @@ class RequestCache:
             return None
         result = self._backend.get(key)
         if result is not None:
-            self._hits += 1
+            with self._counter_lock:
+                self._hits += 1
             logger.debug("request_cache.hit", key=key[:16])
         else:
-            self._misses += 1
+            with self._counter_lock:
+                self._misses += 1
             logger.debug("request_cache.miss", key=key[:16])
         return result
 

@@ -108,7 +108,7 @@ class Pipeline:
             else:
                 # Standard module step
                 module: BaseModule = step  # type: ignore[assignment]
-                response = module.run(current_input)
+                response = module.run(current_input, **(context or {}))
                 results[name] = response
                 previous_response = response
                 try:
@@ -167,7 +167,7 @@ class Pipeline:
                         pass
             else:
                 module: BaseModule = step  # type: ignore[assignment]
-                response = await module.arun(current_input)
+                response = await module.arun(current_input, **(context or {}))
                 results[name] = response
                 previous_response = response
                 try:

@@ -547,15 +547,15 @@ class TestMemoryBuffer:
 
 
 class TestMemoryNone:
-    """None memory mode — only system + last exchange."""
+    """None memory mode — only system prompt retained."""
 
     def test_none_mode_minimal_history(self) -> None:
         agent = _agent(memory="none")
         agent._call_llm = MagicMock(return_value=_fake_llm("ok"))
         agent.chat("First")
         agent.chat("Second")
-        # system + last user + last assistant
-        assert len(agent._messages) == 3
+        # Only the system prompt should remain
+        assert len(agent._messages) == 1
         assert agent._messages[0]["role"] == "system"
 
     def test_none_mode_last_exchange_only(self) -> None:
@@ -564,7 +564,7 @@ class TestMemoryNone:
         agent.chat("old message")
         agent.chat("new message")
         user_msgs = [m for m in agent._messages if m["role"] == "user"]
-        assert len(user_msgs) == 1
+        assert len(user_msgs) == 0
 
 
 class TestMemorySummary:
@@ -1227,8 +1227,7 @@ class TestHistoryDoesNotLeakToolIntermediates:
             assert not msg["content"].startswith("Tool results:")
 
     def test_none_mode_preserves_real_user_message_after_tools(self) -> None:
-        """In 'none' mode with tools, the user's actual message must be kept,
-        not a synthetic 'Tool results:' message."""
+        """In 'none' mode with tools, only the system prompt remains after chat."""
         tool = _mock_tool("calc", "Math")
         agent = _agent(tools=[tool], memory="none")
 
@@ -1239,11 +1238,9 @@ class TestHistoryDoesNotLeakToolIntermediates:
         agent._call_llm = MagicMock(side_effect=lambda m, **kw: next(calls))
         agent.chat("Please calculate something")
 
-        assert len(agent._messages) == 3
-        assert agent._messages[1]["role"] == "user"
-        assert agent._messages[1]["content"] == "Please calculate something"
-        assert agent._messages[2]["role"] == "assistant"
-        assert agent._messages[2]["content"] == "Done."
+        # 'none' mode resets to system prompt only
+        assert len(agent._messages) == 1
+        assert agent._messages[0]["role"] == "system"
 
     def test_buffer_mode_not_inflated_by_tool_messages(self) -> None:
         """Tool intermediate messages should not consume memory_k slots."""

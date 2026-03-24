@@ -307,13 +307,10 @@ class ChatAgent(BaseModule):
     def _manage_memory(self) -> None:
         """Apply memory strategy after each turn."""
         if self.memory_mode == "none":
-            # Keep only system + last exchange
-            if len(self._messages) >= 3:
-                self._messages = [
-                    self._messages[0],       # system prompt
-                    self._messages[-2],      # last user message
-                    self._messages[-1],      # last AI response
-                ]
+            # Stateless: keep only the system prompt for next turn
+            self._messages = [
+                self._messages[0],       # system prompt
+            ]
         elif self.memory_mode == "buffer":
             # Keep last K messages + system prompt
             if len(self._messages) > self.memory_k + 1:

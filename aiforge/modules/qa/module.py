@@ -446,7 +446,7 @@ class DocQA(BaseModule):
             if resolved:
                 messages.append({"role": "system", "content": resolved})
             messages.append({"role": "user", "content": prompt})
-            return self._call_llm(messages)
+            return self._call_llm(messages, temperature=0.0)
 
         return _llm
 
