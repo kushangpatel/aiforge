@@ -11,20 +11,20 @@ Get AIForge running in under 5 minutes.
 pip install aiforge
 
 # Specific providers
-pip install aiforge[anthropic]
-pip install aiforge[local]             # Ollama
-pip install aiforge[azure]
+pip install "aiforge[anthropicai]"      # Anthropic + Voyage AI embeddings
+pip install "aiforge[local]"            # Ollama
 
 # Everything
-pip install aiforge[all]
+pip install "aiforge[all]"
 
 # Vector store backends
-pip install aiforge[pinecone]          # Pinecone
-pip install aiforge[qdrant]            # Qdrant
-pip install aiforge[pgvector]          # PostgreSQL + pgvector
+pip install "aiforge[pinecone]"         # Pinecone
+pip install "aiforge[qdrant]"           # Qdrant
+pip install "aiforge[pgvector]"         # PostgreSQL + pgvector
 
-# API server + UI
-pip install aiforge[server]            # includes FastAPI + Streamlit
+# API server + Playground UI
+pip install "aiforge[server]"           # FastAPI + Uvicorn
+pip install "aiforge[playground]"       # Streamlit UI
 ```
 
 ### Plugin System
@@ -47,7 +47,7 @@ See the [Plugin System](configuration.md#plugin-system) section for full details
 
 ```bash
 aiforge init
-# Creates aiforge.yaml + .env.example + .gitignore
+# Creates aiforge.yaml + .env
 ```
 
 ## 3. Set API Key
@@ -97,10 +97,10 @@ Each module is self-contained and can be used independently:
 
 ```python
 # Install only what you need
-pip install aiforge[openai]        # Core + OpenAI provider
-pip install aiforge[anthropic]     # Core + Anthropic provider
-pip install aiforge[local]         # Core + Ollama provider
-pip install aiforge[all]           # Everything
+pip install aiforge                        # Core + OpenAI provider
+pip install "aiforge[anthropicai]"         # Core + Anthropic + Voyage AI
+pip install "aiforge[local]"               # Core + Ollama provider
+pip install "aiforge[all]"                 # Everything
 
 # Use only what you need
 from aiforge import Summarizer     # Just summarization
@@ -258,6 +258,7 @@ aiforge playground
 
 ## Next Steps
 
+- [CLI](cli.md) — Command-line interface reference
 - [Configuration](configuration.md) — YAML, env vars, and code-level config
 - [Providers](providers.md) — Swap between OpenAI, Anthropic, Ollama, Azure
 - [Pipelines](pipelines.md) — Chain modules together
