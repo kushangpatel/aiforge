@@ -1,9 +1,9 @@
 # CLI
 
 AIForge provides a command-line interface built on [Typer](https://typer.tiangolo.com/)
-for scaffolding projects, starting servers, launching the playground, and
-managing vector store collections. The `aiforge` command is registered
-automatically when you install the package.
+for scaffolding projects, starting servers, launching the playground,
+running every SDK module from the terminal, and managing infrastructure.
+The `aiforge` command is registered automatically when you install the package.
 
 ---
 
@@ -13,20 +13,31 @@ automatically when you install the package.
   - [Table of Contents](#table-of-contents)
   - [Installation](#installation)
   - [Global Help](#global-help)
-  - [Commands](#commands)
+  - [Infrastructure Commands](#infrastructure-commands)
     - [aiforge init](#aiforge-init)
     - [aiforge serve](#aiforge-serve)
     - [aiforge playground](#aiforge-playground)
     - [aiforge migrate](#aiforge-migrate)
+  - [Module Commands](#module-commands)
+    - [aiforge summarize](#aiforge-summarize)
+    - [aiforge classify](#aiforge-classify)
+    - [aiforge extract](#aiforge-extract)
+    - [aiforge generate](#aiforge-generate)
+    - [aiforge moderate](#aiforge-moderate)
+  - [RAG Commands](#rag-commands)
+    - [aiforge qa](#aiforge-qa)
+    - [aiforge search](#aiforge-search)
+  - [Agent Commands](#agent-commands)
+    - [aiforge chat](#aiforge-chat)
+  - [Discovery Commands](#discovery-commands)
+    - [aiforge config](#aiforge-config)
+    - [aiforge models](#aiforge-models)
+    - [aiforge registry](#aiforge-registry)
+  - [Common Options](#common-options)
   - [Configuration Priority](#configuration-priority)
   - [Environment Variables](#environment-variables)
   - [Exit Codes](#exit-codes)
   - [Examples](#examples)
-    - [Scaffold a New Project](#scaffold-a-new-project)
-    - [Start the API Server](#start-the-api-server)
-    - [Launch the Playground](#launch-the-playground)
-    - [Manage Collections](#manage-collections)
-    - [Docker Compose Workflow](#docker-compose-workflow)
   - [Troubleshooting](#troubleshooting)
   - [See Also](#see-also)
 
@@ -54,8 +65,7 @@ Some commands require optional extras:
 |---------|---------------|---------|
 | `aiforge serve` | `server` | `pip install "aiforge[server]"` |
 | `aiforge playground` | `playground` | `pip install "aiforge[playground]"` |
-| `aiforge init` | *(none)* | — |
-| `aiforge migrate` | *(none)* | — |
+| All other commands | *(none)* | — |
 
 ---
 
@@ -69,16 +79,27 @@ $ aiforge --help
  AIForge — plug-and-play AI toolkit
 
 ╭─ Commands ───────────────────────────────────────────────────────────────╮
-│ init          Scaffold aiforge.yaml + .env.example in the current dir.  │
-│ serve         Start the FastAPI REST API server.                        │
-│ playground    Start the Streamlit interactive playground.               │
-│ migrate       Inspect or manage vector store collections.               │
+│ init          Scaffold aiforge.yaml + .env.example                      │
+│ serve         Start the FastAPI REST API server                         │
+│ playground    Start the Streamlit interactive playground                │
+│ migrate       Inspect or manage vector store collections                │
+│ summarize     Summarise text                                            │
+│ classify      Classify text into labels                                 │
+│ extract       Extract structured data from text                         │
+│ generate      Generate text from a prompt / template                    │
+│ moderate      Content moderation & PII redaction                        │
+│ qa            Document Q&A: ingest documents and ask questions           │
+│ search        Semantic search: index documents and query                │
+│ chat          Interactive AI chat agent                                  │
+│ config        Show resolved configuration                               │
+│ models        List models & estimate costs                              │
+│ registry      Explore registered components                             │
 ╰──────────────────────────────────────────────────────────────────────────╯
 ```
 
 ---
 
-## Commands
+## Infrastructure Commands
 
 ### aiforge init
 
@@ -312,7 +333,390 @@ aiforge migrate --delete old_collection
 
 ---
 
-## Configuration Priority
+## Module Commands
+
+Every SDK module is exposed as a top-level CLI command. Module commands share
+a common set of options described in [Common Options](#common-options).
+
+### aiforge summarize
+
+Summarise text with configurable style and strategy.
+
+```bash
+aiforge summarize --text "long article…"
+aiforge summarize --file article.txt --style bullets --strategy map_reduce
+cat article.txt | aiforge summarize
+```
+
+**Options:**
+
+| Flag | Short | Type | Default | Description |
+|------|-------|------|---------|-------------|
+| `--text` | `-t` | `str` | — | Text to summarise |
+| `--file` | `-f` | `path` | — | Read text from a file |
+| `--style` | `-s` | `str` | `paragraph` | Output style: `paragraph` \| `bullets` \| `headline` |
+| `--max-length` | | `int` | — | Approximate max output length (tokens) |
+| `--strategy` | | `str` | — | Chunking strategy: `stuff` \| `map_reduce` \| `refine` |
+| `--output` | `-o` | `path` | — | Write result to file |
+| `--format` | | `str` | `json` | Output format: `json` \| `yaml` |
+
+If `--text` and `--file` are both omitted, the command reads from **stdin**.
+
+---
+
+### aiforge classify
+
+Classify text into one or more labels.
+
+```bash
+aiforge classify --text "I love this product" --labels "positive,negative,neutral"
+aiforge classify -f review.txt -l "spam,ham" --multi-label
+```
+
+**Options:**
+
+| Flag | Short | Type | Default | Description |
+|------|-------|------|---------|-------------|
+| `--text` | `-t` | `str` | — | Text to classify |
+| `--file` | `-f` | `path` | — | Read text from a file |
+| `--labels` | `-l` | `str` | **(required)** | Comma-separated candidate labels |
+| `--multi-label` | | `bool` | `False` | Allow multiple labels |
+| `--examples-file` | | `path` | — | JSON file with few-shot examples |
+| `--output` | `-o` | `path` | — | Write result to file |
+| `--format` | | `str` | `json` | Output format: `json` \| `yaml` |
+
+---
+
+### aiforge extract
+
+Extract structured data from text using a JSON schema.
+
+```bash
+aiforge extract --text "John Doe, age 32, NYC" --schema-file person.json
+cat receipt.txt | aiforge extract --schema-file receipt_schema.json
+```
+
+**Options:**
+
+| Flag | Short | Type | Default | Description |
+|------|-------|------|---------|-------------|
+| `--text` | `-t` | `str` | — | Text to extract from |
+| `--file` | `-f` | `path` | — | Read text from a file |
+| `--schema-file` | | `path` | — | JSON Schema file defining the output structure |
+| `--max-retries` | | `int` | `2` | Max validation retries |
+| `--output` | `-o` | `path` | — | Write result to file |
+| `--format` | | `str` | `json` | Output format: `json` \| `yaml` |
+
+---
+
+### aiforge generate
+
+Generate text from a prompt or Jinja2 template.
+
+```bash
+aiforge generate --prompt "Write a haiku about coding"
+aiforge generate -f template.txt --var topic=AI --var tone=formal
+aiforge generate -p "List 5 ideas" --guardrails competitors --max-tokens 200
+```
+
+**Options:**
+
+| Flag | Short | Type | Default | Description |
+|------|-------|------|---------|-------------|
+| `--prompt` | `-p` | `str` | — | Prompt text |
+| `--file` | `-f` | `path` | — | Read prompt from a file |
+| `--var` | | `str` | — | Template variable as `key=value` (repeatable) |
+| `--guardrails` | `-g` | `str` | — | Comma-separated guardrail names |
+| `--max-tokens` | | `int` | — | Max output tokens |
+| `--temperature` | | `float` | — | Sampling temperature (0.0–2.0) |
+| `--output` | `-o` | `path` | — | Write result to file |
+| `--format` | | `str` | `json` | Output format: `json` \| `yaml` |
+
+---
+
+### aiforge moderate
+
+Content moderation and PII redaction.
+
+```bash
+aiforge moderate --text "Check this user post…"
+aiforge moderate --file comment.txt --checks toxicity,bias
+aiforge moderate --text "My SSN is 123-45-6789" --redact
+```
+
+**Options:**
+
+| Flag | Short | Type | Default | Description |
+|------|-------|------|---------|-------------|
+| `--text` | `-t` | `str` | — | Text to moderate |
+| `--file` | `-f` | `path` | — | Read text from a file |
+| `--checks` | `-c` | `str` | — | Comma-separated checks (e.g. `toxicity,bias,pii`) |
+| `--pii-types` | | `str` | — | Comma-separated PII types to detect |
+| `--redact` | `-r` | `bool` | `False` | Redact PII instead of just flagging |
+| `--output` | `-o` | `path` | — | Write result to file |
+| `--format` | | `str` | `json` | Output format: `json` \| `yaml` |
+
+---
+
+## RAG Commands
+
+### aiforge qa
+
+Document Q&A using retrieval-augmented generation (RAG). Has two
+subcommands: `ingest` (load documents) and `ask` (query them).
+
+#### aiforge qa ingest
+
+```bash
+aiforge qa ingest ./docs/ --collection my-docs --extensions ".md,.txt"
+aiforge qa ingest https://github.com/user/repo --collection repo-docs
+```
+
+**Arguments:**
+
+| Argument | Required | Description |
+|----------|----------|-------------|
+| `SOURCE` | Yes | File path, directory, or git URL to ingest |
+
+**Options:**
+
+| Flag | Short | Type | Default | Description |
+|------|-------|------|---------|-------------|
+| `--collection` | `-c` | `str` | `default` | Target collection name |
+| `--extensions` | `-e` | `str` | — | Comma-separated file extensions (e.g. `.py,.md`) |
+| `--batch-size` | | `int` | `100` | Embedding batch size |
+| `--format` | | `str` | `json` | Output format: `json` \| `yaml` |
+
+#### aiforge qa ask
+
+```bash
+aiforge qa ask "How does authentication work?"
+aiforge qa ask "What is the retry policy?" --collection my-docs --trace
+```
+
+**Arguments:**
+
+| Argument | Required | Description |
+|----------|----------|-------------|
+| `QUERY` | Yes | The question to ask |
+
+**Options:**
+
+| Flag | Short | Type | Default | Description |
+|------|-------|------|---------|-------------|
+| `--collection` | `-c` | `str` | `default` | Collection to search |
+| `--filter` | | `str` | — | Filter results by source path substring |
+| `--trace` | | `bool` | `False` | Include agent reasoning trace |
+| `--output` | `-o` | `path` | — | Write result to file |
+| `--format` | | `str` | `json` | Output format: `json` \| `yaml` |
+
+---
+
+### aiforge search
+
+Semantic search over indexed documents. Has two subcommands:
+`index` (build index) and `query` (search).
+
+#### aiforge search index
+
+```bash
+aiforge search index ./src/ --collection codebase --extensions ".py,.ts"
+```
+
+**Arguments:**
+
+| Argument | Required | Description |
+|----------|----------|-------------|
+| `SOURCE` | Yes | File path or directory to index |
+
+**Options:**
+
+| Flag | Short | Type | Default | Description |
+|------|-------|------|---------|-------------|
+| `--collection` | `-c` | `str` | `default` | Target collection |
+| `--extensions` | `-e` | `str` | — | Comma-separated file extensions |
+| `--format` | | `str` | `json` | Output format: `json` \| `yaml` |
+
+#### aiforge search query
+
+```bash
+aiforge search query "database connection pooling" --top-k 10
+aiforge search query "error handling" --format table
+```
+
+**Arguments:**
+
+| Argument | Required | Description |
+|----------|----------|-------------|
+| `QUERY` | Yes | Search query text |
+
+**Options:**
+
+| Flag | Short | Type | Default | Description |
+|------|-------|------|---------|-------------|
+| `--collection` | `-c` | `str` | `default` | Collection to search |
+| `--top-k` | `-k` | `int` | `5` | Number of results (1–100) |
+| `--output` | `-o` | `path` | — | Write result to file |
+| `--format` | | `str` | `json` | Output format: `json` \| `yaml` \| `table` |
+
+When `--format table` is used, results are displayed as a Rich table with
+columns: **#**, **Score**, **ID**, **Text**.
+
+---
+
+## Agent Commands
+
+### aiforge chat
+
+Interactive chat with an AI agent. Supports single-turn and REPL modes.
+
+```bash
+# Single message
+aiforge chat "What is the capital of France?"
+
+# Interactive REPL
+aiforge chat
+```
+
+**Arguments:**
+
+| Argument | Required | Description |
+|----------|----------|-------------|
+| `MESSAGE` | No | Single message (omit for interactive REPL) |
+
+**Options:**
+
+| Flag | Short | Type | Default | Description |
+|------|-------|------|---------|-------------|
+| `--system` | `-s` | `str` | — | System prompt |
+| `--memory` | `-m` | `str` | `buffer` | Memory mode: `buffer` \| `summary` \| `none` |
+| `--memory-k` | | `int` | `10` | Messages to keep in memory |
+
+**Interactive REPL commands:**
+
+| Command | Description |
+|---------|-------------|
+| `/reset` | Clear conversation history |
+| `/quit` or `/exit` | Exit the chat |
+| `Ctrl+C` | Exit the chat |
+
+---
+
+## Discovery Commands
+
+### aiforge config
+
+Display the resolved AIForge configuration.
+
+```bash
+aiforge config
+aiforge config --format yaml
+aiforge config --reveal  # show secret values
+```
+
+**Options:**
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--format` | `str` | `json` | Output format: `json` \| `yaml` |
+| `--reveal` | `bool` | `False` | Show secret values (keys, tokens); masked by default |
+
+Secrets (any key containing `key`, `secret`, `token`, `password`, or
+`credential`) are replaced with `***` unless `--reveal` is specified.
+
+---
+
+### aiforge models
+
+List available models and estimate costs.
+
+#### aiforge models list
+
+```bash
+aiforge models list
+aiforge models list --quality fast --provider openai
+aiforge models list --format json
+```
+
+**Options:**
+
+| Flag | Short | Type | Default | Description |
+|------|-------|------|---------|-------------|
+| `--quality` | `-q` | `str` | — | Filter by tier: `fast` \| `balanced` \| `quality` |
+| `--provider` | `-p` | `str` | — | Filter by provider name |
+| `--format` | | `str` | `table` | Output format: `json` \| `yaml` \| `table` |
+
+Table output columns: **Model**, **Provider**, **Quality**, **Context**,
+**Input $/1K**, **Output $/1K**.
+
+#### aiforge models estimate
+
+```bash
+aiforge models estimate gpt-4o --input 2000 --output 1000
+```
+
+**Arguments:**
+
+| Argument | Required | Description |
+|----------|----------|-------------|
+| `MODEL` | Yes | Model name (e.g. `gpt-4o-mini`) |
+
+**Options:**
+
+| Flag | Short | Type | Default | Description |
+|------|-------|------|---------|-------------|
+| `--input` | `-i` | `int` | `1000` | Estimated input tokens |
+| `--output` | `-o` | `int` | `500` | Estimated output tokens |
+
+---
+
+### aiforge registry
+
+Show all registered modules, providers, and vector stores.
+
+```bash
+aiforge registry
+aiforge registry --format json
+```
+
+**Options:**
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--format` | `str` | `table` | Output format: `json` \| `yaml` \| `table` |
+
+Table output shows three categories: **modules**, **providers**,
+**vectorstores** and their registered items.
+
+---
+
+## Common Options
+
+Most module commands share these patterns:
+
+**Input:** Every module command accepts `--text/-t` for inline text,
+`--file/-f` to read from a file, or **stdin** when both are omitted:
+
+```bash
+aiforge summarize --text "inline text"
+aiforge summarize --file doc.txt
+echo "piped text" | aiforge summarize
+```
+
+**Output:** Use `--output/-o` to write results to a file instead of stdout,
+and `--format` to switch between JSON and YAML:
+
+```bash
+aiforge classify -t "hello" -l "en,fr" --format yaml
+aiforge extract -f data.txt --schema-file s.json -o result.json
+```
+
+**Metrics footer:** After every module call, the CLI prints a one-line metrics
+footer showing cost, token counts, and latency:
+
+```
+⏱  $0.000340 │ 150 in │ 42 out │ 1.23 s │ gpt-4o-mini
+```
 
 CLI commands interact with AIForge's layered configuration system. The
 priority order (lowest to highest):
@@ -391,7 +795,6 @@ aiforge init
 # ✓ Created aiforge.yaml
 # ✓ Created .env
 
-# Edit your configuration
 nano aiforge.yaml    # Set provider, model, etc.
 nano .env            # Add API keys
 ```
@@ -399,44 +802,93 @@ nano .env            # Add API keys
 ### Start the API Server
 
 ```bash
-# Quick start
 aiforge serve
-
-# Production-like
-AIFORGE_API_KEY=secret-token \
-AIFORGE_LOG_FORMAT=json \
-aiforge serve --host 0.0.0.0 --port 8000
-
-# Development with hot-reload
 aiforge serve --reload --port 9000
+AIFORGE_API_KEY=secret-token AIFORGE_LOG_FORMAT=json aiforge serve
 ```
 
 ### Launch the Playground
 
 ```bash
-# Default
 aiforge playground
+aiforge playground --port 8080
+```
 
-# Alongside the API server (two terminals)
-# Terminal 1:
-aiforge serve --port 8000
-# Terminal 2:
-AIFORGE_API_BASE=http://localhost:8000 aiforge playground --port 8501
+### Run Module Commands
+
+```bash
+# Summarise a file
+aiforge summarize --file article.txt --style bullets
+
+# Classify piped input
+echo "This is spam" | aiforge classify -l "spam,ham"
+
+# Extract structured data
+aiforge extract --text "Alice, 30, NYC" --schema-file person.json --format yaml
+
+# Generate with template variables
+aiforge generate -f email_template.txt --var name=Alice --var product=Widget
+
+# Moderate and redact PII
+aiforge moderate --text "Call me at 555-0123" --redact
+```
+
+### Document Q&A Workflow
+
+```bash
+# Ingest documentation
+aiforge qa ingest ./docs/ --collection my-docs --extensions ".md,.txt"
+# ✓ Indexed 247 chunks from 12 files into 'my-docs'.
+
+# Ask questions
+aiforge qa ask "How do I configure authentication?" --collection my-docs
+```
+
+### Semantic Search Workflow
+
+```bash
+# Index a codebase
+aiforge search index ./src/ --collection codebase --extensions ".py,.ts"
+
+# Search with a Rich table
+aiforge search query "error handling patterns" --top-k 10 --format table
+```
+
+### Interactive Chat
+
+```bash
+# Single question
+aiforge chat "Explain Python decorators"
+
+# REPL session
+aiforge chat --system "You are a helpful coding assistant"
+# you > How do I sort a dict by value?
+# ...
+# you > /quit
+```
+
+### Explore Models & Config
+
+```bash
+# See resolved config (secrets masked)
+aiforge config
+
+# List all models in table form
+aiforge models list
+
+# Estimate cost
+aiforge models estimate gpt-4o --input 5000 --output 2000
+
+# See registered components
+aiforge registry
 ```
 
 ### Manage Collections
 
 ```bash
-# See what's indexed
 aiforge migrate --all
-
-# Check a specific collection
 aiforge migrate -c customer-docs -s
-
-# Clean up old data
 aiforge migrate --delete test-collection
-# Delete collection 'test-collection'? This cannot be undone. [y/N]: y
-# ✓ Deleted collection 'test-collection'.
 ```
 
 ### Docker Compose Workflow
@@ -481,10 +933,11 @@ docker compose up -d
 | `Streamlit not installed` when running `playground` | Missing playground extra | `pip install "aiforge[playground]"` |
 | `aiforge init` skips files silently | Files already exist | Use `aiforge init --force` to overwrite |
 | `aiforge migrate` prints "No action specified" | No flag provided | Add `--all`, `--status`, `--collection`, or `--delete` |
-| Server starts but requests fail with 401 | `AIFORGE_API_KEY` is set | Include `Authorization: Bearer <key>` header in requests |
-| Server starts but LLM calls fail | API keys not configured | Edit `.env` or set `AIFORGE_OPENAI_API_KEY` etc. |
-| Playground shows stale config | Config loaded at process start | Restart: Ctrl+C then `aiforge playground` |
-| `migrate --delete` has no effect | Collection name doesn't exist | Check exact name with `aiforge migrate --all` |
+| Module command hangs waiting for input | No `--text`/`--file` and stdin is a terminal | Provide `--text` or `--file`, or pipe input |
+| Server requests fail with 401 | `AIFORGE_API_KEY` is set | Include `Authorization: Bearer <key>` header in requests |
+| LLM calls fail | API keys not configured | Edit `.env` or set `AIFORGE_OPENAI_API_KEY` etc. |
+| `config` shows `***` for keys | Secrets masked by default | Use `aiforge config --reveal` to view |
+| `models list` returns empty table | No provider configured | Set `AIFORGE_PROVIDER` and API key |
 | Port already in use | Another process on that port | Use `--port <other>` or stop the conflicting process |
 
 ---

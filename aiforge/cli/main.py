@@ -6,6 +6,17 @@ Commands:
     aiforge serve       — start FastAPI server
     aiforge playground  — start Streamlit UI
     aiforge migrate     — migrate / inspect vector store collections
+    aiforge summarize   — summarise text
+    aiforge classify    — classify text into labels
+    aiforge extract     — extract structured data from text
+    aiforge generate    — generate text from a prompt / template
+    aiforge moderate    — content moderation & PII redaction
+    aiforge qa          — document Q&A (ingest + ask)
+    aiforge search      — semantic search (index + query)
+    aiforge chat        — interactive AI chat agent
+    aiforge config      — show resolved configuration
+    aiforge models      — list models & estimate costs
+    aiforge registry    — explore registered components
 """
 
 from __future__ import annotations
@@ -18,12 +29,36 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
+from aiforge.cli.commands_chat import chat_app
+from aiforge.cli.commands_info import config_app, models_app, registry_app
+from aiforge.cli.commands_modules import (
+    classify_app,
+    extract_app,
+    generate_app,
+    moderate_app,
+    summarize_app,
+)
+from aiforge.cli.commands_rag import qa_app, search_app
+
 app = typer.Typer(
     name="aiforge",
     help="AIForge — plug-and-play AI toolkit",
     add_completion=False,
 )
 console = Console()
+
+# ── Register sub-apps ─────────────────────────────────────────────────────
+app.add_typer(summarize_app, name="summarize", help="Summarise text.")
+app.add_typer(classify_app, name="classify", help="Classify text into labels.")
+app.add_typer(extract_app, name="extract", help="Extract structured data from text.")
+app.add_typer(generate_app, name="generate", help="Generate text from a prompt / template.")
+app.add_typer(moderate_app, name="moderate", help="Content moderation & PII redaction.")
+app.add_typer(qa_app, name="qa", help="Document Q&A: ingest documents and ask questions.")
+app.add_typer(search_app, name="search", help="Semantic search: index documents and query.")
+app.add_typer(chat_app, name="chat", help="Interactive AI chat agent.")
+app.add_typer(config_app, name="config", help="Show resolved configuration.")
+app.add_typer(models_app, name="models", help="List models & estimate costs.")
+app.add_typer(registry_app, name="registry", help="Explore registered components.")
 
 
 @app.command()
