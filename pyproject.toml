@@ -95,6 +95,9 @@ aiforge = "aiforge.cli.main:app"
 where = ["."]
 include = ["aiforge*"]
 
+[tool.setuptools.package-data]
+aiforge = ["py.typed"]
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]

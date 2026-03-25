@@ -8,6 +8,10 @@ Quick start::
     from aiforge import Pipeline, CostTracker
 """
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 from aiforge.__version__ import __version__
 from aiforge.core.types import (
     AIForgeError,
@@ -55,51 +59,86 @@ configure_logging(
 setup_tracing(get_settings())
 
 # ---------------------------------------------------------------------------
-# Module imports (lazy — will be populated as modules are implemented)
+# Module & response schema imports
+# ---------------------------------------------------------------------------
+# At type-checking time (mypy, pyright, Pylance) the real classes are always
+# visible so IDE auto-complete, type narrowing, and hover docs work.
+# At runtime the try/except blocks provide graceful degradation when an
+# optional dependency (e.g. streamlit, pinecone) is missing.
 # ---------------------------------------------------------------------------
 
-# These are currently stub placeholders.  Each will be replaced with the
-# real implementation as the respective module is built out.
+if TYPE_CHECKING:
+    # Modules
+    from aiforge.modules.chat.module import ChatAgent as ChatAgent
+    from aiforge.modules.classify.module import Classifier as Classifier
+    from aiforge.modules.extract.module import Extractor as Extractor
+    from aiforge.modules.generate.module import Generator as Generator
+    from aiforge.modules.moderate.module import Moderator as Moderator
+    from aiforge.modules.qa.module import DocQA as DocQA
+    from aiforge.modules.search.module import SemanticSearch as SemanticSearch
+    from aiforge.modules.summarize.module import Summarizer as Summarizer
 
-try:
-    from aiforge.modules.summarize.module import Summarizer
-except ImportError:
-    Summarizer = None  # type: ignore[assignment,misc]
+    # Response schemas
+    from aiforge.modules.chat.schemas import ChatResponse as ChatResponse
+    from aiforge.modules.classify.schemas import ClassifyResponse as ClassifyResponse
+    from aiforge.modules.extract.schemas import ExtractResponse as ExtractResponse
+    from aiforge.modules.generate.schemas import GenerateResponse as GenerateResponse
+    from aiforge.modules.moderate.schemas import ModerateResponse as ModerateResponse
+    from aiforge.modules.qa.schemas import IngestResponse as IngestResponse
+    from aiforge.modules.qa.schemas import QAResponse as QAResponse
+    from aiforge.modules.search.schemas import IndexResponse as IndexResponse
+    from aiforge.modules.search.schemas import SearchResponse as SearchResponse
+    from aiforge.modules.summarize.schemas import SummarizeResponse as SummarizeResponse
+else:
+    try:
+        from aiforge.modules.summarize.module import Summarizer
+    except ImportError:
+        Summarizer = None
 
-try:
-    from aiforge.modules.qa.module import DocQA
-except ImportError:
-    DocQA = None  # type: ignore[assignment,misc]
+    try:
+        from aiforge.modules.qa.module import DocQA
+    except ImportError:
+        DocQA = None
 
-try:
-    from aiforge.modules.extract.module import Extractor
-except ImportError:
-    Extractor = None  # type: ignore[assignment,misc]
+    try:
+        from aiforge.modules.extract.module import Extractor
+    except ImportError:
+        Extractor = None
 
-try:
-    from aiforge.modules.classify.module import Classifier
-except ImportError:
-    Classifier = None  # type: ignore[assignment,misc]
+    try:
+        from aiforge.modules.classify.module import Classifier
+    except ImportError:
+        Classifier = None
 
-try:
-    from aiforge.modules.search.module import SemanticSearch
-except ImportError:
-    SemanticSearch = None  # type: ignore[assignment,misc]
+    try:
+        from aiforge.modules.search.module import SemanticSearch
+    except ImportError:
+        SemanticSearch = None
 
-try:
-    from aiforge.modules.generate.module import Generator
-except ImportError:
-    Generator = None  # type: ignore[assignment,misc]
+    try:
+        from aiforge.modules.generate.module import Generator
+    except ImportError:
+        Generator = None
 
-try:
-    from aiforge.modules.chat.module import ChatAgent
-except ImportError:
-    ChatAgent = None  # type: ignore[assignment,misc]
+    try:
+        from aiforge.modules.chat.module import ChatAgent
+    except ImportError:
+        ChatAgent = None
 
-try:
-    from aiforge.modules.moderate.module import Moderator
-except ImportError:
-    Moderator = None  # type: ignore[assignment,misc]
+    try:
+        from aiforge.modules.moderate.module import Moderator
+    except ImportError:
+        Moderator = None
+
+    # Response schemas — always importable (no optional deps)
+    from aiforge.modules.chat.schemas import ChatResponse
+    from aiforge.modules.classify.schemas import ClassifyResponse
+    from aiforge.modules.extract.schemas import ExtractResponse
+    from aiforge.modules.generate.schemas import GenerateResponse
+    from aiforge.modules.moderate.schemas import ModerateResponse
+    from aiforge.modules.qa.schemas import IngestResponse, QAResponse
+    from aiforge.modules.search.schemas import IndexResponse, SearchResponse
+    from aiforge.modules.summarize.schemas import SummarizeResponse
 
 # ---------------------------------------------------------------------------
 # Auto-register built-in modules and vector stores
@@ -126,28 +165,28 @@ try:
 
     register_vectorstore("chroma", ChromaVectorStore)
 except Exception:  # chromadb may not be installed
-    ChromaVectorStore = None  # type: ignore[assignment,misc]
+    ChromaVectorStore = None  # type: ignore[assignment]
 
 try:
     from aiforge.core.vectorstore_pinecone import PineconeVectorStore  # noqa: E402
 
     register_vectorstore("pinecone", PineconeVectorStore)
 except Exception:  # pinecone may not be installed
-    PineconeVectorStore = None  # type: ignore[assignment,misc]
+    PineconeVectorStore = None  # type: ignore[assignment]
 
 try:
     from aiforge.core.vectorstore_qdrant import QdrantVectorStore  # noqa: E402
 
     register_vectorstore("qdrant", QdrantVectorStore)
 except Exception:  # qdrant-client may not be installed
-    QdrantVectorStore = None  # type: ignore[assignment,misc]
+    QdrantVectorStore = None  # type: ignore[assignment]
 
 try:
     from aiforge.core.vectorstore_pgvector import PgVectorStore  # noqa: E402
 
     register_vectorstore("pgvector", PgVectorStore)
 except Exception:  # psycopg may not be installed
-    PgVectorStore = None  # type: ignore[assignment,misc]
+    PgVectorStore = None  # type: ignore[assignment]
 
 __all__ = [
     "__version__",
@@ -203,4 +242,15 @@ __all__ = [
     "Generator",
     "ChatAgent",
     "Moderator",
+    # Response schemas
+    "SummarizeResponse",
+    "QAResponse",
+    "IngestResponse",
+    "ExtractResponse",
+    "ClassifyResponse",
+    "SearchResponse",
+    "IndexResponse",
+    "GenerateResponse",
+    "ChatResponse",
+    "ModerateResponse",
 ]
