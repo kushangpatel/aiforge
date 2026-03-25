@@ -865,6 +865,25 @@ aiforge/modules/search/
 
 ---
 
+## SemanticSearch vs DocQA
+
+Both modules use vector stores and embeddings, but they serve different
+purposes:
+
+| | SemanticSearch | DocQA |
+|---|---|---|
+| **Purpose** | Find the most similar documents | Answer a question in natural language |
+| **LLM calls** | None — embedding-only | Yes — agentic LangGraph pipeline with iterative refinement |
+| **Ingestion** | Pre-structured documents with explicit `id`, `text`, `metadata` | Raw files, directories, or git URLs (auto-loads, language-aware chunking) |
+| **Output** | Ranked `hits` with similarity `score`, `id`, `text` | Synthesized answer (`text`), `sources`, `confidence`, optional `trace` |
+| **Cost** | Embedding tokens only | Embedding tokens (ingest) + LLM tokens (ask) |
+| **Use when** | You need a *ranked list* of matching passages | You need a *written answer* derived from documents |
+
+Use **SemanticSearch** when you want to find documents and handle the results
+yourself; use **DocQA** when you want a fully synthesized answer.
+
+---
+
 ## See Also
 
 - [Quick Start](../quickstart.md) — Basic search example

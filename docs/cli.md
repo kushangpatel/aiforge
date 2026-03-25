@@ -460,6 +460,21 @@ aiforge moderate --text "My SSN is 123-45-6789" --redact
 
 ## RAG Commands
 
+AIForge has two RAG-oriented modules. They both use vector stores and
+embeddings, but serve different purposes:
+
+| | `qa` | `search` |
+|---|---|---|
+| **Purpose** | Answer a question in natural language | Find the most similar documents |
+| **LLM calls** | Yes — agentic pipeline generates an answer | None — embedding-only |
+| **Ingestion** | Raw files/dirs/URLs (auto-chunks & embeds) | Pre-structured documents (id + text + metadata) |
+| **Output** | Synthesized answer, sources, confidence | Ranked hits with similarity scores |
+| **Cost** | Embedding + LLM tokens | Embedding tokens only |
+| **Use when** | You need a *written answer* derived from docs | You need a *ranked list* of matching passages |
+
+Think of `search` as a smarter `grep` and `qa` as a research assistant that
+reads the results and writes you an answer.
+
 ### aiforge qa
 
 Document Q&A using retrieval-augmented generation (RAG). Has two

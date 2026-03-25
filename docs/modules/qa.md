@@ -912,9 +912,29 @@ aiforge/modules/qa/
 
 ---
 
+## DocQA vs SemanticSearch
+
+Both modules use vector stores and embeddings, but they serve different
+purposes:
+
+| | DocQA | SemanticSearch |
+|---|---|---|
+| **Purpose** | Answer a question in natural language | Find the most similar documents |
+| **LLM calls** | Yes — agentic LangGraph pipeline with self-assessment and iterative refinement | None — embedding-only |
+| **Ingestion** | Raw files, directories, or git URLs (auto-loads, language-aware chunking, embeds) | Pre-structured documents with explicit `id`, `text`, `metadata` |
+| **Output** | Synthesized answer (`text`), `sources`, `confidence`, optional `trace` | Ranked `hits` with similarity `score`, `id`, `text` |
+| **Cost** | Embedding tokens (ingest) + LLM tokens (ask) | Embedding tokens only |
+| **Use when** | You need a *written answer* derived from documents | You need a *ranked list* of matching passages |
+
+Use **DocQA** when you want an answer; use **SemanticSearch** when you want
+to find documents and handle the results yourself.
+
+---
+
 ## See Also
 
 - [Quick Start](../quickstart.md) — Basic Q&A example
+- [SemanticSearch](search.md) — Embedding-only retrieval (no LLM)
 - [Pipelines](../pipelines.md) — Chain DocQA with other modules
 - [API Server](../api-server.md) — `POST /qa/ingest` and `POST /qa/ask` endpoints
 - [API Server > Webhooks](../api-server.md#async-jobs--webhooks) — Async ingestion with webhook notifications
