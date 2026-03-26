@@ -55,6 +55,10 @@ observability = [
     "langsmith>=0.1.0",
 ]
 docs = ["pypdf>=4.0.0", "python-docx>=1.0.0"]
+site = [
+    "mkdocs>=1.6.0",
+    "mkdocs-material>=9.5.0",
+]
 dev = [
     "pytest>=8.0.0",
     "pytest-asyncio>=0.23.0",

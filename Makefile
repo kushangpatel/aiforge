@@ -1,5 +1,5 @@
 .PHONY: help install install-dev install-all lint format typecheck test test-cov \
-       serve playground docker-up docker-down docker-build clean
+       serve playground docker-up docker-down docker-build docs docs-serve clean
 
 PYTHON   ?= python3
 VENV     ?= venv
@@ -64,7 +64,15 @@ docker-down: ## Stop all services
 docker-logs: ## Tail service logs
 	docker compose logs -f
 
+# ── Documentation ────────────────────────────────────────
+docs: ## Build documentation site
+	$(VENV)/bin/mkdocs build
+
+docs-serve: ## Serve docs locally with live-reload
+	$(VENV)/bin/mkdocs serve
+
 # ── Cleanup ──────────────────────────────────────────────
 clean: ## Remove build artifacts and caches
+	rm -rf site/
 	rm -rf build/ dist/ *.egg-info .mypy_cache .pytest_cache .ruff_cache htmlcov/
 	find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
