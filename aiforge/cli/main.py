@@ -116,6 +116,7 @@ def serve(
 @app.command()
 def playground(
     port: int = typer.Option(8501, help="Streamlit port."),
+    host: str = typer.Option("localhost", help="Bind address (use 0.0.0.0 for Docker)."),
 ) -> None:
     """Start the Streamlit interactive playground."""
     import subprocess
@@ -130,7 +131,7 @@ def playground(
         raise typer.Exit(1) from None
 
     playground_path = Path(__file__).parent.parent / "playground" / "app.py"
-    console.print(f"[cyan]Starting AIForge Playground on http://localhost:{port}[/cyan]")
+    console.print(f"[cyan]Starting AIForge Playground on http://{host}:{port}[/cyan]")
     subprocess.run(  # noqa: S603
         [
             sys.executable,
@@ -140,6 +141,8 @@ def playground(
             str(playground_path),
             "--server.port",
             str(port),
+            "--server.address",
+            host,
         ],
         check=False,
     )
