@@ -50,7 +50,8 @@ def _home_page() -> None:
     st.divider()
     st.info(
         "**Available modules:** Summarize · DocQA · Semantic Search · "
-        "Classify · Extract · Generate · Chat · Moderate · Pipeline"
+        "Classify · Extract · Generate · Chat · Moderate · Translate · "
+        "Vision · Pipeline"
     )
 
 
@@ -76,6 +77,8 @@ pg = st.navigation(
             st.Page("pages/generate.py", title="Generate", icon="✍️"),
             st.Page("pages/chat.py", title="Chat", icon="💬"),
             st.Page("pages/moderate.py", title="Moderate", icon="🛡️"),
+            st.Page("pages/translate.py", title="Translate", icon="🌐"),
+            st.Page("pages/vision.py", title="Vision", icon="👁️"),
             st.Page("pages/pipeline.py", title="Pipeline", icon="🔗"),
         ],
         "System": [

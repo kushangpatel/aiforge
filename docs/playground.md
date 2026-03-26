@@ -26,6 +26,8 @@ modules without writing any code.
   - [Built-in Tools](#built-in-tools)
   - [Memory Modes](#memory-modes)
 - [Moderate](#moderate)
+- [Translate](#translate)
+- [Vision](#vision)
 - [Pipeline Builder](#pipeline-builder)
   - [Available Modules](#available-modules)
   - [Step Configuration](#step-configuration)
@@ -136,7 +138,7 @@ Requires `streamlit>=1.40.0`.
 
 ## Pages Overview
 
-The playground has 9 module pages plus a Settings dashboard:
+The playground has 11 module pages plus a Settings dashboard:
 
 | Page | Module | Description |
 |------|--------|-------------|
@@ -148,6 +150,8 @@ The playground has 9 module pages plus a Settings dashboard:
 | **Generate** | `Generator` | Template-based or freeform text generation |
 | **Chat** | `ChatAgent` | Multi-turn conversation with tools and memory |
 | **Moderate** | `Moderator` | Content safety checks and PII redaction |
+| **Translate** | `Translator` | Multilingual translation with formality and domain controls |
+| **Vision** | `Vision` | Image analysis — describe, Q&A, extract, classify |
 | **Pipeline** | `Pipeline` | Visual multi-step pipeline builder |
 | **Settings** | — | Read-only configuration dashboard and session metrics |
 
@@ -374,6 +378,50 @@ Metrics: latency, cost, tokens.
 
 ---
 
+## Translate
+
+Multilingual text translation with language and formality controls.
+
+| Control | Type | Options | Default |
+|---------|------|---------|----------|
+| Source language | Selectbox | Common languages + `auto` | `auto` |
+| Target language | Selectbox | Common languages | `Spanish` |
+| Formality | Radio | `formal`, `informal`, `neutral` | `neutral` |
+| Domain | Text input | Free-form (e.g. `medical`, `legal`) | *(empty)* |
+
+**Input:** Text area (200px height)
+
+**Output:**
+- Translated text
+- Detected source language (when auto-detect)
+- Formality used
+
+Metrics: latency, cost, tokens, model.
+
+---
+
+## Vision
+
+Image analysis using multimodal LLMs.
+
+| Control | Type | Options | Default |
+|---------|------|---------|----------|
+| Task | Selectbox | `describe`, `qa`, `extract`, `classify` | `describe` |
+| Source | Radio | Upload / URL | Upload |
+| Question | Text input | *(qa task only)* | — |
+| Focus | Text input | *(describe task only)* | — |
+| Labels | Text input | *(classify task, comma-separated)* | — |
+
+**Input:** Image file upload or URL
+
+**Output:**
+- Analysis result text
+- Task performed
+
+Metrics: latency, cost, tokens, model.
+
+---
+
 ## Pipeline Builder
 
 Visual interface for constructing and executing multi-step pipelines.
@@ -484,6 +532,8 @@ aiforge/
 │       ├── generate.py     ← Loads generate widget
 │       ├── chat.py         ← Loads chat widget
 │       ├── moderate.py     ← Loads moderate widget
+│       ├── translate.py    ← Loads translate widget
+│       ├── vision.py       ← Loads vision widget
 │       ├── pipeline.py     ← Loads pipeline widget
 │       └── settings.py     ← Config dashboard
 ├── modules/
@@ -494,7 +544,9 @@ aiforge/
 │   ├── search/widget.py
 │   ├── generate/widget.py
 │   ├── chat/widget.py      ← 450+ lines (tools, memory, chat UI)
-│   └── moderate/widget.py
+│   ├── moderate/widget.py
+│   ├── translate/widget.py
+│   └── vision/widget.py
 └── pipeline/
     └── widget.py            ← 400+ lines (step builder, execution)
 ```

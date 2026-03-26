@@ -225,15 +225,21 @@ class Classifier(BaseModule):
         t0 = time.monotonic()
         messages = self._build_sentiment_messages(text, aspects, system_prompt)
         llm = self._call_llm(messages, temperature=self.temperature)
-        result = self._parse_sentiment(llm.text, aspects)
+        parsed = self._parse_sentiment(llm.text, aspects)
         from aiforge.core.pricing import calculate_cost
         cost = calculate_cost(llm.model, llm.input_tokens, llm.output_tokens)
-        result.cost = cost
-        result.input_tokens = llm.input_tokens
-        result.output_tokens = llm.output_tokens
-        result.model = llm.model
-        result.latency_ms = (time.monotonic() - t0) * 1000
-        return result
+        return SentimentResponse(
+            overall=parsed.overall,
+            score=parsed.score,
+            aspects=parsed.aspects,
+            emotions=parsed.emotions,
+            rationale=parsed.rationale,
+            cost=cost,
+            input_tokens=llm.input_tokens,
+            output_tokens=llm.output_tokens,
+            model=llm.model,
+            latency_ms=(time.monotonic() - t0) * 1000,
+        )
 
     async def asentiment(
         self,
@@ -248,15 +254,21 @@ class Classifier(BaseModule):
         t0 = time.monotonic()
         messages = self._build_sentiment_messages(text, aspects, system_prompt)
         llm = await self._acall_llm(messages, temperature=self.temperature)
-        result = self._parse_sentiment(llm.text, aspects)
+        parsed = self._parse_sentiment(llm.text, aspects)
         from aiforge.core.pricing import calculate_cost
         cost = calculate_cost(llm.model, llm.input_tokens, llm.output_tokens)
-        result.cost = cost
-        result.input_tokens = llm.input_tokens
-        result.output_tokens = llm.output_tokens
-        result.model = llm.model
-        result.latency_ms = (time.monotonic() - t0) * 1000
-        return result
+        return SentimentResponse(
+            overall=parsed.overall,
+            score=parsed.score,
+            aspects=parsed.aspects,
+            emotions=parsed.emotions,
+            rationale=parsed.rationale,
+            cost=cost,
+            input_tokens=llm.input_tokens,
+            output_tokens=llm.output_tokens,
+            model=llm.model,
+            latency_ms=(time.monotonic() - t0) * 1000,
+        )
 
     def _build_sentiment_messages(
         self,

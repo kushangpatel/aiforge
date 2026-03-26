@@ -8,32 +8,64 @@ sidecar — any language that can make HTTP requests can use AIForge.
 
 ## Table of Contents
 
-- [Why Use the API Server?](#why-use-the-api-server)
-- [SDK vs HTTP API — When to Use Which](#sdk-vs-http-api--when-to-use-which)
-- [Getting Started](#getting-started)
-- [Authentication](#authentication)
-- [API Reference](#api-reference)
-  - [Health & Metrics](#health--metrics)
-  - [Summarize](#post-summarize)
-  - [Document Q&A](#document-qa)
-  - [Extract](#post-extract)
-  - [Classify](#post-classify)
-  - [Semantic Search](#semantic-search)
-  - [Generate](#post-generate)
-  - [Chat](#chat)
-  - [Moderate](#post-moderate)
-  - [Pipeline](#post-pipeline)
-  - [Jobs](#get-jobsjob_id)
-- [Async Jobs & Webhooks](#async-jobs--webhooks)
-- [Integration Examples](#integration-examples)
-  - [Node.js / TypeScript](#nodejs--typescript)
-  - [Go](#go)
-  - [Java](#java)
-- [CORS](#cors)
-- [Docker Deployment](#docker-deployment)
-- [Environment Variables](#environment-variables)
-- [Graceful Shutdown](#graceful-shutdown)
-- [See Also](#see-also)
+- [API Server](#api-server)
+  - [Table of Contents](#table-of-contents)
+  - [Why Use the API Server?](#why-use-the-api-server)
+  - [SDK vs HTTP API — When to Use Which](#sdk-vs-http-api--when-to-use-which)
+  - [Getting Started](#getting-started)
+    - [Install](#install)
+    - [Start the Server](#start-the-server)
+    - [CLI Options](#cli-options)
+    - [Quick Smoke Test](#quick-smoke-test)
+  - [Authentication](#authentication)
+  - [API Reference](#api-reference)
+    - [Endpoint Summary](#endpoint-summary)
+    - [Health \& Metrics](#health--metrics)
+      - [`GET /health`](#get-health)
+      - [`GET /health/ready`](#get-healthready)
+      - [`GET /stats`](#get-stats)
+    - [`POST /summarize`](#post-summarize)
+    - [Document Q\&A](#document-qa)
+      - [`POST /qa/ingest`](#post-qaingest)
+      - [`POST /qa/ask`](#post-qaask)
+      - [`GET /qa/collections`](#get-qacollections)
+      - [`GET /qa/collections/{name}/stats`](#get-qacollectionsnamestats)
+      - [`DELETE /qa/collections/{name}`](#delete-qacollectionsname)
+    - [`POST /extract`](#post-extract)
+    - [`POST /classify`](#post-classify)
+    - [Semantic Search](#semantic-search)
+      - [`POST /search/index`](#post-searchindex)
+      - [`POST /search/query`](#post-searchquery)
+    - [`POST /generate`](#post-generate)
+    - [Chat](#chat)
+      - [`POST /chat`](#post-chat)
+      - [`POST /chat/reset`](#post-chatreset)
+      - [`GET /chat/conversations`](#get-chatconversations)
+    - [`POST /generate/rewrite`](#post-generaterewrite)
+    - [`POST /translate`](#post-translate)
+    - [`POST /vision`](#post-vision)
+    - [`POST /classify/sentiment`](#post-classifysentiment)
+    - [`POST /moderate`](#post-moderate)
+    - [`POST /pipeline`](#post-pipeline)
+    - [`GET /jobs/{job_id}`](#get-jobsjob_id)
+  - [Async Jobs \& Webhooks](#async-jobs--webhooks)
+    - [Flow](#flow)
+    - [Webhook Payload](#webhook-payload)
+    - [Webhook Delivery](#webhook-delivery)
+    - [SSRF Protection](#ssrf-protection)
+    - [Webhook Configuration](#webhook-configuration)
+  - [Integration Examples](#integration-examples)
+    - [Node.js / TypeScript](#nodejs--typescript)
+    - [Go](#go)
+    - [Java](#java)
+  - [CORS](#cors)
+  - [Docker Deployment](#docker-deployment)
+    - [Dockerfile](#dockerfile)
+    - [Docker Compose](#docker-compose)
+    - [Run with Docker](#run-with-docker)
+  - [Environment Variables](#environment-variables)
+  - [Graceful Shutdown](#graceful-shutdown)
+  - [See Also](#see-also)
 
 ---
 
@@ -174,10 +206,14 @@ Every module endpoint follows the same conventions:
 | `POST` | `/search/index` | SemanticSearch | Index documents for search |
 | `POST` | `/search/query` | SemanticSearch | Semantic similarity search |
 | `POST` | `/generate` | Generator | Generate content (template or freeform) |
+| `POST` | `/generate/rewrite` | Generator | Rewrite text with instructions/tone/reading-level |
+| `POST` | `/translate` | Translator | Translate text between languages |
+| `POST` | `/vision` | Vision | Analyze images (describe, Q&A, extract, classify) |
 | `POST` | `/chat` | ChatAgent | Send a chat message (multi-turn) |
 | `POST` | `/chat/reset` | ChatAgent | Reset a conversation |
 | `GET` | `/chat/conversations` | ChatAgent | List active conversation IDs |
 | `POST` | `/moderate` | Moderator | Content moderation (PII, toxicity, prompt injection) |
+| `POST` | `/classify/sentiment` | Classifier | Sentiment analysis with optional aspect breakdown |
 | `POST` | `/pipeline` | Pipeline | Execute a multi-step pipeline |
 | `GET` | `/jobs/{job_id}` | — | Poll async job status |
 | `GET` | `/docs` | — | Swagger UI |
@@ -952,6 +988,213 @@ List all active conversation IDs.
   "count": 2
 }
 ```
+
+---
+
+### `POST /generate/rewrite`
+
+Rewrite existing text according to instructions, tone, and/or reading level. Uses the same guardrail loop as `/generate`.
+
+**Request:**
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `text` | `string` | *(required)* | Original text to rewrite |
+| `instructions` | `string \| null` | `null` | Free-form rewriting directives |
+| `tone` | `string \| null` | `null` | Target tone (e.g. `"formal"`, `"casual"`) |
+| `reading_level` | `string \| null` | `null` | Target reading level (e.g. `"5th grade"`, `"college"`) |
+| `guardrails` | `string[]` | `[]` | Guardrails to enforce on rewritten output |
+
+If none of `instructions`, `tone`, or `reading_level` are provided, the rewriter defaults to "Improve clarity and readability".
+
+**Response `200`:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `text` | `string` | Rewritten text |
+| `guardrail_flags` | `string[]` | Guardrails still violated after retries |
+| `retry_count` | `integer` | Number of retry attempts |
+| `cost_usd` | `float` | Total cost |
+| `input_tokens` | `integer` | Input tokens consumed |
+| `output_tokens` | `integer` | Output tokens generated |
+| `model` | `string` | Model used |
+| `latency_ms` | `float` | End-to-end latency |
+
+**Example:**
+
+```bash
+curl -X POST http://localhost:8000/generate/rewrite \
+  -H "Content-Type: application/json" \
+  -d '{
+    "text": "The product is good. You should buy it.",
+    "instructions": "Make it more compelling",
+    "tone": "professional"
+  }'
+```
+
+**Errors:** `422` (empty text)
+
+---
+
+### `POST /translate`
+
+Translate text between languages with optional formality and domain controls. Auto-detects source language by default.
+
+**Request:**
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `text` | `string` | *(required)* | Text to translate |
+| `target_language` | `string` | `"English"` | Language to translate into |
+| `source_language` | `string` | `"auto"` | Source language (`"auto"` = detect) |
+| `formality` | `"formal" \| "informal" \| "neutral"` | `"neutral"` | Formality level |
+| `domain` | `string \| null` | `null` | Domain hint (e.g. `"legal"`, `"medical"`) |
+
+**Response `200`:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `text` | `string` | Translated text |
+| `source_language` | `string` | Detected or specified source language |
+| `target_language` | `string` | Target language |
+| `formality` | `string` | Formality level used |
+| `model` | `string` | Model used |
+| `cost_usd` | `float` | Cost of the operation |
+| `input_tokens` | `integer` | Input tokens consumed |
+| `output_tokens` | `integer` | Output tokens generated |
+| `latency_ms` | `float` | End-to-end latency |
+
+**Example:**
+
+```bash
+curl -X POST http://localhost:8000/translate \
+  -H "Content-Type: application/json" \
+  -d '{
+    "text": "Hello, how are you?",
+    "target_language": "Spanish",
+    "formality": "formal"
+  }'
+```
+
+```json
+{
+  "text": "Hola, \u00bfc\u00f3mo est\u00e1 usted?",
+  "source_language": "English",
+  "target_language": "Spanish",
+  "formality": "formal",
+  "model": "gpt-4o-mini",
+  "cost_usd": 0.0002,
+  "input_tokens": 85,
+  "output_tokens": 12,
+  "latency_ms": 420.3
+}
+```
+
+**Errors:** `422` (empty text)
+
+---
+
+### `POST /vision`
+
+Analyze an image using a multimodal LLM. Requires a vision-capable model (e.g. GPT-4o, Claude 3).
+
+**Request:**
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `source` | `string` | *(required)* | Image URL (HTTPS) |
+| `task` | `"describe" \| "qa" \| "extract" \| "classify"` | `"describe"` | Analysis task |
+| `question` | `string \| null` | `null` | Question about the image (required for `qa` task) |
+| `focus` | `string \| null` | `null` | Area to focus on (for `describe` task) |
+| `labels` | `string[]` | `[]` | Classification labels (for `classify` task) |
+
+**Response `200`:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `text` | `string` | Analysis result |
+| `task` | `string` | Task that was performed |
+| `image_source` | `string` | Image source analyzed |
+| `model` | `string` | Model used |
+| `cost_usd` | `float` | Cost of the operation |
+| `input_tokens` | `integer` | Input tokens consumed |
+| `output_tokens` | `integer` | Output tokens generated |
+| `latency_ms` | `float` | End-to-end latency |
+
+**Example:**
+
+```bash
+curl -X POST http://localhost:8000/vision \
+  -H "Content-Type: application/json" \
+  -d '{
+    "source": "https://example.com/photo.jpg",
+    "task": "describe"
+  }'
+```
+
+**Errors:** `422` (empty source, missing question for `qa` task)
+
+---
+
+### `POST /classify/sentiment`
+
+Analyze text sentiment with optional aspect-level breakdown. Returns overall polarity, emotion types, and per-aspect scores.
+
+**Request:**
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `text` | `string` | *(required)* | Text to analyze |
+| `aspects` | `string[]` | `[]` | Aspects to evaluate individually |
+
+**Response `200`:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `overall` | `string` | Overall sentiment (`"positive"`, `"negative"`, `"neutral"`, `"mixed"`) |
+| `score` | `float` | Score from -1.0 to 1.0 |
+| `aspects` | `AspectOut[]` | Per-aspect results |
+| `emotions` | `EmotionOut[]` | Detected emotions with intensity |
+| `rationale` | `string` | Brief explanation |
+| `model` | `string` | Model used |
+| `cost_usd` | `float` | Cost of the operation |
+| `input_tokens` | `integer` | Input tokens consumed |
+| `output_tokens` | `integer` | Output tokens generated |
+| `latency_ms` | `float` | End-to-end latency |
+
+**Example:**
+
+```bash
+curl -X POST http://localhost:8000/classify/sentiment \
+  -H "Content-Type: application/json" \
+  -d '{
+    "text": "The food was great but service was slow.",
+    "aspects": ["food", "service"]
+  }'
+```
+
+```json
+{
+  "overall": "mixed",
+  "score": 0.15,
+  "aspects": [
+    {"aspect": "food", "sentiment": "positive", "score": 0.85},
+    {"aspect": "service", "sentiment": "negative", "score": -0.6}
+  ],
+  "emotions": [
+    {"emotion": "satisfaction", "intensity": 0.7},
+    {"emotion": "frustration", "intensity": 0.5}
+  ],
+  "rationale": "Positive about food quality but negative about service speed.",
+  "model": "gpt-4o-mini",
+  "cost_usd": 0.0003,
+  "input_tokens": 120,
+  "output_tokens": 85,
+  "latency_ms": 580.2
+}
+```
+
+**Errors:** `422` (empty text)
 
 ---
 

@@ -497,6 +497,8 @@ for a in result.aspects:
 | `emotions` | `list[EmotionScore]` | Detected emotions with intensity. |
 | `rationale` | `str` | Brief explanation. |
 
+Plus inherited: `cost`, `input_tokens`, `output_tokens`, `model`, `trace_id`, `latency_ms`.
+
 ### CLI
 
 ```bash

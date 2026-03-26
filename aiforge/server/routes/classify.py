@@ -114,6 +114,7 @@ class SentimentRouteResponse(BaseModel):
     aspects: list[_AspectOut] = []
     emotions: list[_EmotionOut] = []
     rationale: str = ""
+    model: str = ""
     cost_usd: float = 0.0
     input_tokens: int = 0
     output_tokens: int = 0
@@ -136,6 +137,7 @@ async def run_sentiment(body: SentimentRequest) -> Any:
         aspects=[_AspectOut(aspect=a.aspect, sentiment=a.sentiment, score=a.score) for a in result.aspects],
         emotions=[_EmotionOut(emotion=e.emotion, intensity=e.intensity) for e in result.emotions],
         rationale=result.rationale,
+        model=result.model,
         cost_usd=result.cost,
         input_tokens=result.input_tokens,
         output_tokens=result.output_tokens,

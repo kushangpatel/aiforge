@@ -220,6 +220,8 @@ class Generator(BaseModule):
             reading_level: Target reading level (e.g. "5th grade", "college").
             system_prompt: Override the system prompt for this call.
         """
+        if not text or not text.strip():
+            raise ValueError("text must not be empty or whitespace-only")
         t0 = time.monotonic()
         user_prompt = self._build_rewrite_prompt(text, instructions, tone, reading_level)
         resolved_system = resolve_prompt(
@@ -240,6 +242,8 @@ class Generator(BaseModule):
         system_prompt: str | None = None,
     ) -> GenerateResponse:
         """Async version of :meth:`rewrite`."""
+        if not text or not text.strip():
+            raise ValueError("text must not be empty or whitespace-only")
         t0 = time.monotonic()
         user_prompt = self._build_rewrite_prompt(text, instructions, tone, reading_level)
         resolved_system = resolve_prompt(
@@ -265,7 +269,9 @@ class Generator(BaseModule):
             parts.append(f"Target tone: {tone}")
         if reading_level:
             parts.append(f"Target reading level: {reading_level}")
-        instructions_block = "\n".join(parts) + "\n" if parts else ""
+        if not parts:
+            parts.append("Instructions: Improve clarity and readability")
+        instructions_block = "\n".join(parts) + "\n"
         return REWRITE_USER.format(instructions_block=instructions_block, text=text)
 
     # ------------------------------------------------------------------

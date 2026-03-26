@@ -407,7 +407,7 @@ result = g.rewrite(
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `text` | `str` | — | Original text to rewrite. |
+| `text` | `str` | — | Original text to rewrite. Must not be empty (raises `ValueError`). |
 | `instructions` | `str \| None` | `None` | Free-form rewriting directives. |
 | `tone` | `str \| None` | `None` | Target tone (e.g. `"formal"`, `"casual"`, `"friendly"`). |
 | `reading_level` | `str \| None` | `None` | Target reading level (e.g. `"5th grade"`, `"college"`). |
@@ -416,6 +416,8 @@ result = g.rewrite(
 `arewrite()` is the async equivalent.
 
 Rewrite mode uses the same guardrail loop as `generate()`, so any configured guardrails are enforced on the rewritten output.
+
+If none of `instructions`, `tone`, or `reading_level` are provided, the rewriter defaults to "Improve clarity and readability".
 
 ### CLI
 

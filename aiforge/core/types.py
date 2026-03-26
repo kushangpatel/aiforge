@@ -314,7 +314,7 @@ class BaseModule(ABC):
 
     def _call_llm(
         self,
-        messages: list[dict[str, str]],
+        messages: list[dict[str, Any]],
         **kwargs: Any,
     ) -> CompletionResult:
         """Synchronous LLM call with cache + retry + rate-limiting + cost tracking."""
@@ -358,7 +358,7 @@ class BaseModule(ABC):
 
     async def _acall_llm(
         self,
-        messages: list[dict[str, str]],
+        messages: list[dict[str, Any]],
         **kwargs: Any,
     ) -> CompletionResult:
         """Async LLM call with cache + retry + rate-limiting + cost tracking."""
