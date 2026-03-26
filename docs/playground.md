@@ -434,6 +434,8 @@ Visual interface for constructing and executing multi-step pipelines.
 | `Classifier` | Labels (text area), multi-label (checkbox) |
 | `Generator` | Temperature (slider) |
 | `Moderator` | Checks (multiselect) |
+| `Translator` | Target language (selectbox), formality (selectbox) |
+| `Vision` | Task (selectbox) |
 
 > `DocQA`, `SemanticSearch`, and `Extractor` are excluded from the pipeline
 > builder because they require pre-ingested data or complex schema inputs that

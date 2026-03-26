@@ -75,6 +75,40 @@ _AVAILABLE_MODULES = {
             },
         },
     },
+    "Translator": {
+        "import": "aiforge.modules.translate.module",
+        "class": "Translator",
+        "config_fields": {
+            "target_language": {
+                "type": "selectbox",
+                "label": "Target language",
+                "options": [
+                    "English", "Spanish", "French", "German", "Italian",
+                    "Portuguese", "Chinese", "Japanese", "Korean", "Arabic",
+                    "Hindi", "Russian", "Dutch", "Swedish", "Polish",
+                ],
+                "default": "Spanish",
+            },
+            "formality": {
+                "type": "selectbox",
+                "label": "Formality",
+                "options": ["neutral", "formal", "informal"],
+                "default": "neutral",
+            },
+        },
+    },
+    "Vision": {
+        "import": "aiforge.modules.vision.module",
+        "class": "Vision",
+        "config_fields": {
+            "task": {
+                "type": "selectbox",
+                "label": "Task",
+                "options": ["describe", "qa", "extract", "classify"],
+                "default": "describe",
+            },
+        },
+    },
 }
 
 _SESSION_KEY = "pipeline_steps"
