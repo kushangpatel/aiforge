@@ -34,6 +34,8 @@ The `aiforge` command is registered automatically when you install the package.
     - [aiforge models](#aiforge-models)
     - [aiforge registry](#aiforge-registry)
   - [Common Options](#common-options)
+  - [Makefile](#makefile)
+  - [Docker](#docker)
   - [Configuration Priority](#configuration-priority)
   - [Environment Variables](#environment-variables)
   - [Exit Codes](#exit-codes)
@@ -908,34 +910,147 @@ aiforge migrate --delete test-collection
 
 ### Docker Compose Workflow
 
-```yaml
-# docker-compose.yml
-services:
-  api:
-    build: .
-    ports:
-      - "8000:8000"
-    env_file: .env
-    command: aiforge serve --host 0.0.0.0 --port 8000
-
-  playground:
-    build: .
-    ports:
-      - "8501:8501"
-    env_file: .env
-    environment:
-      - AIFORGE_API_BASE=http://api:8000
-    command: aiforge playground --port 8501
-    depends_on:
-      - api
-```
-
 ```bash
+# Build and start API + Playground
 docker compose up -d
+
+# Or use the Makefile shortcut
+make docker-up
+
 # API:        http://localhost:8000
 # Swagger:    http://localhost:8000/docs
 # Playground: http://localhost:8501
 ```
+
+See [Docker](#docker) below for full details on the Dockerfile and
+compose configuration.
+
+---
+
+## Makefile
+
+The project includes a `Makefile` with shortcuts for common development
+tasks. Run `make help` to see all targets:
+
+```
+$ make help
+  help            Show this help
+  venv            Create virtual environment
+  install         Install core dependencies
+  install-dev     Install with dev extras
+  install-all     Install all extras
+  lint            Run ruff linter
+  format          Auto-format code with ruff
+  typecheck       Run mypy type checks
+  test            Run tests
+  test-cov        Run tests with coverage report
+  serve           Start the API server (dev mode)
+  playground      Start the Streamlit playground
+  docker-build    Build Docker image
+  docker-up       Start all services (API + Playground)
+  docker-down     Stop all services
+  docker-logs     Tail service logs
+  clean           Remove build artifacts and caches
+```
+
+### Quick Start with Make
+
+```bash
+# First-time setup
+make install-dev          # creates venv + installs with dev extras
+
+# Daily workflow
+make lint                 # check code style
+make format               # auto-fix formatting
+make typecheck            # run mypy
+make test                 # run test suite
+make test-cov             # run tests with HTML coverage report
+
+# Run locally
+make serve                # starts API server with --reload
+make playground           # starts Streamlit UI
+```
+
+### Docker via Make
+
+```bash
+make docker-build         # docker compose build
+make docker-up            # docker compose up -d
+make docker-logs          # docker compose logs -f
+make docker-down          # docker compose down
+```
+
+### Cleanup
+
+```bash
+make clean                # removes build/, dist/, __pycache__, .mypy_cache, etc.
+```
+
+---
+
+## Docker
+
+AIForge ships with a multi-stage `Dockerfile` and a `docker-compose.yml`
+that runs both the API server and the Playground UI.
+
+### Dockerfile
+
+The Dockerfile uses a two-stage build:
+
+1. **Builder** — installs the package with `server`, `agentic`, and `docs`
+   extras into a prefix directory.
+2. **Runtime** — copies only the installed packages into a slim image.
+
+```bash
+# Build the image manually
+docker build -t aiforge .
+
+# Run the API server
+docker run -p 8000:8000 --env-file .env aiforge
+
+# Run with a persistent ChromaDB volume
+docker run -p 8000:8000 --env-file .env \
+  -v aiforge-data:/data/chroma \
+  -e AIFORGE_CHROMA_PERSIST_DIR=/data/chroma \
+  aiforge
+
+# Override the entrypoint to run the playground instead
+docker run -p 8501:8501 --env-file .env \
+  aiforge playground --port 8501
+```
+
+The image exposes port **8000** and includes a `HEALTHCHECK` that hits
+`/health` every 30 seconds.
+
+### docker-compose.yml
+
+The compose file defines two services:
+
+| Service | Port | Description |
+|---------|------|-------------|
+| `api` | `8000` (configurable via `AIFORGE_PORT`) | FastAPI server with ChromaDB volume |
+| `playground` | `8501` (configurable via `AIFORGE_PLAYGROUND_PORT`) | Streamlit UI, waits for API health |
+
+```bash
+# Start everything
+docker compose up -d
+
+# Custom ports
+AIFORGE_PORT=9000 AIFORGE_PLAYGROUND_PORT=9501 docker compose up -d
+
+# View logs
+docker compose logs -f
+
+# Tear down (data persists in the named volume)
+docker compose down
+
+# Tear down AND delete data
+docker compose down -v
+```
+
+Both services read secrets from `.env` via `env_file`. The API service's
+ChromaDB data is stored in a named volume (`chroma-data`) so it survives
+container restarts.
 
 ---
 

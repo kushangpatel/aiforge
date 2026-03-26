@@ -1856,92 +1856,85 @@ export AIFORGE_CORS_ORIGINS=*
 
 ### Dockerfile
 
+The project includes a multi-stage `Dockerfile`:
+
+1. **Builder stage** — installs AIForge with `server`, `agentic`, and `docs`
+   extras into a prefix directory.
+2. **Runtime stage** — copies the installed packages into a clean
+   `python:3.12-slim` image.
+
 ```dockerfile
-# ---- Build stage ----
+# ── Build stage ────────────────────────────────────────────
 FROM python:3.12-slim AS builder
 
 WORKDIR /build
-COPY pyproject.toml README.md ./
-COPY aiforge/ ./aiforge/
 
-RUN pip install --no-cache-dir build && \
-    python -m build --wheel --outdir /build/dist
+COPY pyproject.toml requirements.txt ./
+COPY aiforge/ aiforge/
 
-# ---- Runtime stage ----
+RUN pip install --no-cache-dir --prefix=/install -e ".[server,agentic,docs]"
+
+# ── Runtime stage ─────────────────────────────────────────
 FROM python:3.12-slim
 
-LABEL maintainer="Kushang Patel"
-LABEL description="AIForge — Plug-and-Play AI Toolkit"
-
-ENV PYTHONUNBUFFERED=1 \
-    PYTHONDONTWRITEBYTECODE=1 \
-    AIFORGE_API_HOST=0.0.0.0 \
-    AIFORGE_API_PORT=8000
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
-COPY --from=builder /build/dist/*.whl /tmp/
-RUN pip install --no-cache-dir /tmp/*.whl[server,docs] && \
-    rm -rf /tmp/*.whl
-
-RUN useradd --create-home appuser
-USER appuser
-
-VOLUME /app/aiforge_data
+COPY --from=builder /install /usr/local
+COPY --from=builder /build /app
 
 EXPOSE 8000
 
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')" || exit 1
 
 ENTRYPOINT ["aiforge"]
 CMD ["serve", "--host", "0.0.0.0", "--port", "8000"]
 ```
 
+The image exposes port **8000** and includes a `HEALTHCHECK` that probes
+`/health` every 30 seconds.
+
 ### Docker Compose
 
-```yaml
-version: "3.8"
+The `docker-compose.yml` defines two services:
 
-services:
-  api:
-    build: .
-    ports:
-      - "8000:8000"
-    volumes:
-      - aiforge_data:/app/aiforge_data
-    env_file:
-      - .env
-    command: aiforge serve --host 0.0.0.0 --port 8000
+| Service | Port | Description |
+|---------|------|-------------|
+| `api` | `8000` (override with `AIFORGE_PORT`) | FastAPI server with health check and persistent ChromaDB volume |
+| `playground` | `8501` (override with `AIFORGE_PLAYGROUND_PORT`) | Streamlit UI; waits for API to be healthy before starting |
 
-  playground:
-    build: .
-    ports:
-      - "8501:8501"
-    env_file:
-      - .env
-    environment:
-      - AIFORGE_API_BASE=http://api:8000
-    command: aiforge playground --port 8501
-    depends_on:
-      - api
-
-volumes:
-  aiforge_data:
-```
+Both services read secrets from `.env` via `env_file`. ChromaDB data is
+stored in a named volume (`chroma-data`) that survives container restarts.
 
 ### Run with Docker
 
 ```bash
 # Build and start both services
-docker compose up --build
+docker compose up --build -d
 
-# Or run just the API server
-docker run -p 8000:8000 \
-  -e AIFORGE_OPENAI_API_KEY=sk-... \
-  -e AIFORGE_API_KEY=your-secret-key \
-  -v aiforge_data:/app/aiforge_data \
-  aiforge/server
+# Or use the Makefile shortcut
+make docker-up
+
+# Custom ports
+AIFORGE_PORT=9000 AIFORGE_PLAYGROUND_PORT=9501 docker compose up -d
+
+# Run just the API server standalone
+docker run -p 8000:8000 --env-file .env \
+  -v chroma-data:/data/chroma \
+  -e AIFORGE_CHROMA_PERSIST_DIR=/data/chroma \
+  aiforge
+
+# View logs
+docker compose logs -f        # or: make docker-logs
+
+# Tear down (volume persists)
+docker compose down            # or: make docker-down
+
+# Tear down AND delete data
+docker compose down -v
 ```
 
 ---
