@@ -10,7 +10,11 @@ Commands:
     aiforge classify    — classify text into labels
     aiforge extract     — extract structured data from text
     aiforge generate    — generate text from a prompt / template
+    aiforge rewrite     — rewrite text according to instructions
     aiforge moderate    — content moderation & PII redaction
+    aiforge translate   — translate text between languages
+    aiforge vision      — analyze images with vision models
+    aiforge sentiment   — analyze text sentiment
     aiforge qa          — document Q&A (ingest + ask)
     aiforge search      — semantic search (index + query)
     aiforge chat        — interactive AI chat agent
@@ -36,7 +40,11 @@ from aiforge.cli.commands_modules import (
     extract_app,
     generate_app,
     moderate_app,
+    rewrite_app,
+    sentiment_app,
     summarize_app,
+    translate_app,
+    vision_app,
 )
 from aiforge.cli.commands_rag import qa_app, search_app
 
@@ -53,6 +61,10 @@ app.add_typer(classify_app, name="classify", help="Classify text into labels.")
 app.add_typer(extract_app, name="extract", help="Extract structured data from text.")
 app.add_typer(generate_app, name="generate", help="Generate text from a prompt / template.")
 app.add_typer(moderate_app, name="moderate", help="Content moderation & PII redaction.")
+app.add_typer(translate_app, name="translate", help="Translate text between languages.")
+app.add_typer(vision_app, name="vision", help="Analyze images with vision models.")
+app.add_typer(rewrite_app, name="rewrite", help="Rewrite text according to instructions.")
+app.add_typer(sentiment_app, name="sentiment", help="Analyze text sentiment.")
 app.add_typer(qa_app, name="qa", help="Document Q&A: ingest documents and ask questions.")
 app.add_typer(search_app, name="search", help="Semantic search: index documents and query.")
 app.add_typer(chat_app, name="chat", help="Interactive AI chat agent.")

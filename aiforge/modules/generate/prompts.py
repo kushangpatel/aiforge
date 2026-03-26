@@ -13,6 +13,31 @@ GENERATE_SYSTEM = (
 )
 
 # ---------------------------------------------------------------------------
+# Rewrite system prompt
+# ---------------------------------------------------------------------------
+
+REWRITE_SYSTEM = (
+    "You are an expert text rewriter. "
+    "Transform the provided text according to the user's instructions while "
+    "preserving the original meaning and key information. "
+    "Respond ONLY with the rewritten text — no preamble, no commentary."
+)
+
+# ---------------------------------------------------------------------------
+# Rewrite user prompt
+# ---------------------------------------------------------------------------
+
+REWRITE_USER = """Rewrite the following text according to these instructions.
+
+{instructions_block}
+Original text:
+<text>
+{text}
+</text>
+
+Respond ONLY with the rewritten text."""
+
+# ---------------------------------------------------------------------------
 # Guardrail retry feedback
 # ---------------------------------------------------------------------------
 

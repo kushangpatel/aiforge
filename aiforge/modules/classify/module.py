@@ -43,8 +43,18 @@ from aiforge.modules.classify.prompts import (
     CLASSIFY_USER_MULTI_FEW_SHOT,
     CLASSIFY_USER_MULTI_ZERO_SHOT,
     CLASSIFY_USER_ZERO_SHOT,
+    SENTIMENT_SYSTEM,
+    SENTIMENT_USER,
+    SENTIMENT_USER_ASPECTS,
 )
-from aiforge.modules.classify.schemas import ClassifyExample, ClassifyResponse, LabelScore
+from aiforge.modules.classify.schemas import (
+    AspectSentiment,
+    ClassifyExample,
+    ClassifyResponse,
+    EmotionScore,
+    LabelScore,
+    SentimentResponse,
+)
 
 _LABELS_MAX = 100
 
@@ -190,6 +200,132 @@ class Classifier(BaseModule):
         """Async pipeline entry point — delegates to :meth:`aclassify`."""
         sp = kwargs.pop("system_prompt", None)
         return await self.aclassify(text, system_prompt=sp)
+
+    # ------------------------------------------------------------------
+    # Sentiment API
+    # ------------------------------------------------------------------
+
+    def sentiment(
+        self,
+        text: str,
+        *,
+        aspects: list[str] | None = None,
+        system_prompt: str | None = None,
+    ) -> SentimentResponse:
+        """Analyze sentiment of *text* synchronously.
+
+        Args:
+            text:          Input text to analyze.
+            aspects:       Optional list of aspects to evaluate individually
+                           (e.g. ``["price", "quality", "service"]``).
+            system_prompt: Override the system prompt for this call.
+        """
+        if not text or not text.strip():
+            raise ValueError("text must not be empty or whitespace-only")
+        t0 = time.monotonic()
+        messages = self._build_sentiment_messages(text, aspects, system_prompt)
+        llm = self._call_llm(messages, temperature=self.temperature)
+        result = self._parse_sentiment(llm.text, aspects)
+        from aiforge.core.pricing import calculate_cost
+        cost = calculate_cost(llm.model, llm.input_tokens, llm.output_tokens)
+        result.cost = cost
+        result.input_tokens = llm.input_tokens
+        result.output_tokens = llm.output_tokens
+        result.model = llm.model
+        result.latency_ms = (time.monotonic() - t0) * 1000
+        return result
+
+    async def asentiment(
+        self,
+        text: str,
+        *,
+        aspects: list[str] | None = None,
+        system_prompt: str | None = None,
+    ) -> SentimentResponse:
+        """Async version of :meth:`sentiment`."""
+        if not text or not text.strip():
+            raise ValueError("text must not be empty or whitespace-only")
+        t0 = time.monotonic()
+        messages = self._build_sentiment_messages(text, aspects, system_prompt)
+        llm = await self._acall_llm(messages, temperature=self.temperature)
+        result = self._parse_sentiment(llm.text, aspects)
+        from aiforge.core.pricing import calculate_cost
+        cost = calculate_cost(llm.model, llm.input_tokens, llm.output_tokens)
+        result.cost = cost
+        result.input_tokens = llm.input_tokens
+        result.output_tokens = llm.output_tokens
+        result.model = llm.model
+        result.latency_ms = (time.monotonic() - t0) * 1000
+        return result
+
+    def _build_sentiment_messages(
+        self,
+        text: str,
+        aspects: list[str] | None,
+        system_prompt: str | None,
+    ) -> list[dict[str, str]]:
+        """Construct messages for a sentiment analysis call."""
+        resolved_system = resolve_prompt(
+            call_override=system_prompt,
+            instance_override=self._system_prompt_override,
+            config_override=self.settings.CUSTOM_PROMPTS.get("classify", {}).get("sentiment_system"),
+            default=SENTIMENT_SYSTEM,
+        )
+        if aspects:
+            aspects_list = "\n".join(f"  - {a}" for a in aspects)
+            user_content = SENTIMENT_USER_ASPECTS.format(aspects_list=aspects_list, text=text)
+        else:
+            user_content = SENTIMENT_USER.format(text=text)
+        return [
+            {"role": "system", "content": resolved_system},
+            {"role": "user", "content": user_content},
+        ]
+
+    def _parse_sentiment(self, llm_text: str, aspects: list[str] | None) -> SentimentResponse:
+        """Parse LLM JSON output into a :class:`SentimentResponse`."""
+        try:
+            data = json.loads(_extract_json(llm_text))
+        except json.JSONDecodeError:
+            self.logger.warning("classify.sentiment_json_parse_failed", raw_head=llm_text[:200])
+            return SentimentResponse()
+
+        overall = str(data.get("overall", "neutral")).lower()
+        if overall not in ("positive", "negative", "neutral", "mixed"):
+            overall = "neutral"
+
+        try:
+            score = max(-1.0, min(1.0, float(data.get("score", 0.0))))
+        except (ValueError, TypeError):
+            score = 0.0
+
+        emotions: list[EmotionScore] = []
+        for e in data.get("emotions", []):
+            try:
+                intensity = max(0.0, min(1.0, float(e.get("intensity", 1.0))))
+            except (ValueError, TypeError):
+                intensity = 1.0
+            emotions.append(EmotionScore(emotion=str(e.get("emotion", "")), intensity=intensity))
+
+        aspect_results: list[AspectSentiment] = []
+        for a in data.get("aspects", []):
+            a_sent = str(a.get("sentiment", "neutral")).lower()
+            if a_sent not in ("positive", "negative", "neutral", "mixed"):
+                a_sent = "neutral"
+            try:
+                a_score = max(-1.0, min(1.0, float(a.get("score", 0.0))))
+            except (ValueError, TypeError):
+                a_score = 0.0
+            aspect_results.append(
+                AspectSentiment(aspect=str(a.get("aspect", "")), sentiment=a_sent, score=a_score)
+            )
+
+        return SentimentResponse(
+            overall=overall,
+            score=score,
+            aspects=aspect_results,
+            emotions=emotions,
+            rationale=str(data.get("rationale", "")),
+        )
 
     # ------------------------------------------------------------------
     # Private helpers

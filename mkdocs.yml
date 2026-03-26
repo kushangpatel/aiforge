@@ -57,6 +57,8 @@ nav:
       - Extractor: modules/extract.md
       - Generator: modules/generate.md
       - Moderator: modules/moderate.md
+      - Translator: modules/translate.md
+      - Vision: modules/vision.md
       - DocQA (RAG): modules/qa.md
       - Semantic Search: modules/search.md
       - Chat Agent: modules/chat.md

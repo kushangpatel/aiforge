@@ -40,6 +40,8 @@ from aiforge.modules.generate.prompts import (
     GENERATE_RETRY,
     GENERATE_SYSTEM,
     PROFESSIONAL_TONE_CHECK,
+    REWRITE_SYSTEM,
+    REWRITE_USER,
 )
 from aiforge.modules.generate.schemas import GenerateResponse, GuardrailResult
 
@@ -195,6 +197,76 @@ class Generator(BaseModule):
         """Pipeline entry point (async)."""
         sp = kwargs.pop("system_prompt", None)
         return await self.agenerate(prompt=text, system_prompt=sp, **kwargs)
+
+    # ------------------------------------------------------------------
+    # Rewrite API
+    # ------------------------------------------------------------------
+
+    def rewrite(
+        self,
+        text: str,
+        *,
+        instructions: str | None = None,
+        tone: str | None = None,
+        reading_level: str | None = None,
+        system_prompt: str | None = None,
+    ) -> GenerateResponse:
+        """Rewrite *text* synchronously according to the given directives.
+
+        Args:
+            text:          The original text to rewrite.
+            instructions:  Free-form rewriting instructions (e.g. "make it shorter").
+            tone:          Target tone (e.g. "formal", "casual", "friendly").
+            reading_level: Target reading level (e.g. "5th grade", "college").
+            system_prompt: Override the system prompt for this call.
+        """
+        t0 = time.monotonic()
+        user_prompt = self._build_rewrite_prompt(text, instructions, tone, reading_level)
+        resolved_system = resolve_prompt(
+            call_override=system_prompt,
+            instance_override=self._system_prompt_override,
+            config_override=self.settings.CUSTOM_PROMPTS.get("generate", {}).get("rewrite_system"),
+            default=REWRITE_SYSTEM,
+        )
+        return self._generate_loop(user_prompt, t0, resolved_system)
+
+    async def arewrite(
+        self,
+        text: str,
+        *,
+        instructions: str | None = None,
+        tone: str | None = None,
+        reading_level: str | None = None,
+        system_prompt: str | None = None,
+    ) -> GenerateResponse:
+        """Async version of :meth:`rewrite`."""
+        t0 = time.monotonic()
+        user_prompt = self._build_rewrite_prompt(text, instructions, tone, reading_level)
+        resolved_system = resolve_prompt(
+            call_override=system_prompt,
+            instance_override=self._system_prompt_override,
+            config_override=self.settings.CUSTOM_PROMPTS.get("generate", {}).get("rewrite_system"),
+            default=REWRITE_SYSTEM,
+        )
+        return await self._agenerate_loop(user_prompt, t0, resolved_system)
+
+    @staticmethod
+    def _build_rewrite_prompt(
+        text: str,
+        instructions: str | None,
+        tone: str | None,
+        reading_level: str | None,
+    ) -> str:
+        """Construct the user prompt for a rewrite call."""
+        parts: list[str] = []
+        if instructions:
+            parts.append(f"Instructions: {instructions}")
+        if tone:
+            parts.append(f"Target tone: {tone}")
+        if reading_level:
+            parts.append(f"Target reading level: {reading_level}")
+        instructions_block = "\n".join(parts) + "\n" if parts else ""
+        return REWRITE_USER.format(instructions_block=instructions_block, text=text)
 
     # ------------------------------------------------------------------
     # Prompt resolution

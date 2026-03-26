@@ -368,6 +368,80 @@ print(result.text)
 
 ---
 
+## Rewrite Mode
+
+The Generator also supports rewriting existing text. Use `rewrite()` to transform text while preserving meaning:
+
+```python
+g = Generator()
+
+# Basic rewrite with instructions
+result = g.rewrite(
+    "The product is good. You should buy it.",
+    instructions="Make it more compelling and professional",
+)
+print(result.text)
+
+# Tone control
+result = g.rewrite(
+    "Dear Sir, I wish to formally request...",
+    tone="casual",
+)
+
+# Reading level adjustment
+result = g.rewrite(
+    "The mitochondria is the powerhouse of the cell...",
+    reading_level="5th grade",
+)
+
+# Combined
+result = g.rewrite(
+    original_text,
+    instructions="Shorten to 2 paragraphs",
+    tone="formal",
+    reading_level="college",
+)
+```
+
+### `rewrite(text, *, instructions=None, tone=None, reading_level=None, system_prompt=None) → GenerateResponse`
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `text` | `str` | — | Original text to rewrite. |
+| `instructions` | `str \| None` | `None` | Free-form rewriting directives. |
+| `tone` | `str \| None` | `None` | Target tone (e.g. `"formal"`, `"casual"`, `"friendly"`). |
+| `reading_level` | `str \| None` | `None` | Target reading level (e.g. `"5th grade"`, `"college"`). |
+| `system_prompt` | `str \| None` | `None` | Override the system prompt for this call. |
+
+`arewrite()` is the async equivalent.
+
+Rewrite mode uses the same guardrail loop as `generate()`, so any configured guardrails are enforced on the rewritten output.
+
+### CLI
+
+```bash
+aiforge rewrite --text "The product is good." --instructions "Make it professional" --tone formal
+aiforge rewrite --file draft.txt --reading-level "5th grade"
+```
+
+### API
+
+```
+POST /generate/rewrite
+```
+
+```json
+{
+  "text": "The product is good. You should buy it.",
+  "instructions": "Make it more compelling",
+  "tone": "professional",
+  "reading_level": null,
+  "guardrails": ["professional_tone"]
+}
+```
+
+---
+
 ## Guardrails
 
 Guardrails are enforced **after** generation. If any guardrail is violated, the Generator retries with the violation feedback included in the prompt (up to 2 retries, 3 total attempts).

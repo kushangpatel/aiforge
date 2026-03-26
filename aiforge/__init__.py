@@ -77,10 +77,13 @@ if TYPE_CHECKING:
     from aiforge.modules.qa.module import DocQA as DocQA
     from aiforge.modules.search.module import SemanticSearch as SemanticSearch
     from aiforge.modules.summarize.module import Summarizer as Summarizer
+    from aiforge.modules.translate.module import Translator as Translator
+    from aiforge.modules.vision.module import Vision as Vision
 
     # Response schemas
     from aiforge.modules.chat.schemas import ChatResponse as ChatResponse
     from aiforge.modules.classify.schemas import ClassifyResponse as ClassifyResponse
+    from aiforge.modules.classify.schemas import SentimentResponse as SentimentResponse
     from aiforge.modules.extract.schemas import ExtractResponse as ExtractResponse
     from aiforge.modules.generate.schemas import GenerateResponse as GenerateResponse
     from aiforge.modules.moderate.schemas import ModerateResponse as ModerateResponse
@@ -89,6 +92,8 @@ if TYPE_CHECKING:
     from aiforge.modules.search.schemas import IndexResponse as IndexResponse
     from aiforge.modules.search.schemas import SearchResponse as SearchResponse
     from aiforge.modules.summarize.schemas import SummarizeResponse as SummarizeResponse
+    from aiforge.modules.translate.schemas import TranslateResponse as TranslateResponse
+    from aiforge.modules.vision.schemas import VisionResponse as VisionResponse
 else:
     try:
         from aiforge.modules.summarize.module import Summarizer
@@ -130,15 +135,27 @@ else:
     except ImportError:
         Moderator = None
 
+    try:
+        from aiforge.modules.translate.module import Translator
+    except ImportError:
+        Translator = None
+
+    try:
+        from aiforge.modules.vision.module import Vision
+    except ImportError:
+        Vision = None
+
     # Response schemas — always importable (no optional deps)
     from aiforge.modules.chat.schemas import ChatResponse
-    from aiforge.modules.classify.schemas import ClassifyResponse
+    from aiforge.modules.classify.schemas import ClassifyResponse, SentimentResponse
     from aiforge.modules.extract.schemas import ExtractResponse
     from aiforge.modules.generate.schemas import GenerateResponse
     from aiforge.modules.moderate.schemas import ModerateResponse
     from aiforge.modules.qa.schemas import IngestResponse, QAResponse
     from aiforge.modules.search.schemas import IndexResponse, SearchResponse
     from aiforge.modules.summarize.schemas import SummarizeResponse
+    from aiforge.modules.translate.schemas import TranslateResponse
+    from aiforge.modules.vision.schemas import VisionResponse
 
 # ---------------------------------------------------------------------------
 # Auto-register built-in modules and vector stores
@@ -153,6 +170,8 @@ _BUILTIN_MODULES: dict[str, type | None] = {
     "generate": Generator,
     "chat": ChatAgent,
     "moderate": Moderator,
+    "translate": Translator,
+    "vision": Vision,
 }
 
 for _name, _cls in _BUILTIN_MODULES.items():
@@ -242,15 +261,20 @@ __all__ = [
     "Generator",
     "ChatAgent",
     "Moderator",
+    "Translator",
+    "Vision",
     # Response schemas
     "SummarizeResponse",
     "QAResponse",
     "IngestResponse",
     "ExtractResponse",
     "ClassifyResponse",
+    "SentimentResponse",
     "SearchResponse",
     "IndexResponse",
     "GenerateResponse",
     "ChatResponse",
     "ModerateResponse",
+    "TranslateResponse",
+    "VisionResponse",
 ]

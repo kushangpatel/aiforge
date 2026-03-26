@@ -86,3 +86,58 @@ async def run_classify(body: ClassifyRequest) -> Any:
         latency_ms=result.latency_ms,
     )
 
+
+# ---------------------------------------------------------------------------
+# Sentiment endpoint
+# ---------------------------------------------------------------------------
+
+
+class SentimentRequest(BaseModel):
+    text: str
+    aspects: list[str] = []
+
+
+class _EmotionOut(BaseModel):
+    emotion: str
+    intensity: float = 1.0
+
+
+class _AspectOut(BaseModel):
+    aspect: str
+    sentiment: str = "neutral"
+    score: float = 0.0
+
+
+class SentimentRouteResponse(BaseModel):
+    overall: str = "neutral"
+    score: float = 0.0
+    aspects: list[_AspectOut] = []
+    emotions: list[_EmotionOut] = []
+    rationale: str = ""
+    cost_usd: float = 0.0
+    input_tokens: int = 0
+    output_tokens: int = 0
+    latency_ms: float = 0.0
+
+
+@router.post("/sentiment", response_model=SentimentRouteResponse)
+async def run_sentiment(body: SentimentRequest) -> Any:
+    """Analyze text sentiment with optional aspect-level breakdown."""
+    from aiforge.modules.classify.module import Classifier
+
+    try:
+        c = Classifier(labels=["positive", "negative", "neutral"])
+        result = await c.asentiment(body.text, aspects=body.aspects or None)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    return SentimentRouteResponse(
+        overall=result.overall,
+        score=result.score,
+        aspects=[_AspectOut(aspect=a.aspect, sentiment=a.sentiment, score=a.score) for a in result.aspects],
+        emotions=[_EmotionOut(emotion=e.emotion, intensity=e.intensity) for e in result.emotions],
+        rationale=result.rationale,
+        cost_usd=result.cost,
+        input_tokens=result.input_tokens,
+        output_tokens=result.output_tokens,
+        latency_ms=result.latency_ms,
+    )

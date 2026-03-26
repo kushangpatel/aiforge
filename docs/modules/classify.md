@@ -442,6 +442,86 @@ else:
 
 ---
 
+## Sentiment Analysis
+
+The Classifier also provides built-in sentiment analysis via `sentiment()`. This mode detects overall polarity, emotion types, and optional aspect-level breakdown — no label configuration required.
+
+### Quick Start
+
+```python
+from aiforge import Classifier
+
+c = Classifier(labels=["positive", "negative", "neutral"])
+
+# Basic sentiment
+result = c.sentiment("I absolutely love this product! Best purchase ever.")
+print(result.overall)     # "positive"
+print(result.score)       # 0.95
+print(result.emotions)    # [EmotionScore(emotion="joy", intensity=0.9), ...]
+print(result.rationale)   # "Text expresses strong positive sentiment."
+```
+
+### Aspect-Level Analysis
+
+```python
+result = c.sentiment(
+    "The food was amazing but the service was terrible and the price was too high.",
+    aspects=["food", "service", "price"],
+)
+print(result.overall)     # "mixed"
+print(result.score)       # -0.1
+for a in result.aspects:
+    print(f"  {a.aspect}: {a.sentiment} ({a.score})")
+    # food: positive (0.9)
+    # service: negative (-0.8)
+    # price: negative (-0.6)
+```
+
+### `sentiment(text, *, aspects=None, system_prompt=None) → SentimentResponse`
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `text` | `str` | — | Input text to analyze. |
+| `aspects` | `list[str] \| None` | `None` | Aspects to evaluate individually. |
+| `system_prompt` | `str \| None` | `None` | Override the system prompt. |
+
+`asentiment()` is the async equivalent.
+
+### SentimentResponse
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `overall` | `Literal["positive", "negative", "neutral", "mixed"]` | Overall sentiment. |
+| `score` | `float` | Score from -1.0 (very negative) to 1.0 (very positive). |
+| `aspects` | `list[AspectSentiment]` | Per-aspect results (when aspects provided). |
+| `emotions` | `list[EmotionScore]` | Detected emotions with intensity. |
+| `rationale` | `str` | Brief explanation. |
+
+### CLI
+
+```bash
+# Basic sentiment
+aiforge sentiment --text "I love this product!"
+
+# With aspects
+aiforge sentiment --text "Great food but slow service." --aspects "food,service"
+```
+
+### API
+
+```
+POST /classify/sentiment
+```
+
+```json
+{
+  "text": "The food was great but service was slow.",
+  "aspects": ["food", "service"]
+}
+```
+
+---
+
 ## Prompt Resolution
 
 System prompts are resolved in this precedence order (highest to lowest):

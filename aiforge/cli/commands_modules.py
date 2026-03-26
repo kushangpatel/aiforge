@@ -1,4 +1,4 @@
-"""Module execution CLI commands: summarize, classify, extract, generate, moderate."""
+"""Module execution CLI commands: summarize, classify, extract, generate, moderate, translate, vision."""
 
 from __future__ import annotations
 
@@ -248,3 +248,157 @@ def moderate(
 
     if not redact:
         print_metrics(resp)
+
+
+# ---------------------------------------------------------------------------
+# aiforge translate
+# ---------------------------------------------------------------------------
+
+translate_app = typer.Typer(name="translate", invoke_without_command=True)
+
+
+@translate_app.callback(invoke_without_command=True)
+def translate(
+    ctx: typer.Context,
+    text: Optional[str] = typer.Option(None, "--text", "-t", help="Input text."),
+    file: Optional[Path] = typer.Option(None, "--file", "-f", help="Read input from file."),
+    target: str = typer.Option("English", "--target", help="Target language."),
+    source: str = typer.Option("auto", "--source", help="Source language (auto-detect if 'auto')."),
+    formality: str = typer.Option("neutral", "--formality", help="Tone: formal|informal|neutral."),
+    domain: Optional[str] = typer.Option(None, "--domain", help="Domain hint (e.g. 'legal', 'medical')."),
+    output: Optional[Path] = typer.Option(None, "--output", "-o", help="Write result to file."),
+    fmt: str = typer.Option("json", "--format", help="Output format: json|yaml."),
+) -> None:
+    """Translate text between languages."""
+    body = read_input(text, file)
+
+    from aiforge import Translator
+
+    t = Translator(
+        target_language=target,
+        source_language=source,
+        formality=formality,
+        domain=domain,
+    )
+    resp = t.translate(body)
+
+    data = response_to_dict(resp)
+    if output:
+        output.write_text(json.dumps(data, indent=2, default=str), encoding="utf-8")
+        console.print(f"[green]✓[/green] Written to {output}")
+    else:
+        format_output(data, fmt)
+    print_metrics(resp)
+
+
+# ---------------------------------------------------------------------------
+# aiforge vision
+# ---------------------------------------------------------------------------
+
+vision_app = typer.Typer(name="vision", invoke_without_command=True)
+
+
+@vision_app.callback(invoke_without_command=True)
+def vision(
+    ctx: typer.Context,
+    source: str = typer.Option(..., "--source", "-s", help="Image file path or URL."),
+    task: str = typer.Option("describe", "--task", help="Task: describe|qa|extract|classify."),
+    question: Optional[str] = typer.Option(None, "--question", "-q", help="Question for QA task."),
+    focus: Optional[str] = typer.Option(None, "--focus", help="Focus area for describe task."),
+    labels: Optional[str] = typer.Option(None, "--labels", "-l", help="Comma-separated labels for classify task."),
+    output: Optional[Path] = typer.Option(None, "--output", "-o", help="Write result to file."),
+    fmt: str = typer.Option("json", "--format", help="Output format: json|yaml."),
+) -> None:
+    """Analyze an image with a vision model."""
+    from aiforge import Vision
+
+    label_list = [lb.strip() for lb in labels.split(",") if lb.strip()] if labels else None
+
+    v = Vision(task=task)
+    resp = v.analyze(source=source, question=question, focus=focus, labels=label_list)
+
+    data = response_to_dict(resp)
+    if output:
+        output.write_text(json.dumps(data, indent=2, default=str), encoding="utf-8")
+        console.print(f"[green]✓[/green] Written to {output}")
+    else:
+        format_output(data, fmt)
+    print_metrics(resp)
+
+
+# ---------------------------------------------------------------------------
+# aiforge rewrite
+# ---------------------------------------------------------------------------
+
+rewrite_app = typer.Typer(name="rewrite", invoke_without_command=True)
+
+
+@rewrite_app.callback(invoke_without_command=True)
+def rewrite(
+    ctx: typer.Context,
+    text: Optional[str] = typer.Option(None, "--text", "-t", help="Input text to rewrite."),
+    file: Optional[Path] = typer.Option(None, "--file", "-f", help="Read input from file."),
+    instructions: Optional[str] = typer.Option(None, "--instructions", "-i", help="Rewriting instructions."),
+    tone: Optional[str] = typer.Option(None, "--tone", help="Target tone (e.g. formal, casual)."),
+    reading_level: Optional[str] = typer.Option(None, "--reading-level", help="Target reading level."),
+    guardrails: Optional[str] = typer.Option(
+        None, "--guardrails", "-g", help="Comma-separated guardrails.",
+    ),
+    output: Optional[Path] = typer.Option(None, "--output", "-o", help="Write result to file."),
+    fmt: str = typer.Option("json", "--format", help="Output format: json|yaml."),
+) -> None:
+    """Rewrite text according to instructions."""
+    body = read_input(text, file)
+
+    guard_list = None
+    if guardrails:
+        guard_list = [g.strip() for g in guardrails.split(",") if g.strip()]
+
+    from aiforge import Generator
+
+    gen = Generator(guardrails=guard_list)
+    resp = gen.rewrite(body, instructions=instructions, tone=tone, reading_level=reading_level)
+
+    data = response_to_dict(resp)
+    if output:
+        output.write_text(json.dumps(data, indent=2, default=str), encoding="utf-8")
+        console.print(f"[green]✓[/green] Written to {output}")
+    else:
+        format_output(data, fmt)
+    print_metrics(resp)
+
+
+# ---------------------------------------------------------------------------
+# aiforge sentiment
+# ---------------------------------------------------------------------------
+
+sentiment_app = typer.Typer(name="sentiment", invoke_without_command=True)
+
+
+@sentiment_app.callback(invoke_without_command=True)
+def sentiment(
+    ctx: typer.Context,
+    text: Optional[str] = typer.Option(None, "--text", "-t", help="Input text."),
+    file: Optional[Path] = typer.Option(None, "--file", "-f", help="Read input from file."),
+    aspects: Optional[str] = typer.Option(
+        None, "--aspects", "-a", help="Comma-separated aspects to analyze.",
+    ),
+    output: Optional[Path] = typer.Option(None, "--output", "-o", help="Write result to file."),
+    fmt: str = typer.Option("json", "--format", help="Output format: json|yaml."),
+) -> None:
+    """Analyze text sentiment."""
+    body = read_input(text, file)
+    aspect_list = [a.strip() for a in aspects.split(",") if a.strip()] if aspects else None
+
+    from aiforge import Classifier
+
+    c = Classifier(labels=["positive", "negative", "neutral"])
+    resp = c.sentiment(body, aspects=aspect_list)
+
+    data = response_to_dict(resp)
+    if output:
+        output.write_text(json.dumps(data, indent=2, default=str), encoding="utf-8")
+        console.print(f"[green]✓[/green] Written to {output}")
+    else:
+        format_output(data, fmt)
+    print_metrics(resp)

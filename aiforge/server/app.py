@@ -52,6 +52,8 @@ def create_app() -> FastAPI:
         qa,
         search,
         summarize,
+        translate,
+        vision,
     )
 
     settings = get_settings()
@@ -86,6 +88,8 @@ def create_app() -> FastAPI:
     application.include_router(generate.router)
     application.include_router(chat.router)
     application.include_router(moderate.router)
+    application.include_router(translate.router)
+    application.include_router(vision.router)
     application.include_router(pipeline.router)
     application.include_router(jobs.router)
 

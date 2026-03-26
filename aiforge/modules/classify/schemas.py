@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 from aiforge.core.types import ModuleResponse
@@ -41,3 +43,46 @@ class ClassifyResponse(ModuleResponse):
         table to handle unclassified inputs gracefully (I8).
         """
         return self.label or "unknown"
+
+
+# ---------------------------------------------------------------------------
+# Sentiment schemas
+# ---------------------------------------------------------------------------
+
+
+class EmotionScore(BaseModel):
+    """A detected emotion with its intensity."""
+
+    emotion: str
+    intensity: float = Field(default=1.0, ge=0.0, le=1.0)
+
+
+class AspectSentiment(BaseModel):
+    """Sentiment for a specific aspect of the text."""
+
+    aspect: str
+    sentiment: Literal["positive", "negative", "neutral", "mixed"] = "neutral"
+    score: float = Field(default=0.0, ge=-1.0, le=1.0)
+
+
+class SentimentResponse(ModuleResponse):
+    """Response from Classifier.sentiment()."""
+
+    overall: Literal["positive", "negative", "neutral", "mixed"] = "neutral"
+    """Overall sentiment polarity."""
+
+    score: float = Field(default=0.0, ge=-1.0, le=1.0)
+    """Overall sentiment score (-1.0 to 1.0)."""
+
+    aspects: list[AspectSentiment] = Field(default_factory=list)
+    """Per-aspect sentiment scores (populated when aspects are requested)."""
+
+    emotions: list[EmotionScore] = Field(default_factory=list)
+    """Detected emotions with intensity scores."""
+
+    rationale: str = ""
+    """Brief explanation from the LLM."""
+
+    def to_text(self) -> str:
+        """Return the overall sentiment label for pipeline chaining."""
+        return self.overall
