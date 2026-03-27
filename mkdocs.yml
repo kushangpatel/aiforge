@@ -72,6 +72,7 @@ nav:
       - API Server: api-server.md
       - API Authentication: api-auth.md
       - Playground: playground.md
+      - MCP Integration: mcp.md
   - Architecture: architecture.md
   - CLI Reference: cli.md
 

@@ -23,7 +23,13 @@ def _store_conversation(conversation_id: str, agent: Any) -> None:
     _conversations[conversation_id] = agent
     _conversations.move_to_end(conversation_id)
     while len(_conversations) > _MAX_CONVERSATIONS:
-        _conversations.popitem(last=False)
+        _, evicted_agent = _conversations.popitem(last=False)
+        # Close MCP connections on evicted agents to avoid leaking subprocesses
+        if hasattr(evicted_agent, "close"):
+            try:
+                evicted_agent.close()
+            except Exception:  # noqa: BLE001
+                pass
 
 
 # ---------------------------------------------------------------------------
@@ -38,6 +44,7 @@ class ChatRequest(BaseModel):
     memory: str = "buffer"
     memory_k: int = 20
     stream: bool = False
+    mcp_servers: list[dict[str, Any]] | None = None
 
 
 class ChatResponseOut(BaseModel):
@@ -82,6 +89,7 @@ async def chat(req: ChatRequest) -> ChatResponseOut | StreamingResponse:
                 system_prompt=req.system_prompt,
                 memory=req.memory,
                 memory_k=req.memory_k,
+                mcp_servers=req.mcp_servers,
             )
             _store_conversation(agent.conversation_id, agent)
 

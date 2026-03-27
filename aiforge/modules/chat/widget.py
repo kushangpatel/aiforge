@@ -393,6 +393,32 @@ def render() -> None:
 
     enable_tools = st.checkbox("Enable built-in tools", value=True)
 
+    # ── MCP servers ──
+    with st.expander("MCP Servers (optional)"):
+        st.caption(
+            "Connect to external MCP tool servers. "
+            "Paste a JSON array of server configs."
+        )
+        mcp_json = st.text_area(
+            "MCP config (JSON)",
+            value="",
+            height=120,
+            placeholder=(
+                '[{"name": "github", "transport": "stdio", '
+                '"command": "npx", "args": ["@modelcontextprotocol/server-github"], '
+                '"env": {"GITHUB_TOKEN": "..."}}]'
+            ),
+        )
+        mcp_servers: list[dict[str, Any]] | None = None
+        if mcp_json.strip():
+            import json
+            try:
+                mcp_servers = json.loads(mcp_json)
+                st.success(f"{len(mcp_servers)} server(s) configured")
+            except (json.JSONDecodeError, TypeError) as exc:
+                st.error(f"Invalid JSON: {exc}")
+                mcp_servers = None
+
     if st.button("Reset conversation"):
         st.session_state.pop("chat_agent", None)
         st.session_state.pop("chat_history", None)
@@ -402,7 +428,7 @@ def render() -> None:
 
     # ── Initialise agent ──
     if "chat_agent" not in st.session_state:
-        _init_agent(system_prompt, memory_mode, memory_k, enable_tools)
+        _init_agent(system_prompt, memory_mode, memory_k, enable_tools, mcp_servers)
 
     agent = st.session_state.chat_agent
 
@@ -473,6 +499,7 @@ def _init_agent(
     memory_mode: str,
     memory_k: int,
     enable_tools: bool,
+    mcp_servers: list[dict[str, Any]] | None = None,
 ) -> None:
     """Create a ChatAgent and store it in session state."""
     from aiforge.modules.chat.module import ChatAgent
@@ -483,5 +510,6 @@ def _init_agent(
         tools=tools,
         memory=memory_mode,
         memory_k=memory_k,
+        mcp_servers=mcp_servers,
     )
     st.session_state.chat_history = []

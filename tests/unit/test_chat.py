@@ -50,6 +50,8 @@ def _agent(
         agent.system_prompt = base_prompt
 
     agent._messages = [{"role": "system", "content": agent.system_prompt}]
+    agent._system_prompt_override = system_prompt
+    agent._mcp_manager = None
 
     import structlog
 

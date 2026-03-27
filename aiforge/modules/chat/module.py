@@ -53,6 +53,9 @@ class ChatAgent(BaseModule):
         memory:              Memory mode: ``"buffer"`` | ``"summary"`` | ``"none"``.
         memory_k:            Number of messages to keep in the buffer.
         max_tool_iterations: Safety cap on tool-use loops.
+        mcp_servers:         List of MCP server config dicts.  Each dict is
+                             parsed into :class:`~aiforge.mcp.config.MCPServerConfig`.
+                             Falls back to ``settings.MCP_SERVERS`` when *None*.
         **kwargs:            Forwarded to :class:`~aiforge.core.types.BaseModule`.
     """
 
@@ -63,6 +66,7 @@ class ChatAgent(BaseModule):
         memory: str = "buffer",
         memory_k: int = 20,
         max_tool_iterations: int = 5,
+        mcp_servers: list[dict[str, Any]] | None = None,
         **kwargs: Any,
     ) -> None:
         super().__init__(**kwargs)
@@ -81,6 +85,12 @@ class ChatAgent(BaseModule):
         self.max_tool_iterations: int = max_tool_iterations
         self.conversation_id: str = uuid.uuid4().hex[:16]
         self._system_prompt_override: str | None = system_prompt
+        self._mcp_manager: Any | None = None
+
+        # ── MCP server integration ────────────────────────────────────
+        raw_servers = mcp_servers if mcp_servers is not None else self.settings.MCP_SERVERS
+        if raw_servers:
+            self._init_mcp(raw_servers)
 
         # Build the effective system prompt
         base_prompt = resolve_prompt(
@@ -89,7 +99,7 @@ class ChatAgent(BaseModule):
             config_override=self.settings.CUSTOM_PROMPTS.get("chat", {}).get("system"),
             default=DEFAULT_SYSTEM_PROMPT,
         )
-        if tools:
+        if self.tools:
             tool_descs = "\n".join(
                 f"- {t.name}: {t.description}" for t in self.tools
             )
@@ -105,6 +115,56 @@ class ChatAgent(BaseModule):
         self._messages: list[dict[str, str]] = [
             {"role": "system", "content": self.system_prompt}
         ]
+
+    # ------------------------------------------------------------------
+    # MCP helpers
+    # ------------------------------------------------------------------
+
+    def _init_mcp(self, raw_servers: list[dict[str, Any]]) -> None:
+        """Parse MCP configs, connect, and merge discovered tools."""
+        try:
+            from aiforge.mcp.client import MCPClientManager
+            from aiforge.mcp.config import MCPServerConfig
+        except ImportError as exc:
+            raise ImportError(
+                "MCP support requires the 'mcp' package. "
+                "Install it with: pip install 'aiforge[mcp]'"
+            ) from exc
+
+        configs = [MCPServerConfig(**s) for s in raw_servers]
+        manager = MCPClientManager(configs)
+        manager.connect_sync()
+        mcp_tools = manager.get_langchain_tools()
+        self.tools.extend(mcp_tools)
+        self._mcp_manager = manager
+
+    def close(self) -> None:
+        """Disconnect MCP sessions. Safe to call multiple times."""
+        if self._mcp_manager is not None:
+            self._mcp_manager.disconnect_sync()
+            self._mcp_manager = None
+
+    async def aclose(self) -> None:
+        """Async disconnect MCP sessions."""
+        if self._mcp_manager is not None:
+            await self._mcp_manager.disconnect()
+            self._mcp_manager = None
+
+    def __del__(self) -> None:
+        try:
+            self.close()
+        except Exception:  # noqa: BLE001
+            pass
+
+    # Async context manager for proper lifecycle management:
+    #   async with ChatAgent(mcp_servers=[...]) as agent:
+    #       response = await agent.achat("...")
+
+    async def __aenter__(self) -> "ChatAgent":
+        return self
+
+    async def __aexit__(self, *exc: Any) -> None:
+        await self.aclose()
 
     # ------------------------------------------------------------------
     # Public API
@@ -236,7 +296,7 @@ class ChatAgent(BaseModule):
             yield chunk
 
     def reset(self) -> None:
-        """Clear conversation history. Keeps the system prompt."""
+        """Clear conversation history. Keeps the system prompt and MCP connections."""
         self._messages = [
             {"role": "system", "content": self.system_prompt}
         ]
