@@ -43,6 +43,24 @@ from aiforge.modules.chat.prompts import (
 from aiforge.modules.chat.schemas import ChatResponse, ToolCallRecord
 
 
+def _describe_tool(t: Any) -> str:
+    """Build a tool description string that includes parameter info."""
+    desc = f"- {t.name}: {t.description}"
+    try:
+        args = t.args  # LangChain StructuredTool .args property → JSON schema
+        if args:
+            params = []
+            for k, v in args.items():
+                ptype = v.get("type", "string") if isinstance(v, dict) else "string"
+                required = "(required)" if isinstance(v, dict) and v.get("default") is None else ""
+                params.append(f"{k} ({ptype}{', ' + required if required else ''})")
+            if params:
+                desc += f"  Parameters: {', '.join(params)}"
+    except Exception:
+        pass
+    return desc
+
+
 class ChatAgent(BaseModule):
     """Multi-turn conversational agent with memory and optional tool use.
 
@@ -101,7 +119,7 @@ class ChatAgent(BaseModule):
         )
         if self.tools:
             tool_descs = "\n".join(
-                f"- {t.name}: {t.description}" for t in self.tools
+                _describe_tool(t) for t in self.tools
             )
             tool_instructions = TOOL_USE_SYSTEM.format(
                 tool_descriptions=tool_descs,
@@ -356,7 +374,7 @@ class ChatAgent(BaseModule):
         )
         if self.tools:
             tool_descs = "\n".join(
-                f"- {t.name}: {t.description}" for t in self.tools
+                _describe_tool(t) for t in self.tools
             )
             effective = f"{base}\n\n{TOOL_USE_SYSTEM.format(tool_descriptions=tool_descs)}"
         else:

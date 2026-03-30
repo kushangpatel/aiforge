@@ -114,6 +114,11 @@ def build_chat_graph(
             if tool_name in tool_map:
                 try:
                     if isinstance(tool_input, dict):
+                        # Auto-coerce: LLMs often produce dict/list values
+                        # for parameters that tools expect as JSON strings.
+                        tool_input = _coerce_tool_input(
+                            tool_map[tool_name], tool_input
+                        )
                         output = str(tool_map[tool_name].invoke(tool_input))
                     else:
                         output = str(tool_map[tool_name].invoke(str(tool_input)))
@@ -226,16 +231,46 @@ def build_chat_graph(
 # ---------------------------------------------------------------------------
 
 
+def _coerce_tool_input(tool: Any, tool_input: dict[str, Any]) -> dict[str, Any]:
+    """Auto-serialize dict/list values to JSON strings when the tool expects str.
+
+    LLMs frequently produce structured objects for parameters that MCP tools
+    declare as ``"type": "string"`` (e.g.  a ``body`` parameter that should
+    be a JSON-encoded string).  This helper checks the tool's ``args``
+    schema and converts mismatched types so Pydantic validation succeeds.
+    """
+    try:
+        args_schema = getattr(tool, "args", None)
+        if not args_schema:
+            return tool_input
+        coerced = dict(tool_input)
+        for key, value in coerced.items():
+            if isinstance(value, (dict, list)):
+                prop = args_schema.get(key, {})
+                if isinstance(prop, dict) and prop.get("type") == "string":
+                    coerced[key] = json.dumps(value)
+        return coerced
+    except Exception:
+        return tool_input
+
+
 def _parse_tool_calls(text: str) -> list[dict[str, Any]]:
     """Extract tool call JSON objects from LLM output.
 
     Looks for ``{"tool": ..., "input": ...}`` patterns in the text.
+    Handles multi-line JSON and JSON embedded in surrounding prose.
     Returns an empty list if no valid tool calls are found.
     """
     calls: list[dict[str, Any]] = []
-    # Try the whole text as a single JSON object first
+
+    # Fast exit — no possible tool call in the text
+    if '"tool"' not in text:
+        return calls
+
     stripped = text.strip()
-    if stripped.startswith("{") and '"tool"' in stripped:
+
+    # 1. Try the whole text as a single JSON object
+    if stripped.startswith("{"):
         try:
             obj = json.loads(stripped)
             if "tool" in obj:
@@ -244,7 +279,32 @@ def _parse_tool_calls(text: str) -> list[dict[str, Any]]:
         except json.JSONDecodeError:
             pass
 
-    # Try to find JSON objects line-by-line
+    # 2. Bracket-matching: find top-level { } pairs that may span
+    #    multiple lines and be surrounded by prose.
+    depth = 0
+    start: int | None = None
+    for i, ch in enumerate(text):
+        if ch == "{":
+            if depth == 0:
+                start = i
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0 and start is not None:
+                candidate = text[start : i + 1]
+                if '"tool"' in candidate:
+                    try:
+                        obj = json.loads(candidate)
+                        if "tool" in obj:
+                            calls.append(obj)
+                    except json.JSONDecodeError:
+                        pass
+                start = None
+
+    if calls:
+        return calls
+
+    # 3. Fallback — line-by-line (single-line JSON on its own line)
     for line in text.splitlines():
         line = line.strip()
         if line.startswith("{") and '"tool"' in line:

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -214,6 +215,61 @@ class TestParseToolCalls:
         assert len(result) == 2
         assert result[0]["tool"] == "calculator"
         assert result[1]["tool"] == "current_time"
+
+    def test_multiline_json_tool_call(self) -> None:
+        """Tool call JSON spanning multiple lines should be parsed."""
+        text = (
+            '{\n'
+            '  "tool": "jira_post",\n'
+            '  "input": {\n'
+            '    "path": "/rest/api/3/issue",\n'
+            '    "body": {"fields": {"project": {"key": "TC"}}}\n'
+            '  }\n'
+            '}'
+        )
+        result = _parse_tool_calls(text)
+        assert len(result) == 1
+        assert result[0]["tool"] == "jira_post"
+        assert result[0]["input"]["path"] == "/rest/api/3/issue"
+
+    def test_multiline_json_embedded_in_prose(self) -> None:
+        """Tool call JSON embedded in surrounding text should be extracted."""
+        text = (
+            "I'll create a Jira ticket for this bug.\n"
+            '{"tool": "jira_post", "input": {"path": "/rest/api/3/issue",\n'
+            '"body": {"fields": {"summary": "Login broken"}}}}\n'
+            "Let me proceed."
+        )
+        result = _parse_tool_calls(text)
+        assert len(result) == 1
+        assert result[0]["tool"] == "jira_post"
+
+    def test_deeply_nested_json_tool_call(self) -> None:
+        """Deeply nested JSON (like Jira ADF) should be parsed."""
+        text = json.dumps({
+            "tool": "jira_post",
+            "input": {
+                "path": "/rest/api/3/issue",
+                "body": {
+                    "fields": {
+                        "project": {"key": "TC"},
+                        "issuetype": {"name": "Bug"},
+                        "summary": "Login broken",
+                        "description": {
+                            "type": "doc",
+                            "version": 1,
+                            "content": [{
+                                "type": "paragraph",
+                                "content": [{"type": "text", "text": "Details here"}],
+                            }],
+                        },
+                    },
+                },
+            },
+        })
+        result = _parse_tool_calls(text)
+        assert len(result) == 1
+        assert result[0]["tool"] == "jira_post"
 
 
 # ===========================================================================

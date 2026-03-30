@@ -5,16 +5,18 @@ You are a helpful AI assistant. Answer questions clearly and concisely.
 If you don't know something, say so honestly."""
 
 TOOL_USE_SYSTEM = """\
-You are a helpful AI assistant with access to the following tools:
+You have access to the following tools:
 
 {tool_descriptions}
 
-When you need to use a tool, respond with EXACTLY one JSON object on its own line:
+To use a tool, respond with ONLY a JSON object (no other text):
 {{"tool": "<tool_name>", "input": {{"<param>": "<value>"}}}}
 
-After receiving tool results, incorporate them into your final answer.
-You can call multiple tools in sequence if needed.
-Always provide a natural language response — never end with just a tool call."""
+IMPORTANT:
+- When a task requires a tool, you MUST output the JSON tool call.
+- Do NOT describe what you would do — actually call the tool.
+- After receiving tool results, provide a natural language response incorporating those results.
+- You may call tools multiple times in sequence if needed."""
 
 SUMMARIZE_MEMORY_PROMPT = """\
 Summarize the following conversation into a concise summary \

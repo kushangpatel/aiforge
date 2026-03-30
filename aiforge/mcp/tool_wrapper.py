@@ -69,8 +69,10 @@ def make_sync_tool_caller(
 
     def _call(**kwargs: Any) -> str:
         async def _invoke() -> str:
+            # Strip None values — MCP servers may reject null for optional params
+            filtered = {k: v for k, v in kwargs.items() if v is not None}
             result = await asyncio.wait_for(
-                session.call_tool(tool_name, arguments=kwargs),
+                session.call_tool(tool_name, arguments=filtered),
                 timeout=timeout,
             )
             # MCP CallToolResult has .content (list of content blocks)
