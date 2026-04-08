@@ -124,6 +124,20 @@ pip install -e ".[all]"               # Everything
 
 ---
 
+## Lint and Type checking
+
+```bash
+# Lint checker
+ruff check .
+# Output the lint findings to a file
+ruff check . > ruff_output.txt
+
+# Type checker
+pyright .
+```
+
+---
+
 ## Modules
 
 ### Summarize — Text Summarization

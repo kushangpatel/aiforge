@@ -83,3 +83,9 @@ mkdocs-material>=1.6.1
 psycopg>=3.3.3
 pinecone>=8.1.1
 qdrant_client>=1.17.1
+
+# ============================================================
+# Optional: Add any additional dependencies for specific features or providers as needed.
+# ============================================================
+pyright>=1.1.408                    # For static type checking (optional but recommended)
+ruff>=0.15.9                        # For linting (optional but recommended)
