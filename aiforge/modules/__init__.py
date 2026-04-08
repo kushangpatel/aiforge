@@ -16,6 +16,22 @@ Each sub-package exposes a single main class that inherits from
 - :mod:`aiforge.modules.vision`     — :class:`~aiforge.modules.vision.module.Vision`
 """
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from aiforge.modules.chat.module import ChatAgent as ChatAgent
+    from aiforge.modules.classify.module import Classifier as Classifier
+    from aiforge.modules.extract.module import Extractor as Extractor
+    from aiforge.modules.generate.module import Generator as Generator
+    from aiforge.modules.moderate.module import Moderator as Moderator
+    from aiforge.modules.qa.module import DocQA as DocQA
+    from aiforge.modules.search.module import SemanticSearch as SemanticSearch
+    from aiforge.modules.summarize.module import Summarizer as Summarizer
+    from aiforge.modules.translate.module import Translator as Translator
+    from aiforge.modules.vision.module import Vision as Vision
+
 __all__ = [
     "Summarizer",
     "DocQA",

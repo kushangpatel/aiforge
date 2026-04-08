@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import pytest
 
-from aiforge.core.doc_loader import DocLoader, IngestStats
+from aiforge.core.doc_loader import DocLoader
 
 
 class TestDocLoaderFile:
-    def test_load_text_file(self, tmp_path: any) -> None:
+    def test_load_text_file(self, tmp_path: Any) -> None:
         f = tmp_path / "sample.py"
         f.write_text("print('hello')\n")
         loader = DocLoader()
@@ -18,7 +20,7 @@ class TestDocLoaderFile:
         assert stats.files_processed == 1
         assert "py" in stats.languages
 
-    def test_load_markdown_file(self, tmp_path: any) -> None:
+    def test_load_markdown_file(self, tmp_path: Any) -> None:
         f = tmp_path / "README.md"
         f.write_text("# Title\n\nSome content.\n")
         loader = DocLoader()
@@ -26,7 +28,7 @@ class TestDocLoaderFile:
         assert len(docs) == 1
         assert "Title" in docs[0].page_content
 
-    def test_load_directory_recursive(self, tmp_path: any) -> None:
+    def test_load_directory_recursive(self, tmp_path: Any) -> None:
         (tmp_path / "a.py").write_text("x = 1")
         (tmp_path / "sub").mkdir()
         (tmp_path / "sub" / "b.md").write_text("hello")
@@ -34,7 +36,7 @@ class TestDocLoaderFile:
         docs, stats = loader.load(str(tmp_path))
         assert stats.files_processed == 2
 
-    def test_ignores_pycache(self, tmp_path: any) -> None:
+    def test_ignores_pycache(self, tmp_path: Any) -> None:
         (tmp_path / "__pycache__").mkdir()
         (tmp_path / "__pycache__" / "cache.py").write_text("junk")
         (tmp_path / "real.py").write_text("x = 1")
@@ -42,14 +44,14 @@ class TestDocLoaderFile:
         docs, stats = loader.load(str(tmp_path))
         assert stats.files_processed == 1
 
-    def test_ignores_binary_extensions(self, tmp_path: any) -> None:
+    def test_ignores_binary_extensions(self, tmp_path: Any) -> None:
         (tmp_path / "image.png").write_bytes(b"\x89PNG\r\n")
         (tmp_path / "code.py").write_text("pass")
         loader = DocLoader()
         docs, stats = loader.load(str(tmp_path))
         assert stats.files_processed == 1
 
-    def test_extension_whitelist(self, tmp_path: any) -> None:
+    def test_extension_whitelist(self, tmp_path: Any) -> None:
         (tmp_path / "a.py").write_text("x")
         (tmp_path / "b.md").write_text("y")
         loader = DocLoader(file_extensions=[".py"])
@@ -57,7 +59,7 @@ class TestDocLoaderFile:
         assert stats.files_processed == 1
         assert stats.skipped_files  # b.md was skipped
 
-    def test_load_file_list(self, tmp_path: any) -> None:
+    def test_load_file_list(self, tmp_path: Any) -> None:
         f1 = tmp_path / "one.txt"
         f2 = tmp_path / "two.txt"
         f1.write_text("one")

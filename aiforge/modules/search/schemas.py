@@ -89,4 +89,3 @@ class SearchResponse(ModuleResponse):
     def to_text(self) -> str:
         """Return the top hit's text for pipeline chaining, or empty string."""
         return self.hits[0].text if self.hits else ""
-

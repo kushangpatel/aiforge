@@ -8,12 +8,11 @@ from unittest.mock import patch
 import pytest
 
 from aiforge.core.model_router import (
+    _TIER_RANK,
     MODEL_CATALOG,
     ModelRouter,
     ModelSpec,
-    _TIER_RANK,
 )
-
 
 # ---------------------------------------------------------------------------
 # ModelSpec
@@ -196,6 +195,7 @@ class TestConfigKeys:
     def test_default_values(self) -> None:
         with patch.dict("os.environ", {"AIFORGE_OPENAI_API_KEY": "test-key"}, clear=False):
             from aiforge.infra.config import AIForgeSettings
+
             s = AIForgeSettings()
             assert s.MODEL_ROUTER_ENABLED is True
             assert s.DEFAULT_QUALITY == "medium"
@@ -204,6 +204,7 @@ class TestConfigKeys:
     def test_custom_values(self) -> None:
         with patch.dict("os.environ", {"AIFORGE_OPENAI_API_KEY": "test-key"}, clear=False):
             from aiforge.infra.config import AIForgeSettings
+
             s = AIForgeSettings(
                 MODEL_ROUTER_ENABLED=False,
                 DEFAULT_QUALITY="high",
@@ -263,7 +264,7 @@ class TestBaseModuleRouterIntegration:
             MODEL_ROUTER_ENABLED=False,
         )
         # Keeps the default model since router is disabled
-        assert clf.settings.MODEL == default_model
+        assert default_model == clf.settings.MODEL
 
     def test_no_quality_uses_default_quality(self) -> None:
         """No quality= → DEFAULT_QUALITY is used as fallback."""
@@ -287,7 +288,7 @@ class TestBaseModuleRouterIntegration:
 
         default_model = AIForgeSettings().MODEL
         clf = Classifier(labels=["a", "b"], MODEL_ROUTER_ENABLED=False)
-        assert clf.settings.MODEL == default_model
+        assert default_model == clf.settings.MODEL
 
     def test_quality_with_anthropic_provider(self) -> None:
         """quality='medium' + PROVIDER='anthropic' → claude-3-haiku."""
@@ -308,8 +309,8 @@ class TestBaseModuleRouterIntegration:
         from aiforge.modules.classify import Classifier
 
         original_model = get_settings().MODEL
-        clf = Classifier(labels=["a", "b"], quality="low")
-        assert get_settings().MODEL == original_model
+        Classifier(labels=["a", "b"], quality="low")
+        assert original_model == get_settings().MODEL
 
     def test_no_matching_model_falls_back(self) -> None:
         """If router can't match, keeps default model."""
@@ -322,7 +323,7 @@ class TestBaseModuleRouterIntegration:
             side_effect=ValueError("No model found"),
         ):
             clf = Classifier(labels=["a", "b"], quality="high")
-            assert clf.settings.MODEL == default_model
+            assert default_model == clf.settings.MODEL
 
 
 # ---------------------------------------------------------------------------
@@ -336,12 +337,12 @@ class TestQualityValidation:
     def test_invalid_quality_raises(self) -> None:
         router = ModelRouter()
         with pytest.raises(ValueError, match="Invalid quality tier"):
-            router.select(quality="ultra")
+            router.select(quality="ultra")  # type: ignore[arg-type]
 
     def test_invalid_quality_typo_raises(self) -> None:
         router = ModelRouter()
         with pytest.raises(ValueError, match="Invalid quality tier"):
-            router.select(quality="hgih")
+            router.select(quality="hgih")  # type: ignore[arg-type]
 
     def test_invalid_default_quality_config_raises(self) -> None:
         """DEFAULT_QUALITY field validator rejects invalid tiers."""

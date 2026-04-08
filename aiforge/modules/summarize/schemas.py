@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, Field
-
 from aiforge.core.types import ModuleResponse
 
 SummarizeStyle = Literal["concise", "detailed", "bullet_points", "executive"]

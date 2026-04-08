@@ -150,7 +150,7 @@ class ChromaVectorStore(VectorStoreAdapter):
         raw_embeds = embeds[0] if include_embeddings and embeds is not None else None
 
         for i, (doc, meta, dist, doc_id) in enumerate(
-            zip(docs[0], metas[0], dists[0], ids_list[0])
+            zip(docs[0], metas[0], dists[0], ids_list[0], strict=False)
         ):
             hit: dict[str, Any] = {
                 "id": doc_id,

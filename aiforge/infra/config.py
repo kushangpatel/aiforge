@@ -119,7 +119,9 @@ class AIForgeSettings(BaseSettings):
     # Pinecone
     PINECONE_API_KEY: str | None = None
     PINECONE_INDEX: str | None = None
-    PINECONE_ENVIRONMENT: str | None = None  # Deprecated — unused by factory (v3 SDK resolves endpoint automatically)
+    PINECONE_ENVIRONMENT: str | None = (
+        None  # Deprecated — unused by factory (v3 SDK resolves endpoint automatically)
+    )
 
     # Qdrant
     QDRANT_URL: str | None = None
@@ -249,9 +251,7 @@ class AIForgeSettings(BaseSettings):
     def validate_cache_backend(cls, v: str) -> str:
         allowed = {"memory", "redis"}
         if v not in allowed:
-            raise ValueError(
-                f"AIFORGE_CACHE_BACKEND must be one of {sorted(allowed)}, got {v!r}"
-            )
+            raise ValueError(f"AIFORGE_CACHE_BACKEND must be one of {sorted(allowed)}, got {v!r}")
         return v
 
     @field_validator("DEFAULT_QUALITY")
@@ -259,9 +259,7 @@ class AIForgeSettings(BaseSettings):
     def validate_default_quality(cls, v: str) -> str:
         allowed = {"high", "medium", "low"}
         if v not in allowed:
-            raise ValueError(
-                f"AIFORGE_DEFAULT_QUALITY must be one of {allowed}, got {v!r}"
-            )
+            raise ValueError(f"AIFORGE_DEFAULT_QUALITY must be one of {allowed}, got {v!r}")
         return v
 
     @field_validator("TEMPERATURE")
@@ -272,7 +270,7 @@ class AIForgeSettings(BaseSettings):
         return v
 
     @model_validator(mode="after")
-    def validate_provider_embedding_combo(self) -> "AIForgeSettings":
+    def validate_provider_embedding_combo(self) -> AIForgeSettings:
         """Ensure the embedding model is compatible with the chosen provider."""
         allowed = _PROVIDER_EMBEDDING_MAP.get(self.PROVIDER, [])
         if allowed and self.EMBEDDING_MODEL not in allowed:
@@ -287,7 +285,7 @@ class AIForgeSettings(BaseSettings):
         return self
 
     @model_validator(mode="after")
-    def validate_api_keys_present(self) -> "AIForgeSettings":
+    def validate_api_keys_present(self) -> AIForgeSettings:
         """Warn (not error) if a required API key looks missing."""
         key_map = {
             "openai": ("OPENAI_API_KEY", self.OPENAI_API_KEY),
@@ -311,7 +309,7 @@ class AIForgeSettings(BaseSettings):
     # ------------------------------------------------------------------
 
     @classmethod
-    def from_yaml(cls, path: str | Path, **overrides: Any) -> "AIForgeSettings":
+    def from_yaml(cls, path: str | Path, **overrides: Any) -> AIForgeSettings:
         """Load settings from a YAML file with optional code-level overrides."""
         yaml_data = _load_yaml_config(Path(path))
         # Set env vars temporarily so Pydantic Settings picks them up
@@ -338,10 +336,7 @@ def get_settings() -> AIForgeSettings:
     kwargs create a local patched copy via ``AIForgeSettings(**kwargs)``.
     """
     yaml_path = Path("aiforge.yaml")
-    if yaml_path.exists():
-        settings = AIForgeSettings.from_yaml(yaml_path)
-    else:
-        settings = AIForgeSettings()
+    settings = AIForgeSettings.from_yaml(yaml_path) if yaml_path.exists() else AIForgeSettings()
 
     # Apply custom pricing / context-window overrides from config
     from aiforge.core.pricing import (

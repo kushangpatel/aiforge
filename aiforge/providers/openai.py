@@ -28,7 +28,7 @@ if TYPE_CHECKING:
 class OpenAIProvider(LLMProvider):
     """LLM provider backed by OpenAI Chat Completions."""
 
-    def __init__(self, settings: "AIForgeSettings") -> None:
+    def __init__(self, settings: AIForgeSettings) -> None:
         try:
             from langchain_openai import ChatOpenAI
         except ImportError as exc:
@@ -40,7 +40,7 @@ class OpenAIProvider(LLMProvider):
         self._llm = ChatOpenAI(
             model=settings.MODEL,
             temperature=settings.TEMPERATURE,
-            max_tokens=settings.MAX_TOKENS,
+            max_tokens=settings.MAX_TOKENS,  # type: ignore[call-arg]
             api_key=settings.OPENAI_API_KEY,  # type: ignore[arg-type]
         )
         self._model_name = settings.MODEL
@@ -69,9 +69,7 @@ class OpenAIProvider(LLMProvider):
             input_tokens=usage.get("input_tokens", 0),
             output_tokens=usage.get("output_tokens", 0),
             model=self._model_name,
-            finish_reason=getattr(response, "response_metadata", {}).get(
-                "finish_reason", "stop"
-            ),
+            finish_reason=getattr(response, "response_metadata", {}).get("finish_reason", "stop"),
             latency_ms=latency_ms,
         )
 
@@ -95,9 +93,7 @@ class OpenAIProvider(LLMProvider):
             input_tokens=usage.get("input_tokens", 0),
             output_tokens=usage.get("output_tokens", 0),
             model=self._model_name,
-            finish_reason=getattr(response, "response_metadata", {}).get(
-                "finish_reason", "stop"
-            ),
+            finish_reason=getattr(response, "response_metadata", {}).get("finish_reason", "stop"),
             latency_ms=latency_ms,
         )
 
@@ -114,7 +110,7 @@ class OpenAIProvider(LLMProvider):
 class OpenAIEmbeddingProvider(EmbeddingProvider):
     """Embedding provider backed by OpenAI Embeddings."""
 
-    def __init__(self, settings: "AIForgeSettings") -> None:
+    def __init__(self, settings: AIForgeSettings) -> None:
         try:
             from langchain_openai import OpenAIEmbeddings
         except ImportError as exc:
@@ -152,6 +148,7 @@ class OpenAIEmbeddingProvider(EmbeddingProvider):
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 # Re-export for backward compatibility (azure.py imports _wrap_openai_error from here)
 def _wrap_openai_error(exc: Exception) -> ProviderError:

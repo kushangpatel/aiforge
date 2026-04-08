@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Optional
 
 import typer
 from rich.table import Table
@@ -13,7 +12,6 @@ from aiforge.cli._helpers import (
     console,
     format_output,
     print_metrics,
-    read_input,
     response_to_dict,
 )
 
@@ -28,17 +26,17 @@ qa_app = typer.Typer(name="qa", help="Document Q&A: ingest documents and ask que
 def ingest(
     source: str = typer.Argument(..., help="File path, directory, or git URL to ingest."),
     collection: str = typer.Option("default", "--collection", "-c", help="Target collection name."),
-    extensions: Optional[str] = typer.Option(
-        None, "--extensions", "-e",
+    extensions: str | None = typer.Option(
+        None,
+        "--extensions",
+        "-e",
         help="Comma-separated file extensions to include (e.g. '.py,.md,.txt').",
     ),
     batch_size: int = typer.Option(100, "--batch-size", help="Embedding batch size."),
     fmt: str = typer.Option("json", "--format", help="Output format: json|yaml."),
 ) -> None:
     """Ingest documents into a collection for RAG queries."""
-    ext_list = (
-        [e.strip() for e in extensions.split(",") if e.strip()] if extensions else None
-    )
+    ext_list = [e.strip() for e in extensions.split(",") if e.strip()] if extensions else None
 
     from aiforge import DocQA
 
@@ -58,13 +56,17 @@ def ingest(
 def ask(
     query: str = typer.Argument(..., help="Question to ask."),
     collection: str = typer.Option("default", "--collection", "-c", help="Collection to search."),
-    filter_repo: Optional[str] = typer.Option(
-        None, "--filter", help="Filter results by source path substring.",
+    filter_repo: str | None = typer.Option(
+        None,
+        "--filter",
+        help="Filter results by source path substring.",
     ),
     include_trace: bool = typer.Option(
-        False, "--trace", help="Include agent reasoning trace in output.",
+        False,
+        "--trace",
+        help="Include agent reasoning trace in output.",
     ),
-    output: Optional[Path] = typer.Option(None, "--output", "-o", help="Write result to file."),
+    output: Path | None = typer.Option(None, "--output", "-o", help="Write result to file."),
     fmt: str = typer.Option("json", "--format", help="Output format: json|yaml."),
 ) -> None:
     """Ask a question against ingested documents."""
@@ -93,16 +95,16 @@ search_app = typer.Typer(name="search", help="Semantic search: index documents a
 def index(
     source: str = typer.Argument(..., help="File path or directory to index."),
     collection: str = typer.Option("default", "--collection", "-c", help="Target collection."),
-    extensions: Optional[str] = typer.Option(
-        None, "--extensions", "-e",
+    extensions: str | None = typer.Option(
+        None,
+        "--extensions",
+        "-e",
         help="Comma-separated file extensions (e.g. '.py,.md').",
     ),
     fmt: str = typer.Option("json", "--format", help="Output format: json|yaml."),
 ) -> None:
     """Index files into a collection for semantic search."""
-    ext_list = (
-        [e.strip() for e in extensions.split(",") if e.strip()] if extensions else None
-    )
+    ext_list = [e.strip() for e in extensions.split(",") if e.strip()] if extensions else None
 
     from aiforge import SemanticSearch
 
@@ -123,7 +125,7 @@ def query(
     query_text: str = typer.Argument(..., help="Search query."),
     collection: str = typer.Option("default", "--collection", "-c", help="Collection to search."),
     top_k: int = typer.Option(5, "--top-k", "-k", help="Number of results (1-100)."),
-    output: Optional[Path] = typer.Option(None, "--output", "-o", help="Write result to file."),
+    output: Path | None = typer.Option(None, "--output", "-o", help="Write result to file."),
     fmt: str = typer.Option("json", "--format", help="Output format: json|yaml|table."),
 ) -> None:
     """Query a collection with semantic search."""

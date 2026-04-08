@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import asyncio
+from datetime import UTC
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -19,7 +19,6 @@ from aiforge.server.webhooks import (
     mark_running,
     validate_webhook_url,
 )
-
 
 # ======================================================================
 # Fixtures
@@ -92,7 +91,9 @@ class TestCompleteJob:
     async def test_fires_webhook_on_complete(self) -> None:
         job = create_job(webhook_url="https://example.com/hook")
 
-        with patch("aiforge.server.webhooks._deliver_webhook", new_callable=AsyncMock) as mock_deliver:
+        with patch(
+            "aiforge.server.webhooks._deliver_webhook", new_callable=AsyncMock
+        ) as mock_deliver:
             await complete_job(job.job_id, {"indexed_count": 50})
             mock_deliver.assert_awaited_once()
             delivered_job = mock_deliver.call_args[0][0]
@@ -131,9 +132,9 @@ class TestDeliverWebhook:
         job = create_job(webhook_url="https://example.com/hook")
         job.status = JobStatus.COMPLETED
         job.result = {"indexed_count": 50}
-        from datetime import datetime, timezone
+        from datetime import datetime
 
-        job.completed_at = datetime.now(timezone.utc)
+        job.completed_at = datetime.now(UTC)
 
         mock_response = MagicMock()
         mock_response.status_code = 200
@@ -315,7 +316,9 @@ class TestTimeoutPropagation:
     async def test_complete_job_passes_timeout(self) -> None:
         job = create_job(webhook_url="https://example.com/hook")
 
-        with patch("aiforge.server.webhooks._deliver_webhook", new_callable=AsyncMock) as mock_deliver:
+        with patch(
+            "aiforge.server.webhooks._deliver_webhook", new_callable=AsyncMock
+        ) as mock_deliver:
             await complete_job(job.job_id, {"x": 1}, timeout=25.0)
             mock_deliver.assert_awaited_once()
             assert mock_deliver.call_args[1]["timeout"] == 25.0
@@ -324,7 +327,9 @@ class TestTimeoutPropagation:
     async def test_fail_job_passes_timeout(self) -> None:
         job = create_job(webhook_url="https://example.com/hook")
 
-        with patch("aiforge.server.webhooks._deliver_webhook", new_callable=AsyncMock) as mock_deliver:
+        with patch(
+            "aiforge.server.webhooks._deliver_webhook", new_callable=AsyncMock
+        ) as mock_deliver:
             await fail_job(job.job_id, "err", timeout=15.0)
             mock_deliver.assert_awaited_once()
             assert mock_deliver.call_args[1]["timeout"] == 15.0

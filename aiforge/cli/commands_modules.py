@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Optional
+from typing import cast
 
 import typer
 
@@ -26,25 +26,30 @@ summarize_app = typer.Typer(name="summarize", invoke_without_command=True)
 @summarize_app.callback(invoke_without_command=True)
 def summarize(
     ctx: typer.Context,
-    text: Optional[str] = typer.Option(None, "--text", "-t", help="Input text."),
-    file: Optional[Path] = typer.Option(None, "--file", "-f", help="Read input from file."),
+    text: str | None = typer.Option(None, "--text", "-t", help="Input text."),
+    file: Path | None = typer.Option(None, "--file", "-f", help="Read input from file."),
     style: str = typer.Option(
-        "concise", "--style", "-s",
+        "concise",
+        "--style",
+        "-s",
         help="Summary style: concise|detailed|bullet_points|executive.",
     ),
     max_length: int = typer.Option(500, "--max-length", help="Target summary length."),
-    strategy: Optional[str] = typer.Option(
-        None, "--strategy", help="Chunking strategy: stuff|map_reduce (auto if omitted).",
+    strategy: str | None = typer.Option(
+        None,
+        "--strategy",
+        help="Chunking strategy: stuff|map_reduce (auto if omitted).",
     ),
-    output: Optional[Path] = typer.Option(None, "--output", "-o", help="Write result to file."),
+    output: Path | None = typer.Option(None, "--output", "-o", help="Write result to file."),
     fmt: str = typer.Option("json", "--format", help="Output format: json|yaml."),
 ) -> None:
     """Summarize text."""
     body = read_input(text, file)
 
     from aiforge import Summarizer
+    from aiforge.modules.summarize.schemas import SummarizeStyle
 
-    s = Summarizer(style=style, max_length=max_length)
+    s = Summarizer(style=cast(SummarizeStyle, style), max_length=max_length)
     resp = s.summarize(body, strategy=strategy)
 
     data = response_to_dict(resp)
@@ -66,17 +71,21 @@ classify_app = typer.Typer(name="classify", invoke_without_command=True)
 @classify_app.callback(invoke_without_command=True)
 def classify(
     ctx: typer.Context,
-    text: Optional[str] = typer.Option(None, "--text", "-t", help="Input text."),
-    file: Optional[Path] = typer.Option(None, "--file", "-f", help="Read input from file."),
+    text: str | None = typer.Option(None, "--text", "-t", help="Input text."),
+    file: Path | None = typer.Option(None, "--file", "-f", help="Read input from file."),
     labels: str = typer.Option(
-        ..., "--labels", "-l",
+        ...,
+        "--labels",
+        "-l",
         help="Comma-separated labels (e.g. 'bug,feature,question').",
     ),
     multi_label: bool = typer.Option(False, "--multi-label", help="Allow multiple labels."),
-    examples_file: Optional[Path] = typer.Option(
-        None, "--examples-file", help="JSON file with few-shot examples [{text, label}].",
+    examples_file: Path | None = typer.Option(
+        None,
+        "--examples-file",
+        help="JSON file with few-shot examples [{text, label}].",
     ),
-    output: Optional[Path] = typer.Option(None, "--output", "-o", help="Write result to file."),
+    output: Path | None = typer.Option(None, "--output", "-o", help="Write result to file."),
     fmt: str = typer.Option("json", "--format", help="Output format: json|yaml."),
 ) -> None:
     """Classify text into labels."""
@@ -114,13 +123,15 @@ extract_app = typer.Typer(name="extract", invoke_without_command=True)
 @extract_app.callback(invoke_without_command=True)
 def extract(
     ctx: typer.Context,
-    text: Optional[str] = typer.Option(None, "--text", "-t", help="Input text."),
-    file: Optional[Path] = typer.Option(None, "--file", "-f", help="Read input from file."),
-    schema_file: Optional[Path] = typer.Option(
-        None, "--schema-file", help="JSON Schema file defining output structure.",
+    text: str | None = typer.Option(None, "--text", "-t", help="Input text."),
+    file: Path | None = typer.Option(None, "--file", "-f", help="Read input from file."),
+    schema_file: Path | None = typer.Option(
+        None,
+        "--schema-file",
+        help="JSON Schema file defining output structure.",
     ),
     max_retries: int = typer.Option(3, "--max-retries", help="Validation retry attempts."),
-    output: Optional[Path] = typer.Option(None, "--output", "-o", help="Write result to file."),
+    output: Path | None = typer.Option(None, "--output", "-o", help="Write result to file."),
     fmt: str = typer.Option("json", "--format", help="Output format: json|yaml."),
 ) -> None:
     """Extract structured data from text."""
@@ -154,17 +165,22 @@ generate_app = typer.Typer(name="generate", invoke_without_command=True)
 @generate_app.callback(invoke_without_command=True)
 def generate(
     ctx: typer.Context,
-    prompt: Optional[str] = typer.Option(None, "--prompt", "-p", help="Prompt or template text."),
-    file: Optional[Path] = typer.Option(None, "--file", "-f", help="Read prompt from file."),
-    var: Optional[list[str]] = typer.Option(
-        None, "--var", help="Template variable as key=value (repeatable).",
+    prompt: str | None = typer.Option(None, "--prompt", "-p", help="Prompt or template text."),
+    file: Path | None = typer.Option(None, "--file", "-f", help="Read prompt from file."),
+    var: list[str] | None = typer.Option(
+        None,
+        "--var",
+        help="Template variable as key=value (repeatable).",
     ),
-    guardrails: Optional[str] = typer.Option(
-        None, "--guardrails", "-g", help="Comma-separated guardrails (e.g. 'no_pii,professional_tone').",
+    guardrails: str | None = typer.Option(
+        None,
+        "--guardrails",
+        "-g",
+        help="Comma-separated guardrails (e.g. 'no_pii,professional_tone').",
     ),
     max_tokens: int = typer.Option(1024, "--max-tokens", help="Max output tokens."),
     temperature: float = typer.Option(0.7, "--temperature", help="Sampling temperature."),
-    output: Optional[Path] = typer.Option(None, "--output", "-o", help="Write result to file."),
+    output: Path | None = typer.Option(None, "--output", "-o", help="Write result to file."),
     fmt: str = typer.Option("json", "--format", help="Output format: json|yaml."),
 ) -> None:
     """Generate text from a prompt or template."""
@@ -212,17 +228,23 @@ moderate_app = typer.Typer(name="moderate", invoke_without_command=True)
 @moderate_app.callback(invoke_without_command=True)
 def moderate(
     ctx: typer.Context,
-    text: Optional[str] = typer.Option(None, "--text", "-t", help="Input text."),
-    file: Optional[Path] = typer.Option(None, "--file", "-f", help="Read input from file."),
+    text: str | None = typer.Option(None, "--text", "-t", help="Input text."),
+    file: Path | None = typer.Option(None, "--file", "-f", help="Read input from file."),
     checks: str = typer.Option(
-        "pii,toxicity,prompt_injection", "--checks", "-c",
+        "pii,toxicity,prompt_injection",
+        "--checks",
+        "-c",
         help="Comma-separated checks: pii,toxicity,prompt_injection.",
     ),
-    pii_types: Optional[str] = typer.Option(
-        None, "--pii-types", help="Comma-separated PII types: email,phone,ssn,credit_card.",
+    pii_types: str | None = typer.Option(
+        None,
+        "--pii-types",
+        help="Comma-separated PII types: email,phone,ssn,credit_card.",
     ),
-    redact: bool = typer.Option(False, "--redact", "-r", help="Redact PII instead of just flagging."),
-    output: Optional[Path] = typer.Option(None, "--output", "-o", help="Write result to file."),
+    redact: bool = typer.Option(
+        False, "--redact", "-r", help="Redact PII instead of just flagging."
+    ),
+    output: Path | None = typer.Option(None, "--output", "-o", help="Write result to file."),
     fmt: str = typer.Option("json", "--format", help="Output format: json|yaml."),
 ) -> None:
     """Check text for safety issues or redact PII."""
@@ -234,10 +256,7 @@ def moderate(
 
     m = Moderator(checks=check_list, pii_types=pii_list)
 
-    if redact:
-        resp = m.redact(body)
-    else:
-        resp = m.check(body)
+    resp = m.redact(body) if redact else m.check(body)
 
     data = response_to_dict(resp)
     if output:
@@ -260,24 +279,27 @@ translate_app = typer.Typer(name="translate", invoke_without_command=True)
 @translate_app.callback(invoke_without_command=True)
 def translate(
     ctx: typer.Context,
-    text: Optional[str] = typer.Option(None, "--text", "-t", help="Input text."),
-    file: Optional[Path] = typer.Option(None, "--file", "-f", help="Read input from file."),
+    text: str | None = typer.Option(None, "--text", "-t", help="Input text."),
+    file: Path | None = typer.Option(None, "--file", "-f", help="Read input from file."),
     target: str = typer.Option("English", "--target", help="Target language."),
     source: str = typer.Option("auto", "--source", help="Source language (auto-detect if 'auto')."),
     formality: str = typer.Option("neutral", "--formality", help="Tone: formal|informal|neutral."),
-    domain: Optional[str] = typer.Option(None, "--domain", help="Domain hint (e.g. 'legal', 'medical')."),
-    output: Optional[Path] = typer.Option(None, "--output", "-o", help="Write result to file."),
+    domain: str | None = typer.Option(
+        None, "--domain", help="Domain hint (e.g. 'legal', 'medical')."
+    ),
+    output: Path | None = typer.Option(None, "--output", "-o", help="Write result to file."),
     fmt: str = typer.Option("json", "--format", help="Output format: json|yaml."),
 ) -> None:
     """Translate text between languages."""
     body = read_input(text, file)
 
     from aiforge import Translator
+    from aiforge.modules.translate.schemas import Formality
 
     t = Translator(
         target_language=target,
         source_language=source,
-        formality=formality,
+        formality=cast(Formality, formality),
         domain=domain,
     )
     resp = t.translate(body)
@@ -303,18 +325,21 @@ def vision(
     ctx: typer.Context,
     source: str = typer.Option(..., "--source", "-s", help="Image file path or URL."),
     task: str = typer.Option("describe", "--task", help="Task: describe|qa|extract|classify."),
-    question: Optional[str] = typer.Option(None, "--question", "-q", help="Question for QA task."),
-    focus: Optional[str] = typer.Option(None, "--focus", help="Focus area for describe task."),
-    labels: Optional[str] = typer.Option(None, "--labels", "-l", help="Comma-separated labels for classify task."),
-    output: Optional[Path] = typer.Option(None, "--output", "-o", help="Write result to file."),
+    question: str | None = typer.Option(None, "--question", "-q", help="Question for QA task."),
+    focus: str | None = typer.Option(None, "--focus", help="Focus area for describe task."),
+    labels: str | None = typer.Option(
+        None, "--labels", "-l", help="Comma-separated labels for classify task."
+    ),
+    output: Path | None = typer.Option(None, "--output", "-o", help="Write result to file."),
     fmt: str = typer.Option("json", "--format", help="Output format: json|yaml."),
 ) -> None:
     """Analyze an image with a vision model."""
     from aiforge import Vision
+    from aiforge.modules.vision.schemas import VisionTask
 
     label_list = [lb.strip() for lb in labels.split(",") if lb.strip()] if labels else None
 
-    v = Vision(task=task)
+    v = Vision(task=cast(VisionTask, task))
     resp = v.analyze(source=source, question=question, focus=focus, labels=label_list)
 
     data = response_to_dict(resp)
@@ -336,15 +361,20 @@ rewrite_app = typer.Typer(name="rewrite", invoke_without_command=True)
 @rewrite_app.callback(invoke_without_command=True)
 def rewrite(
     ctx: typer.Context,
-    text: Optional[str] = typer.Option(None, "--text", "-t", help="Input text to rewrite."),
-    file: Optional[Path] = typer.Option(None, "--file", "-f", help="Read input from file."),
-    instructions: Optional[str] = typer.Option(None, "--instructions", "-i", help="Rewriting instructions."),
-    tone: Optional[str] = typer.Option(None, "--tone", help="Target tone (e.g. formal, casual)."),
-    reading_level: Optional[str] = typer.Option(None, "--reading-level", help="Target reading level."),
-    guardrails: Optional[str] = typer.Option(
-        None, "--guardrails", "-g", help="Comma-separated guardrails.",
+    text: str | None = typer.Option(None, "--text", "-t", help="Input text to rewrite."),
+    file: Path | None = typer.Option(None, "--file", "-f", help="Read input from file."),
+    instructions: str | None = typer.Option(
+        None, "--instructions", "-i", help="Rewriting instructions."
     ),
-    output: Optional[Path] = typer.Option(None, "--output", "-o", help="Write result to file."),
+    tone: str | None = typer.Option(None, "--tone", help="Target tone (e.g. formal, casual)."),
+    reading_level: str | None = typer.Option(None, "--reading-level", help="Target reading level."),
+    guardrails: str | None = typer.Option(
+        None,
+        "--guardrails",
+        "-g",
+        help="Comma-separated guardrails.",
+    ),
+    output: Path | None = typer.Option(None, "--output", "-o", help="Write result to file."),
     fmt: str = typer.Option("json", "--format", help="Output format: json|yaml."),
 ) -> None:
     """Rewrite text according to instructions."""
@@ -378,12 +408,15 @@ sentiment_app = typer.Typer(name="sentiment", invoke_without_command=True)
 @sentiment_app.callback(invoke_without_command=True)
 def sentiment(
     ctx: typer.Context,
-    text: Optional[str] = typer.Option(None, "--text", "-t", help="Input text."),
-    file: Optional[Path] = typer.Option(None, "--file", "-f", help="Read input from file."),
-    aspects: Optional[str] = typer.Option(
-        None, "--aspects", "-a", help="Comma-separated aspects to analyze.",
+    text: str | None = typer.Option(None, "--text", "-t", help="Input text."),
+    file: Path | None = typer.Option(None, "--file", "-f", help="Read input from file."),
+    aspects: str | None = typer.Option(
+        None,
+        "--aspects",
+        "-a",
+        help="Comma-separated aspects to analyze.",
     ),
-    output: Optional[Path] = typer.Option(None, "--output", "-o", help="Write result to file."),
+    output: Path | None = typer.Option(None, "--output", "-o", help="Write result to file."),
     fmt: str = typer.Option("json", "--format", help="Output format: json|yaml."),
 ) -> None:
     """Analyze text sentiment."""

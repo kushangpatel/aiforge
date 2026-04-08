@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
-from unittest.mock import MagicMock, patch
+from typing import Any, cast
 
 import pytest
 
@@ -12,7 +11,6 @@ from aiforge.core.vectorstore import VectorStoreAdapter
 from aiforge.core.vectorstore_factory import build_vectorstore
 from aiforge.infra.config import AIForgeSettings
 from aiforge.registry import register_vectorstore
-
 
 # ---------------------------------------------------------------------------
 # Helpers — minimal concrete stub
@@ -44,7 +42,9 @@ class _StubStore(VectorStoreAdapter):
 class _PgStub(_StubStore):
     """pgvector-like stub."""
 
-    def __init__(self, *, dsn: str | None = None, collection_name: str = "default", **kw: Any) -> None:
+    def __init__(
+        self, *, dsn: str | None = None, collection_name: str = "default", **kw: Any
+    ) -> None:
         super().__init__(dsn=dsn, collection_name=collection_name, **kw)
         self.dsn = dsn
         self.collection_name = collection_name
@@ -53,8 +53,14 @@ class _PgStub(_StubStore):
 class _PineconeStub(_StubStore):
     """Pinecone-like stub."""
 
-    def __init__(self, *, api_key: str | None = None, index_name: str | None = None,
-                 namespace: str = "default", **kw: Any) -> None:
+    def __init__(
+        self,
+        *,
+        api_key: str | None = None,
+        index_name: str | None = None,
+        namespace: str = "default",
+        **kw: Any,
+    ) -> None:
         super().__init__(api_key=api_key, index_name=index_name, namespace=namespace, **kw)
         self.api_key = api_key
         self.index_name = index_name
@@ -64,8 +70,14 @@ class _PineconeStub(_StubStore):
 class _QdrantStub(_StubStore):
     """Qdrant-like stub."""
 
-    def __init__(self, *, url: str | None = None, api_key: str | None = None,
-                 collection_name: str = "default", **kw: Any) -> None:
+    def __init__(
+        self,
+        *,
+        url: str | None = None,
+        api_key: str | None = None,
+        collection_name: str = "default",
+        **kw: Any,
+    ) -> None:
         super().__init__(url=url, api_key=api_key, collection_name=collection_name, **kw)
         self.url = url
         self.api_key = api_key
@@ -149,7 +161,7 @@ class TestBuildVectorstorePgvector:
             PGVECTOR_DSN="postgresql://u:p@localhost/db",
         )
         store = build_vectorstore(collection_name="docs", settings=settings)
-        assert store.collection_name == "docs"
+        assert cast(Any, store).collection_name == "docs"
 
     def test_pgvector_no_dsn_raises(self) -> None:
         """When DSN not set, ConfigError is raised early."""
@@ -167,7 +179,7 @@ class TestBuildVectorstorePgvector:
             PGVECTOR_COLLECTION="my_table",
         )
         store = build_vectorstore(settings=settings)
-        assert store.collection_name == "my_table"
+        assert cast(Any, store).collection_name == "my_table"
 
     def test_pgvector_config_collection_overridden_by_arg(self) -> None:
         """collection_name arg takes precedence when PGVECTOR_COLLECTION is empty."""
@@ -178,7 +190,7 @@ class TestBuildVectorstorePgvector:
             PGVECTOR_COLLECTION="",
         )
         store = build_vectorstore(collection_name="from_arg", settings=settings)
-        assert store.collection_name == "from_arg"
+        assert cast(Any, store).collection_name == "from_arg"
 
 
 class TestBuildVectorstorePinecone:
@@ -223,7 +235,7 @@ class TestBuildVectorstoreQdrant:
             QDRANT_URL="http://localhost:6333",
         )
         store = build_vectorstore(collection_name="fallback", settings=settings)
-        assert store.collection_name == "fallback"
+        assert cast(Any, store).collection_name == "fallback"
 
     def test_qdrant_no_url_raises(self) -> None:
         """ConfigError raised when QDRANT_URL is missing."""
@@ -241,13 +253,13 @@ class TestBuildVectorstoreCustom:
         settings = AIForgeSettings(VECTOR_STORE="myvec")
         store = build_vectorstore(collection_name="c1", settings=settings)
         assert isinstance(store, _StubStore)
-        assert store.init_kwargs["collection_name"] == "c1"
+        assert cast(_StubStore, store).init_kwargs["collection_name"] == "c1"
 
     def test_overrides_forwarded(self) -> None:
         register_vectorstore("myvec", _StubStore)
         settings = AIForgeSettings(VECTOR_STORE="myvec")
         store = build_vectorstore(collection_name="c1", settings=settings, timeout=30)
-        assert store.init_kwargs["timeout"] == 30
+        assert cast(_StubStore, store).init_kwargs["timeout"] == 30
 
 
 class TestBuildVectorstoreUnregistered:
@@ -373,10 +385,12 @@ class TestVectorStoreValidator:
 
     def test_rejects_empty(self) -> None:
         import pydantic
+
         with pytest.raises(pydantic.ValidationError, match="must not be empty"):
             AIForgeSettings(VECTOR_STORE="")
 
     def test_rejects_whitespace_only(self) -> None:
         import pydantic
+
         with pytest.raises(pydantic.ValidationError, match="must not be empty"):
             AIForgeSettings(VECTOR_STORE="   ")

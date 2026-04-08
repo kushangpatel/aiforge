@@ -83,10 +83,7 @@ async def run_index(body: IndexRequest, background_tasks: BackgroundTasks) -> An
     from aiforge.modules.search.module import SemanticSearch
     from aiforge.modules.search.schemas import SearchDocument
 
-    docs = [
-        SearchDocument(id=d.id, text=d.text, metadata=d.metadata)
-        for d in body.documents
-    ]
+    docs = [SearchDocument(id=d.id, text=d.text, metadata=d.metadata) for d in body.documents]
 
     if body.webhook_url:
         from aiforge.infra.config import get_settings
@@ -104,7 +101,7 @@ async def run_index(body: IndexRequest, background_tasks: BackgroundTasks) -> An
         try:
             validate_webhook_url(body.webhook_url, allow_insecure=settings.WEBHOOK_ALLOW_INSECURE)
         except ValueError as exc:
-            raise HTTPException(status_code=422, detail=str(exc))
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
 
         job = create_job(webhook_url=body.webhook_url)
         webhook_timeout = settings.WEBHOOK_TIMEOUT
@@ -132,13 +129,13 @@ async def run_index(body: IndexRequest, background_tasks: BackgroundTasks) -> An
         ss = SemanticSearch(collection=body.collection)
         result = await ss.aindex(docs)
     except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc))
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     except Exception as exc:
         from aiforge.core.types import RateLimitError
 
         if isinstance(exc, RateLimitError):
-            raise HTTPException(status_code=429, detail=str(exc))
-        raise HTTPException(status_code=503, detail=str(exc))
+            raise HTTPException(status_code=429, detail=str(exc)) from exc
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
     return IndexResponseOut(
         indexed_count=result.indexed_count,
         collection=result.collection,
@@ -163,13 +160,13 @@ async def run_query(body: QueryRequest) -> Any:
             include_embeddings=body.include_embeddings,
         )
     except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc))
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     except Exception as exc:
         from aiforge.core.types import RateLimitError
 
         if isinstance(exc, RateLimitError):
-            raise HTTPException(status_code=429, detail=str(exc))
-        raise HTTPException(status_code=503, detail=str(exc))
+            raise HTTPException(status_code=429, detail=str(exc)) from exc
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
     return SearchResponseOut(
         hits=[
             _HitOut(
@@ -187,4 +184,3 @@ async def run_query(body: QueryRequest) -> Any:
         input_tokens=result.input_tokens,
         latency_ms=result.latency_ms,
     )
-

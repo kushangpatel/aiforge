@@ -7,6 +7,7 @@ st.caption("Analyze images — describe, answer questions, extract data, or clas
 
 try:
     from aiforge.modules.vision.widget import render
+
     render()
 except ImportError as exc:
     st.error(f"Module unavailable: {exc}")

@@ -39,7 +39,9 @@ def _schema_to_description(schema: type[BaseModel] | dict[str, Any]) -> str:
         return json.dumps(schema.model_json_schema(), indent=2)
     if isinstance(schema, dict):
         return json.dumps(schema, indent=2)
-    raise TypeError(f"output_schema must be a Pydantic BaseModel subclass or dict, got {type(schema)}")
+    raise TypeError(
+        f"output_schema must be a Pydantic BaseModel subclass or dict, got {type(schema)}"
+    )
 
 
 def _format_examples(examples: list[ExtractExample]) -> str:
@@ -106,7 +108,9 @@ class Extractor(BaseModule):
             raise ValueError("text must not be empty or whitespace-only")
         schema = output_schema or self.output_schema
         if schema is None:
-            raise ValueError("output_schema must be provided either in constructor or extract() call")
+            raise ValueError(
+                "output_schema must be provided either in constructor or extract() call"
+            )
         exs = examples if examples is not None else self.examples
         t0 = time.monotonic()
         return self._extract_loop(text, schema, exs, t0, system_prompt=system_prompt)
@@ -124,7 +128,9 @@ class Extractor(BaseModule):
             raise ValueError("text must not be empty or whitespace-only")
         schema = output_schema or self.output_schema
         if schema is None:
-            raise ValueError("output_schema must be provided either in constructor or extract() call")
+            raise ValueError(
+                "output_schema must be provided either in constructor or extract() call"
+            )
         exs = examples if examples is not None else self.examples
         t0 = time.monotonic()
         return await self._aextract_loop(text, schema, exs, t0, system_prompt=system_prompt)
@@ -165,14 +171,22 @@ class Extractor(BaseModule):
         total_cost = 0.0
         raw_json = ""
         error_msg = ""
+        model_name = ""
 
         for attempt in range(self.max_retries):
             messages = self._build_messages(
-                text, schema_desc, examples_section, attempt, raw_json, error_msg,
+                text,
+                schema_desc,
+                examples_section,
+                attempt,
+                raw_json,
+                error_msg,
                 system=resolved_system,
             )
             llm = self._call_llm(messages, temperature=self.temperature)
             from aiforge.core.pricing import calculate_cost
+
+            model_name = llm.model
             cost = calculate_cost(llm.model, llm.input_tokens, llm.output_tokens)
             total_in += llm.input_tokens
             total_out += llm.output_tokens
@@ -189,7 +203,7 @@ class Extractor(BaseModule):
                     cost=total_cost,
                     input_tokens=total_in,
                     output_tokens=total_out,
-                    model=llm.model,
+                    model=model_name,
                     latency_ms=(time.monotonic() - t0) * 1000,
                 )
             error_msg = err
@@ -208,7 +222,7 @@ class Extractor(BaseModule):
             cost=total_cost,
             input_tokens=total_in,
             output_tokens=total_out,
-            model=llm.model,
+            model=model_name,
             latency_ms=(time.monotonic() - t0) * 1000,
         )
 
@@ -234,14 +248,22 @@ class Extractor(BaseModule):
         total_cost = 0.0
         raw_json = ""
         error_msg = ""
+        model_name = ""
 
         for attempt in range(self.max_retries):
             messages = self._build_messages(
-                text, schema_desc, examples_section, attempt, raw_json, error_msg,
+                text,
+                schema_desc,
+                examples_section,
+                attempt,
+                raw_json,
+                error_msg,
                 system=resolved_system,
             )
             llm = await self._acall_llm(messages, temperature=self.temperature)
             from aiforge.core.pricing import calculate_cost
+
+            model_name = llm.model
             cost = calculate_cost(llm.model, llm.input_tokens, llm.output_tokens)
             total_in += llm.input_tokens
             total_out += llm.output_tokens
@@ -258,7 +280,7 @@ class Extractor(BaseModule):
                     cost=total_cost,
                     input_tokens=total_in,
                     output_tokens=total_out,
-                    model=llm.model,
+                    model=model_name,
                     latency_ms=(time.monotonic() - t0) * 1000,
                 )
             error_msg = err
@@ -276,7 +298,7 @@ class Extractor(BaseModule):
             cost=total_cost,
             input_tokens=total_in,
             output_tokens=total_out,
-            model=llm.model,
+            model=model_name,
             latency_ms=(time.monotonic() - t0) * 1000,
         )
 

@@ -6,8 +6,9 @@ created automatically on first use if it does not already exist.
 
 from __future__ import annotations
 
-import structlog
 from typing import Any
+
+import structlog
 
 from aiforge.core.vectorstore import VectorStoreAdapter
 
@@ -66,7 +67,7 @@ class QdrantVectorStore(VectorStoreAdapter):
         from qdrant_client.models import PointStruct
 
         points = []
-        for doc_id, emb, text, meta in zip(ids, embeddings, texts, metadatas):
+        for doc_id, emb, text, meta in zip(ids, embeddings, texts, metadatas, strict=False):
             if "_text" in meta:
                 logger.warning(
                     "vectorstore.qdrant.reserved_key",

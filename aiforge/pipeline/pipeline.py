@@ -20,9 +20,10 @@ Example::
 
 from __future__ import annotations
 
+import contextlib
 from typing import TYPE_CHECKING, Any
 
-from aiforge.pipeline.schemas import PipelineRequest, PipelineResult
+from aiforge.pipeline.schemas import PipelineResult
 
 if TYPE_CHECKING:
     from aiforge.core.types import BaseModule, ModuleResponse
@@ -38,7 +39,7 @@ class Pipeline:
 
     def __init__(
         self,
-        steps: list[tuple[str, "BaseModule | Router"]],
+        steps: list[tuple[str, BaseModule | Router]],
         *,
         halt_on_flag: bool = True,
     ) -> None:
@@ -111,10 +112,8 @@ class Pipeline:
                 response = module.run(current_input, **(context or {}))
                 results[name] = response
                 previous_response = response
-                try:
+                with contextlib.suppress(NotImplementedError):
                     current_input = response.to_text()
-                except NotImplementedError:
-                    pass  # Module doesn't support chaining — keep current_input
 
         total_cost = sum(r.cost for r in results.values())
         total_tokens = sum(r.input_tokens + r.output_tokens for r in results.values())
@@ -161,19 +160,15 @@ class Pipeline:
                 if response is not None:
                     results[name] = response
                     previous_response = response
-                    try:
+                    with contextlib.suppress(NotImplementedError):
                         current_input = response.to_text()
-                    except NotImplementedError:
-                        pass
             else:
                 module: BaseModule = step  # type: ignore[assignment]
                 response = await module.arun(current_input, **(context or {}))
                 results[name] = response
                 previous_response = response
-                try:
+                with contextlib.suppress(NotImplementedError):
                     current_input = response.to_text()
-                except NotImplementedError:
-                    pass
 
         total_cost = sum(r.cost for r in results.values())
         total_tokens = sum(r.input_tokens + r.output_tokens for r in results.values())

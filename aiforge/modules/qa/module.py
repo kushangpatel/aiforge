@@ -217,7 +217,9 @@ class DocQA(BaseModule):
         loader = DocLoader(file_extensions=file_extensions)
         loop = asyncio.get_running_loop()
         documents, stats = await loop.run_in_executor(
-            None, loader.load, source,
+            None,
+            loader.load,
+            source,
         )
 
         if not documents:
@@ -341,9 +343,7 @@ class DocQA(BaseModule):
 
         coll_stats = self._store.collection_stats(self.collection)
         if coll_stats.get("chunks", 0) == 0:
-            raise AIForgeError(
-                f"No documents ingested in collection '{self.collection}'"
-            )
+            raise AIForgeError(f"No documents ingested in collection '{self.collection}'")
 
         graph = build_qa_graph(
             llm_fn=self._make_llm_fn(system_prompt=system_prompt),
@@ -372,9 +372,7 @@ class DocQA(BaseModule):
 
         coll_stats = self._store.collection_stats(self.collection)
         if coll_stats.get("chunks", 0) == 0:
-            raise AIForgeError(
-                f"No documents ingested in collection '{self.collection}'"
-            )
+            raise AIForgeError(f"No documents ingested in collection '{self.collection}'")
 
         graph = build_qa_graph(
             llm_fn=self._make_llm_fn(system_prompt=system_prompt),
@@ -415,9 +413,7 @@ class DocQA(BaseModule):
 
     def delete_collection(self, collection: str | None = None) -> None:
         """Delete *collection* (defaults to this instance's collection)."""
-        self._store.delete_collection(
-            collection if collection is not None else self.collection
-        )
+        self._store.delete_collection(collection if collection is not None else self.collection)
 
     # ------------------------------------------------------------------
     # Private helpers
@@ -460,13 +456,17 @@ class DocQA(BaseModule):
         ) -> list[dict[str, Any]]:
             embedding = self.embedding_provider.embed_query(query_text)
             return self._store.query(
-                embedding=embedding, top_k=top_k, filter=filter,
+                embedding=embedding,
+                top_k=top_k,
+                filter=filter,
             )
 
         return _retrieve
 
     def _initial_state(
-        self, query: str, filter_repo: str | None,
+        self,
+        query: str,
+        filter_repo: str | None,
     ) -> dict[str, Any]:
         return {
             "query": query,

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
@@ -14,7 +14,7 @@ class TranslateRequest(BaseModel):
     text: str
     target_language: str = "English"
     source_language: str = "auto"
-    formality: str = Field(default="neutral", pattern="^(formal|informal|neutral)$")
+    formality: Literal["formal", "informal", "neutral"] = "neutral"
     domain: str | None = None
 
 
@@ -44,13 +44,13 @@ async def run_translate(body: TranslateRequest) -> Any:
         )
         result = await t.atranslate(body.text)
     except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc))
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     except Exception as exc:
         from aiforge.core.types import RateLimitError
 
         if isinstance(exc, RateLimitError):
-            raise HTTPException(status_code=429, detail=str(exc))
-        raise HTTPException(status_code=503, detail=str(exc))
+            raise HTTPException(status_code=429, detail=str(exc)) from exc
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
     return TranslateRouteResponse(
         text=result.text,
         source_language=result.source_language,

@@ -26,7 +26,7 @@ import structlog
 _logger = structlog.get_logger(__name__)
 
 # Module-level singleton
-_instance: "RateLimiter | None" = None
+_instance: RateLimiter | None = None
 _instance_lock = threading.Lock()
 
 
@@ -103,7 +103,7 @@ class RateLimiter:
     # ------------------------------------------------------------------
 
     @classmethod
-    def get_instance(cls, rpm: int = 500, tpm: int = 150_000) -> "RateLimiter":
+    def get_instance(cls, rpm: int = 500, tpm: int = 150_000) -> RateLimiter:
         """Return (or create) the process-level rate limiter singleton."""
         global _instance
         if _instance is None:

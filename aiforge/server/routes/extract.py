@@ -49,13 +49,13 @@ async def run_extract(body: ExtractRequest) -> Any:
         e = Extractor(output_schema=body.output_schema, examples=examples or None)
         result = await e.aextract(body.text)
     except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc))
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     except Exception as exc:
         from aiforge.core.types import RateLimitError
 
         if isinstance(exc, RateLimitError):
-            raise HTTPException(status_code=429, detail=str(exc))
-        raise HTTPException(status_code=503, detail=str(exc))
+            raise HTTPException(status_code=429, detail=str(exc)) from exc
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
     return ExtractResponse(
         data=result.data,
         raw_json=result.raw_json,
@@ -67,4 +67,3 @@ async def run_extract(body: ExtractRequest) -> Any:
         model=result.model,
         latency_ms=result.latency_ms,
     )
-

@@ -67,8 +67,7 @@ def _encode_image(source: str | Path) -> tuple[str, str]:
     mime, _ = mimetypes.guess_type(str(path))
     if mime not in _SUPPORTED_MIME_TYPES:
         raise ValueError(
-            f"Unsupported image type {mime!r}. "
-            f"Supported: {sorted(_SUPPORTED_MIME_TYPES)}"
+            f"Unsupported image type {mime!r}. Supported: {sorted(_SUPPORTED_MIME_TYPES)}"
         )
     data = base64.b64encode(path.read_bytes()).decode("ascii")
     return data, mime
@@ -150,7 +149,9 @@ class Vision(BaseModule):
         """
         t0 = time.monotonic()
         system, user_text = self._resolve_prompts(
-            question=question, focus=focus, labels=labels,
+            question=question,
+            focus=focus,
+            labels=labels,
             system_prompt=system_prompt,
         )
         content = _build_image_content(source, user_text)
@@ -191,7 +192,9 @@ class Vision(BaseModule):
         """Async version of :meth:`analyze`."""
         t0 = time.monotonic()
         system, user_text = self._resolve_prompts(
-            question=question, focus=focus, labels=labels,
+            question=question,
+            focus=focus,
+            labels=labels,
             system_prompt=system_prompt,
         )
         content = _build_image_content(source, user_text)

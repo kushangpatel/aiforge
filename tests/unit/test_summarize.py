@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from pydantic import BaseModel
 
 from aiforge.modules.summarize.module import (
     Summarizer,
@@ -22,8 +21,7 @@ from aiforge.modules.summarize.prompts import (
     SUMMARIZE_REDUCE,
     SUMMARIZE_SYSTEM,
 )
-from aiforge.modules.summarize.schemas import SummarizeResponse
-
+from aiforge.modules.summarize.schemas import SummarizeResponse, SummarizeStyle
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -37,7 +35,7 @@ def _sum(
 ) -> Summarizer:
     """Instantiate a Summarizer bypassing BaseModule provider initialisation."""
     s = object.__new__(Summarizer)
-    s.style = style
+    s.style = cast(SummarizeStyle, style)
     s.max_length = max_length
     s.temperature = temperature
 
@@ -147,7 +145,7 @@ class TestConstructor:
 
     def test_invalid_style_raises(self) -> None:
         with pytest.raises(ValueError, match="style"):
-            Summarizer(style="haiku")
+            Summarizer(style="haiku")  # type: ignore[arg-type]
 
 
 # ---------------------------------------------------------------------------
@@ -178,9 +176,11 @@ class TestStrategySelection:
     def test_auto_long_text_picks_map_reduce(self) -> None:
         s = _sum()
         # Force model to have a tiny context window
-        with patch("aiforge.core.pricing.get_context_window", return_value=100):
-            with patch("aiforge.modules.summarize.module._count_tokens", return_value=90):
-                result = s._choose_strategy("x" * 1000, None)
+        with (
+            patch("aiforge.core.pricing.get_context_window", return_value=100),
+            patch("aiforge.modules.summarize.module._count_tokens", return_value=90),
+        ):
+            result = s._choose_strategy("x" * 1000, None)
         assert result == "map_reduce"
 
 
@@ -215,7 +215,7 @@ class TestStuffSync:
         s = _sum(style="bullet_points")
         fake = _fake_llm("- Point one\n- Point two")
         with patch.object(s, "_call_llm", return_value=fake) as mock_call:
-            r = s.summarize("Some text.")
+            s.summarize("Some text.")
         call_messages = mock_call.call_args[0][0]
         assert "bullet" in call_messages[1]["content"].lower()
 
@@ -223,7 +223,7 @@ class TestStuffSync:
         s = _sum(style="executive")
         fake = _fake_llm("Executive summary.")
         with patch.object(s, "_call_llm", return_value=fake) as mock_call:
-            r = s.summarize("Some text.")
+            s.summarize("Some text.")
         call_messages = mock_call.call_args[0][0]
         assert "executive" in call_messages[1]["content"].lower()
 
@@ -328,12 +328,14 @@ class TestMapReduceSync:
                 return map_reply
             return reduce_reply
 
-        with patch.object(s, "_call_llm", side_effect=_side_effect):
-            with patch(
+        with (
+            patch.object(s, "_call_llm", side_effect=_side_effect),
+            patch(
                 "aiforge.modules.summarize.module._split_text",
                 return_value=["chunk one", "chunk two"],
-            ):
-                r = s.summarize("long text", strategy="map_reduce")
+            ),
+        ):
+            r = s.summarize("long text", strategy="map_reduce")
 
         assert r.summary == "Final combined summary."
         assert r.strategy_used == "map_reduce"
@@ -356,12 +358,14 @@ class TestMapReduceSync:
                 return map_reply
             return reduce_reply
 
-        with patch.object(s, "_call_llm", side_effect=_side_effect):
-            with patch(
+        with (
+            patch.object(s, "_call_llm", side_effect=_side_effect),
+            patch(
                 "aiforge.modules.summarize.module._split_text",
                 return_value=["single chunk"],
-            ):
-                r = s.summarize("text", strategy="map_reduce")
+            ),
+        ):
+            r = s.summarize("text", strategy="map_reduce")
 
         assert r.strategy_used == "map_reduce"
         assert r.chunks_processed == 1
@@ -369,12 +373,14 @@ class TestMapReduceSync:
     def test_map_reduce_cost_accumulates(self) -> None:
         s = _sum()
         fake = _fake_llm("Summary.")
-        with patch.object(s, "_call_llm", return_value=fake):
-            with patch(
+        with (
+            patch.object(s, "_call_llm", return_value=fake),
+            patch(
                 "aiforge.modules.summarize.module._split_text",
                 return_value=["c1", "c2", "c3"],
-            ):
-                r = s.summarize("text", strategy="map_reduce")
+            ),
+        ):
+            r = s.summarize("text", strategy="map_reduce")
         # 3 map + 1 reduce = 4 calls
         assert r.input_tokens == 50 * 4
         assert r.output_tokens == 30 * 4
@@ -388,12 +394,14 @@ class TestMapReduceSync:
             calls.append(messages)
             return _fake_llm("Summary.")
 
-        with patch.object(s, "_call_llm", side_effect=_record_call):
-            with patch(
+        with (
+            patch.object(s, "_call_llm", side_effect=_record_call),
+            patch(
                 "aiforge.modules.summarize.module._split_text",
                 return_value=["chunk1"],
-            ):
-                s.summarize("text", strategy="map_reduce")
+            ),
+        ):
+            s.summarize("text", strategy="map_reduce")
 
         # First call is map, second is reduce
         assert "chunk1" in calls[0][1]["content"]
@@ -403,12 +411,14 @@ class TestMapReduceSync:
     def test_latency_recorded(self) -> None:
         s = _sum()
         fake = _fake_llm("Summary.")
-        with patch.object(s, "_call_llm", return_value=fake):
-            with patch(
+        with (
+            patch.object(s, "_call_llm", return_value=fake),
+            patch(
                 "aiforge.modules.summarize.module._split_text",
                 return_value=["c1"],
-            ):
-                r = s.summarize("text", strategy="map_reduce")
+            ),
+        ):
+            r = s.summarize("text", strategy="map_reduce")
         assert r.latency_ms > 0.0
 
 
@@ -432,12 +442,14 @@ class TestMapReduceAsync:
                 return map_reply
             return reduce_reply
 
-        with patch.object(s, "_acall_llm", new_callable=AsyncMock, side_effect=_side_effect):
-            with patch(
+        with (
+            patch.object(s, "_acall_llm", new_callable=AsyncMock, side_effect=_side_effect),
+            patch(
                 "aiforge.modules.summarize.module._split_text",
                 return_value=["chunk one", "chunk two"],
-            ):
-                r = await s.asummarize("long text", strategy="map_reduce")
+            ),
+        ):
+            r = await s.asummarize("long text", strategy="map_reduce")
 
         assert r.summary == "Final async combined."
         assert r.strategy_used == "map_reduce"
@@ -446,12 +458,14 @@ class TestMapReduceAsync:
     async def test_async_map_reduce_cost_accumulates(self) -> None:
         s = _sum()
         fake = _fake_llm("Summary.")
-        with patch.object(s, "_acall_llm", new_callable=AsyncMock, return_value=fake):
-            with patch(
+        with (
+            patch.object(s, "_acall_llm", new_callable=AsyncMock, return_value=fake),
+            patch(
                 "aiforge.modules.summarize.module._split_text",
                 return_value=["c1", "c2"],
-            ):
-                r = await s.asummarize("text", strategy="map_reduce")
+            ),
+        ):
+            r = await s.asummarize("text", strategy="map_reduce")
         # 2 map + 1 reduce = 3 calls
         assert r.input_tokens == 50 * 3
         assert r.output_tokens == 30 * 3

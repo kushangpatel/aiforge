@@ -36,12 +36,8 @@ MODEL_CATALOG: list[ModelSpec] = [
     ModelSpec("gpt-4o-mini", "openai", "medium", 0.15, 0.60, 128_000),
     ModelSpec("gpt-3.5-turbo", "openai", "low", 0.50, 1.50, 16_385),
     # Anthropic
-    ModelSpec(
-        "claude-3-5-sonnet-20241022", "anthropic", "high", 3.00, 15.00, 200_000
-    ),
-    ModelSpec(
-        "claude-3-haiku-20240307", "anthropic", "medium", 0.25, 1.25, 200_000
-    ),
+    ModelSpec("claude-3-5-sonnet-20241022", "anthropic", "high", 3.00, 15.00, 200_000),
+    ModelSpec("claude-3-haiku-20240307", "anthropic", "medium", 0.25, 1.25, 200_000),
     # Ollama (local — zero cost)
     ModelSpec("llama3.1", "ollama", "medium", 0.0, 0.0, 131_072),
     ModelSpec("llama3.2", "ollama", "low", 0.0, 0.0, 131_072),
@@ -115,8 +111,7 @@ class ModelRouter:
         """
         if quality not in _TIER_RANK:
             raise ValueError(
-                f"Invalid quality tier: {quality!r}. "
-                f"Must be one of {sorted(_TIER_RANK)}"
+                f"Invalid quality tier: {quality!r}. Must be one of {sorted(_TIER_RANK)}"
             )
 
         min_rank = _TIER_RANK[quality]
@@ -125,10 +120,7 @@ class ModelRouter:
             for m in self._catalog
             if _TIER_RANK.get(m.tier, 0) >= min_rank
             and (provider is None or m.provider == provider)
-            and (
-                self._available_providers is None
-                or m.provider in self._available_providers
-            )
+            and (self._available_providers is None or m.provider in self._available_providers)
             and m.context_window >= min_context
         ]
 
@@ -140,9 +132,7 @@ class ModelRouter:
 
         # Sort: prefer_local puts ollama first, then by input cost ascending
         def _sort_key(m: ModelSpec) -> tuple[int, float]:
-            local_priority = (
-                0 if (prefer_local and m.provider == "ollama") else 1
-            )
+            local_priority = 0 if (prefer_local and m.provider == "ollama") else 1
             return (local_priority, m.input_cost_per_m)
 
         candidates.sort(key=_sort_key)
@@ -180,9 +170,7 @@ class ModelRouter:
         """Return catalog entries matching optional filters."""
         results = []
         for m in self._catalog:
-            if quality and _TIER_RANK.get(m.tier, 0) < _TIER_RANK.get(
-                quality, 0
-            ):
+            if quality and _TIER_RANK.get(m.tier, 0) < _TIER_RANK.get(quality, 0):
                 continue
             if provider and m.provider != provider:
                 continue

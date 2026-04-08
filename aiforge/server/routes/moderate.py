@@ -88,4 +88,3 @@ async def run_moderate(body: ModerateRequest) -> Any:
         output_tokens=result.output_tokens,
         latency_ms=result.latency_ms,
     )
-

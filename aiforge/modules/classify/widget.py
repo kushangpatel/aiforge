@@ -63,13 +63,9 @@ def render() -> None:
             else:
                 dropped_labels += 1
     if malformed_lines:
-        st.warning(
-            f"{malformed_lines} example line(s) skipped — use format: `text | label`"
-        )
+        st.warning(f"{malformed_lines} example line(s) skipped — use format: `text | label`")
     if dropped_labels:
-        st.warning(
-            f"{dropped_labels} example(s) ignored — label not found in taxonomy"
-        )
+        st.warning(f"{dropped_labels} example(s) ignored — label not found in taxonomy")
 
     with st.spinner("Classifying..."):
         try:
@@ -97,12 +93,7 @@ def render() -> None:
 
     if result.scores:
         st.subheader("Scores")
-        st.table(
-            [
-                {"Label": s.label, "Confidence": f"{s.confidence:.0%}"}
-                for s in result.scores
-            ]
-        )
+        st.table([{"Label": s.label, "Confidence": f"{s.confidence:.0%}"} for s in result.scores])
 
     with st.expander("Metrics"):
         st.json(

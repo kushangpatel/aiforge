@@ -83,9 +83,21 @@ _AVAILABLE_MODULES = {
                 "type": "selectbox",
                 "label": "Target language",
                 "options": [
-                    "English", "Spanish", "French", "German", "Italian",
-                    "Portuguese", "Chinese", "Japanese", "Korean", "Arabic",
-                    "Hindi", "Russian", "Dutch", "Swedish", "Polish",
+                    "English",
+                    "Spanish",
+                    "French",
+                    "German",
+                    "Italian",
+                    "Portuguese",
+                    "Chinese",
+                    "Japanese",
+                    "Korean",
+                    "Arabic",
+                    "Hindi",
+                    "Russian",
+                    "Dutch",
+                    "Swedish",
+                    "Polish",
                 ],
                 "default": "Spanish",
             },
@@ -136,9 +148,7 @@ def _remove_step(step_id: str) -> None:
     ]
 
 
-def _render_config_field(
-    key_prefix: str, field_name: str, spec: dict[str, Any]
-) -> Any:
+def _render_config_field(key_prefix: str, field_name: str, spec: dict[str, Any]) -> Any:
     """Render a single config field and return its value."""
     widget_key = f"{key_prefix}_{field_name}"
     ftype = spec["type"]
@@ -190,7 +200,7 @@ def _build_module(module_type: str, config_values: dict[str, Any]) -> Any:
     kwargs = dict(config_values)
     if module_type == "Classifier" and "labels" in kwargs:
         raw = kwargs.pop("labels")
-        kwargs["labels"] = [l.strip() for l in raw.splitlines() if l.strip()]
+        kwargs["labels"] = [lb.strip() for lb in raw.splitlines() if lb.strip()]
 
     # Moderator: convert empty checks list to None (use defaults).
     if module_type == "Moderator" and "checks" in kwargs and not kwargs["checks"]:

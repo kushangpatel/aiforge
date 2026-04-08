@@ -7,7 +7,7 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from aiforge.modules.extract.module import (
     Extractor,
@@ -16,7 +16,6 @@ from aiforge.modules.extract.module import (
     _schema_to_description,
 )
 from aiforge.modules.extract.schemas import ExtractExample, ExtractResponse
-
 
 # ---------------------------------------------------------------------------
 # Test Pydantic models
@@ -441,7 +440,9 @@ class TestAextract:
     async def test_async_basic_extraction(self) -> None:
         e = _ext(output_schema=PersonSchema)
         valid_json = '{"name": "Alice", "age": 30}'
-        with patch.object(e, "_acall_llm", new_callable=AsyncMock, return_value=_fake_llm(valid_json)):
+        with patch.object(
+            e, "_acall_llm", new_callable=AsyncMock, return_value=_fake_llm(valid_json)
+        ):
             result = await e.aextract("Alice is 30 years old.")
         assert result.validation_passed is True
         assert result.data == {"name": "Alice", "age": 30}
@@ -496,7 +497,9 @@ class TestPipelineInterface:
     async def test_arun_delegates_to_aextract(self) -> None:
         e = _ext(output_schema=PersonSchema)
         valid_json = '{"name": "B", "age": 2}'
-        with patch.object(e, "_acall_llm", new_callable=AsyncMock, return_value=_fake_llm(valid_json)):
+        with patch.object(
+            e, "_acall_llm", new_callable=AsyncMock, return_value=_fake_llm(valid_json)
+        ):
             result = await e.arun("B is 2")
         assert isinstance(result, ExtractResponse)
         assert result.validation_passed is True
@@ -607,7 +610,7 @@ class TestExtractExample:
         assert ex.output == {"name": "John", "age": 30}
 
     def test_empty_input_rejected(self) -> None:
-        with pytest.raises(Exception):  # Pydantic validation
+        with pytest.raises(ValidationError):
             ExtractExample(input="", output={"x": 1})
 
     def test_empty_output_ok(self) -> None:

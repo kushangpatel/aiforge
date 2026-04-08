@@ -10,8 +10,9 @@ on first use if they do not already exist.
 
 from __future__ import annotations
 
-import structlog
 from typing import Any
+
+import structlog
 
 from aiforge.core.vectorstore import VectorStoreAdapter
 
@@ -58,6 +59,7 @@ class PgVectorStore(VectorStoreAdapter):
         ids: list[str],
     ) -> None:
         import json
+
         from psycopg import sql as pgsql
 
         table = self._collection_name
@@ -78,6 +80,7 @@ class PgVectorStore(VectorStoreAdapter):
                         texts[i : i + _UPSERT_BATCH],
                         [json.dumps(m) for m in metadatas[i : i + _UPSERT_BATCH]],
                         [self._vec_literal(e) for e in embeddings[i : i + _UPSERT_BATCH]],
+                        strict=False,
                     )
                 )
                 cur.executemany(stmt, batch)
@@ -90,13 +93,16 @@ class PgVectorStore(VectorStoreAdapter):
         include_embeddings: bool = False,
     ) -> list[dict[str, Any]]:
         import json
+
         from psycopg import sql as pgsql
 
         table = self._collection_name
         vec = self._vec_literal(embedding)
 
         if include_embeddings:
-            cols_sql = pgsql.SQL("id, text, metadata, embedding <=> %s::vector AS distance, embedding")
+            cols_sql = pgsql.SQL(
+                "id, text, metadata, embedding <=> %s::vector AS distance, embedding"
+            )
         else:
             cols_sql = pgsql.SQL("id, text, metadata, embedding <=> %s::vector AS distance")
 
@@ -172,7 +178,8 @@ class PgVectorStore(VectorStoreAdapter):
         idx_name = f"{table}_embedding_idx"
         with self._conn.cursor() as cur:
             cur.execute(pgsql.SQL("CREATE EXTENSION IF NOT EXISTS vector"))
-            cur.execute(pgsql.SQL("""
+            cur.execute(
+                pgsql.SQL("""
                 CREATE TABLE IF NOT EXISTS {table} (
                     id        TEXT PRIMARY KEY,
                     text      TEXT NOT NULL,
@@ -180,18 +187,21 @@ class PgVectorStore(VectorStoreAdapter):
                     embedding vector({size})
                 )
             """).format(
-                table=pgsql.Identifier(table),
-                size=pgsql.Literal(self._vector_size),
-            ))
-            cur.execute(pgsql.SQL("""
+                    table=pgsql.Identifier(table),
+                    size=pgsql.Literal(self._vector_size),
+                )
+            )
+            cur.execute(
+                pgsql.SQL("""
                 CREATE INDEX IF NOT EXISTS {idx}
                 ON {table}
                 USING ivfflat (embedding vector_cosine_ops)
                 WITH (lists = 100)
             """).format(
-                idx=pgsql.Identifier(idx_name),
-                table=pgsql.Identifier(table),
-            ))
+                    idx=pgsql.Identifier(idx_name),
+                    table=pgsql.Identifier(table),
+                )
+            )
 
     def close(self) -> None:
         """Close the underlying database connection."""

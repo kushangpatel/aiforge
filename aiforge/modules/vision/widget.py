@@ -53,12 +53,9 @@ def render() -> None:
             placeholder="e.g. landscape, portrait, product, document",
         )
         if labels_input.strip():
-            labels = [l.strip() for l in labels_input.split(",") if l.strip()]
+            labels = [lb.strip() for lb in labels_input.split(",") if lb.strip()]
 
-    ready = bool(
-        (source_type == "Upload" and uploaded)
-        or (source_type == "URL" and image_path)
-    )
+    ready = bool((source_type == "Upload" and uploaded) or (source_type == "URL" and image_path))
     if task == "qa" and not question:
         ready = False
     if task == "classify" and not labels:
@@ -70,9 +67,8 @@ def render() -> None:
     # Write uploaded file to temp path
     if source_type == "Upload" and uploaded:
         suffix = Path(uploaded.name).suffix
-        tmp = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
-        tmp.write(uploaded.getvalue())
-        tmp.close()
+        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+            tmp.write(uploaded.getvalue())
         image_path = tmp.name
 
     if not image_path:

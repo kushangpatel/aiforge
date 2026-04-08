@@ -7,6 +7,7 @@ st.caption("Text summarisation with automatic stuff / map-reduce strategy select
 
 try:
     from aiforge.modules.summarize.widget import render
+
     render()
 except ImportError as exc:
     st.error(f"Module unavailable: {exc}")

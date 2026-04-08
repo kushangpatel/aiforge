@@ -6,6 +6,7 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from pydantic import ValidationError
 
 from aiforge.modules.search.module import (
     SemanticSearch,
@@ -62,9 +63,7 @@ def _ss(
 
     provider = MagicMock()
     provider.embed.side_effect = lambda texts: [[0.1, 0.2, 0.3, 0.4]] * len(texts)
-    provider.embed_async = AsyncMock(
-        side_effect=lambda texts: [[0.1, 0.2, 0.3, 0.4]] * len(texts)
-    )
+    provider.embed_async = AsyncMock(side_effect=lambda texts: [[0.1, 0.2, 0.3, 0.4]] * len(texts))
     provider.embed_query.return_value = [0.1, 0.2, 0.3, 0.4]
     provider.embed_query_async = AsyncMock(return_value=[0.1, 0.2, 0.3, 0.4])
     provider.model_name = "text-embedding-3-small"
@@ -75,7 +74,12 @@ def _ss(
 def _sample_raw_hits() -> list[dict]:
     """Chroma-style raw hits with distances."""
     return [
-        {"id": "doc2", "text": "Portable Bluetooth speaker", "metadata": {"price": 79}, "distance": 0.08},
+        {
+            "id": "doc2",
+            "text": "Portable Bluetooth speaker",
+            "metadata": {"price": 79},
+            "distance": 0.08,
+        },
         {"id": "doc1", "text": "Wireless headphones", "metadata": {"price": 299}, "distance": 0.11},
     ]
 
@@ -97,11 +101,11 @@ class TestSearchDocument:
         assert doc.metadata == {}
 
     def test_empty_id_raises(self) -> None:
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             SearchDocument(id="", text="hello")
 
     def test_empty_text_raises(self) -> None:
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             SearchDocument(id="d1", text="")
 
 
@@ -117,11 +121,11 @@ class TestSearchHit:
         assert hit.metadata == {}
 
     def test_score_above_one_raises(self) -> None:
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             SearchHit(id="1", text="t", score=1.01)
 
     def test_score_below_zero_raises(self) -> None:
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             SearchHit(id="1", text="t", score=-0.01)
 
 
@@ -253,6 +257,7 @@ class TestIndex:
         store = _make_store()
         ss = _ss(store=store)
         ss.index(SAMPLE_DOCS)
+        assert ss._embedding_provider is not None
         assert ss._embedding_provider.embed.called
         assert store.add_documents.called
 
@@ -288,10 +293,12 @@ class TestIndex:
     async def test_aindex_returns_correct_count(self) -> None:
         store = _make_store(collection_chunks=2)
         ss = _ss(store=store)
-        result = await ss.aindex([
-            {"id": "a", "text": "async document one"},
-            {"id": "b", "text": "async document two"},
-        ])
+        result = await ss.aindex(
+            [
+                {"id": "a", "text": "async document one"},
+                {"id": "b", "text": "async document two"},
+            ]
+        )
         assert result.indexed_count == 2
         assert result.collection == "test"
 
@@ -306,6 +313,7 @@ class TestIndex:
         store = _make_store(collection_chunks=1)
         ss = _ss(store=store)
         await ss.aindex([{"id": "x", "text": "doc"}])
+        assert ss._embedding_provider is not None
         assert ss._embedding_provider.embed_async.called
 
 
@@ -323,27 +331,33 @@ class TestQuery:
         assert result.query == "audio device"
 
     def test_query_score_is_one_minus_distance(self) -> None:
-        store = _make_store(query_results=[
-            {"id": "d1", "text": "t", "metadata": {}, "distance": 0.2},
-        ])
+        store = _make_store(
+            query_results=[
+                {"id": "d1", "text": "t", "metadata": {}, "distance": 0.2},
+            ]
+        )
         ss = _ss(store=store)
         result = ss.query("q")
         assert abs(result.hits[0].score - 0.8) < 1e-9
 
     def test_query_score_clamped_below_zero(self) -> None:
         # distance > 1.0 should clamp score to 0.0
-        store = _make_store(query_results=[
-            {"id": "d1", "text": "t", "metadata": {}, "distance": 1.1},
-        ])
+        store = _make_store(
+            query_results=[
+                {"id": "d1", "text": "t", "metadata": {}, "distance": 1.1},
+            ]
+        )
         ss = _ss(store=store)
         result = ss.query("q")
         assert result.hits[0].score == 0.0
 
     def test_query_score_clamped_above_one(self) -> None:
         # negative distance (can happen with certain distance metrics)
-        store = _make_store(query_results=[
-            {"id": "d1", "text": "t", "metadata": {}, "distance": -0.1},
-        ])
+        store = _make_store(
+            query_results=[
+                {"id": "d1", "text": "t", "metadata": {}, "distance": -0.1},
+            ]
+        )
         ss = _ss(store=store)
         result = ss.query("q")
         assert result.hits[0].score == 1.0
@@ -391,6 +405,7 @@ class TestQuery:
         store = _make_store(query_results=[])
         ss = _ss(store=store)
         ss.query("test query")
+        assert ss._embedding_provider is not None
         assert ss._embedding_provider.embed_query.called
 
     def test_query_records_cost(self) -> None:
@@ -417,6 +432,7 @@ class TestQuery:
         store = _make_store(query_results=[])
         ss = _ss(store=store)
         await ss.aquery("q")
+        assert ss._embedding_provider is not None
         assert ss._embedding_provider.embed_query_async.called
 
 
@@ -705,11 +721,11 @@ class TestNewSchemas:
         assert req.include_embeddings is False
 
     def test_search_request_top_k_too_low_raises(self) -> None:
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             SearchRequest(query="q", top_k=0)
 
     def test_search_request_top_k_too_high_raises(self) -> None:
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             SearchRequest(query="q", top_k=101)
 
     def test_search_request_include_embeddings_default_false(self) -> None:
@@ -822,4 +838,3 @@ class TestBatchOperations:
         batch_result = ss.run_batch([])
         assert batch_result.results == []
         assert batch_result.failed == []
-

@@ -6,9 +6,9 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from pydantic import ValidationError
 
 from aiforge.mcp.config import MCPServerConfig
-
 
 # ---------------------------------------------------------------------------
 # MCPServerConfig validation
@@ -222,6 +222,7 @@ class TestToolWrapper:
 
         lt = _LoopThread()
         try:
+
             async def _coro() -> str:
                 return "hello"
 
@@ -245,7 +246,10 @@ class TestToolWrapper:
             mock_session.call_tool = AsyncMock(return_value=mock_result)
 
             caller = make_sync_tool_caller(
-                mock_session, "list_issues", timeout=10.0, loop_thread=lt,
+                mock_session,
+                "list_issues",
+                timeout=10.0,
+                loop_thread=lt,
             )
             result = caller(project="TEST")
 
@@ -278,7 +282,7 @@ class TestBuildArgsModel:
         assert Model.__name__ == "MCP_test_tool_Args"
 
         # Required field
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             Model(limit=10)  # missing required 'query'
 
         # Valid instance
@@ -316,6 +320,7 @@ class TestChatAgentMCP:
         agent._mcp_manager = MagicMock()
 
         import structlog
+
         agent.logger = structlog.get_logger()
         agent._provider = None
         agent._embedding_provider = MagicMock()
@@ -327,12 +332,16 @@ class TestChatAgentMCP:
         settings.MCP_SERVERS = []
         agent.settings = settings
         from aiforge.infra.cost_tracker import CostTracker
+
         agent.cost_tracker = CostTracker.get_session()
 
         if mcp_tools:
             tool_descs = "\n".join(f"- {t.name}: {t.description}" for t in agent.tools)
             from aiforge.modules.chat.prompts import TOOL_USE_SYSTEM
-            agent.system_prompt = f"{DEFAULT_SYSTEM_PROMPT}\n\n{TOOL_USE_SYSTEM.format(tool_descriptions=tool_descs)}"
+
+            agent.system_prompt = (
+                f"{DEFAULT_SYSTEM_PROMPT}\n\n{TOOL_USE_SYSTEM.format(tool_descriptions=tool_descs)}"
+            )
         else:
             agent.system_prompt = DEFAULT_SYSTEM_PROMPT
 

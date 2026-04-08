@@ -16,7 +16,8 @@ from __future__ import annotations
 
 import operator
 import re
-from typing import Annotated, Any, Callable, TypedDict
+from collections.abc import Callable
+from typing import Annotated, Any, TypedDict
 
 from langgraph.graph import END, StateGraph
 
@@ -25,7 +26,6 @@ from aiforge.modules.qa.prompts import (
     REASON_PROMPT,
     RESPOND_PROMPT,
 )
-
 
 # ---------------------------------------------------------------------------
 # Agent state
@@ -151,24 +151,17 @@ def build_qa_graph(
             after_colon = cleaned.split(":", 1)[1] if ":" in cleaned else ""
 
             match = re.search(r"(-?\d+\.?\d*)", after_colon)
-            if match:
-                conf = max(0.0, min(1.0, float(match.group(1))))
-            else:
-                conf = 0.7
+            conf = max(0.0, min(1.0, float(match.group(1)))) if match else 0.7
             updates["confidence"] = conf
             updates["decision"] = "sufficient"
-            updates["trace"] = [
-                {"step": "reason", "result": raw, "decision": "sufficient"}
-            ]
+            updates["trace"] = [{"step": "reason", "result": raw, "decision": "sufficient"}]
         else:
             updates["decision"] = "insufficient"
             if ":" in cleaned:
-                refined = cleaned.split(":", 1)[1].strip().strip('"\'')
+                refined = cleaned.split(":", 1)[1].strip().strip("\"'")
                 if refined:
                     updates["current_query"] = refined
-            updates["trace"] = [
-                {"step": "reason", "result": raw, "decision": "insufficient"}
-            ]
+            updates["trace"] = [{"step": "reason", "result": raw, "decision": "insufficient"}]
 
         return updates
 

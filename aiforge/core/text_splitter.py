@@ -19,7 +19,7 @@ _EXT_TO_LANGUAGE: dict[str, Language | None] = {
     ".py": Language.PYTHON,
     ".js": Language.JS,
     ".jsx": Language.JS,
-    ".ts": Language.JS,   # LangChain uses JS splitter for TS
+    ".ts": Language.JS,  # LangChain uses JS splitter for TS
     ".tsx": Language.JS,
     ".go": Language.GO,
     ".java": Language.JAVA,
@@ -30,7 +30,7 @@ _EXT_TO_LANGUAGE: dict[str, Language | None] = {
     ".hpp": Language.CPP,
     ".rb": Language.RUBY,
     ".md": Language.MARKDOWN,
-    ".rst": None,       # prose splitter
+    ".rst": None,  # prose splitter
     ".txt": None,
     ".html": Language.HTML,
     ".htm": Language.HTML,

@@ -102,7 +102,7 @@ async def ingest(body: IngestRequest, background_tasks: BackgroundTasks) -> Any:
         try:
             validate_webhook_url(body.webhook_url, allow_insecure=settings.WEBHOOK_ALLOW_INSECURE)
         except ValueError as exc:
-            raise HTTPException(status_code=422, detail=str(exc))
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
 
         job = create_job(webhook_url=body.webhook_url)
         webhook_timeout = settings.WEBHOOK_TIMEOUT
@@ -138,9 +138,9 @@ async def ingest(body: IngestRequest, background_tasks: BackgroundTasks) -> Any:
             batch_size=body.batch_size,
         )
     except FileNotFoundError as exc:
-        raise HTTPException(status_code=404, detail=str(exc))
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc))
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     return IngestResponseOut(
         chunks_indexed=result.chunks_indexed,
         files_processed=result.files_processed,
@@ -171,9 +171,9 @@ async def ask(body: AskRequest) -> Any:
             include_trace=body.include_trace,
         )
     except AIForgeError as exc:
-        raise HTTPException(status_code=422, detail=str(exc))
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc))
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     return AskResponseOut(
         text=result.text,
         sources=result.sources,

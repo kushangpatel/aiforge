@@ -12,7 +12,8 @@ from __future__ import annotations
 import secrets
 import time
 import uuid
-from typing import TYPE_CHECKING, Callable
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any
 
 import structlog
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -25,13 +26,15 @@ if TYPE_CHECKING:
 _logger = structlog.get_logger(__name__)
 
 # Paths that never require authentication
-_PUBLIC_PATHS: frozenset[str] = frozenset({
-    "/health",
-    "/health/ready",
-    "/docs",
-    "/openapi.json",
-    "/redoc",
-})
+_PUBLIC_PATHS: frozenset[str] = frozenset(
+    {
+        "/health",
+        "/health/ready",
+        "/docs",
+        "/openapi.json",
+        "/redoc",
+    }
+)
 
 
 class AuthMiddleware(BaseHTTPMiddleware):
@@ -41,7 +44,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
     Only active when ``AIFORGE_API_KEY`` is configured.
     """
 
-    def __init__(self, app: "Any", api_key: str | None = None) -> None:  # noqa: ANN401
+    def __init__(self, app: Any, api_key: str | None = None) -> None:  # noqa: ANN401
         super().__init__(app)
         self._api_key = api_key
 
@@ -66,7 +69,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
                 status_code=401,
                 content={"detail": "Missing or invalid Authorization header"},
             )
-        token = auth_header[len("Bearer "):]
+        token = auth_header[len("Bearer ") :]
         if not secrets.compare_digest(token, self._api_key):
             _logger.warning(
                 "Auth failure: invalid API key",

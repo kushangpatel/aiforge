@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
@@ -12,7 +12,7 @@ router = APIRouter(prefix="/vision", tags=["vision"])
 
 class VisionRequest(BaseModel):
     source: str = Field(description="Image URL or base64-encoded data URI.")
-    task: str = Field(default="describe", pattern="^(describe|qa|extract|classify)$")
+    task: Literal["describe", "qa", "extract", "classify"] = "describe"
     question: str | None = None
     focus: str | None = None
     labels: list[str] = Field(default_factory=list)
@@ -43,13 +43,13 @@ async def run_vision(body: VisionRequest) -> Any:
             labels=body.labels or None,
         )
     except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc))
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     except Exception as exc:
         from aiforge.core.types import RateLimitError
 
         if isinstance(exc, RateLimitError):
-            raise HTTPException(status_code=429, detail=str(exc))
-        raise HTTPException(status_code=503, detail=str(exc))
+            raise HTTPException(status_code=429, detail=str(exc)) from exc
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
     return VisionRouteResponse(
         text=result.text,
         task=result.task,

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 from contextlib import AsyncExitStack
 from typing import Any
 
@@ -78,8 +77,7 @@ class MCPClientManager:
             return
 
         try:
-            from mcp import ClientSession, StdioServerParameters
-            from mcp.client.stdio import stdio_client
+            import mcp  # noqa: F401
         except ImportError as exc:
             raise ImportError(
                 "MCP support requires the 'mcp' package. "
@@ -126,17 +124,17 @@ class MCPClientManager:
         from mcp.client.stdio import stdio_client
 
         if cfg.transport == "stdio":
-            server_params = StdioServerParameters(
+            server_params = StdioServerParameters(  # type: ignore[call-arg]
                 command=cfg.command,  # type: ignore[arg-type]
                 args=cfg.args,
                 env=cfg.env or None,
             )
             stdio_transport = await self._exit_stack.enter_async_context(
-                stdio_client(server_params)
+                stdio_client(server_params)  # type: ignore[arg-type]
             )
             read_stream, write_stream = stdio_transport
             session = await self._exit_stack.enter_async_context(
-                ClientSession(read_stream, write_stream)
+                ClientSession(read_stream, write_stream)  # type: ignore[arg-type]
             )
             await session.initialize()
             return session
@@ -149,7 +147,7 @@ class MCPClientManager:
             )
             read_stream, write_stream = sse_transport
             session = await self._exit_stack.enter_async_context(
-                ClientSession(read_stream, write_stream)
+                ClientSession(read_stream, write_stream)  # type: ignore[arg-type]
             )
             await session.initialize()
             return session

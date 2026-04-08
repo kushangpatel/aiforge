@@ -31,13 +31,9 @@ class MCPServerConfig(BaseModel):
     enabled: bool = True
 
     @model_validator(mode="after")
-    def _validate_transport_fields(self) -> "MCPServerConfig":
+    def _validate_transport_fields(self) -> MCPServerConfig:
         if self.transport == "stdio" and not self.command:
-            raise ValueError(
-                f"MCP server {self.name!r}: stdio transport requires 'command'"
-            )
+            raise ValueError(f"MCP server {self.name!r}: stdio transport requires 'command'")
         if self.transport == "sse" and not self.url:
-            raise ValueError(
-                f"MCP server {self.name!r}: sse transport requires 'url'"
-            )
+            raise ValueError(f"MCP server {self.name!r}: sse transport requires 'url'")
         return self

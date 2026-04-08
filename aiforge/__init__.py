@@ -13,6 +13,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from aiforge.__version__ import __version__
+from aiforge.core.model_router import MODEL_CATALOG, ModelRouter, ModelSpec
 from aiforge.core.types import (
     AIForgeError,
     APIConnectionError,
@@ -28,7 +29,6 @@ from aiforge.core.types import (
     ValidationError,
     VectorStoreError,
 )
-from aiforge.core.model_router import MODEL_CATALOG, ModelRouter, ModelSpec
 from aiforge.core.vectorstore import VectorStoreAdapter
 from aiforge.core.vectorstore_factory import build_vectorstore
 from aiforge.infra.config import AIForgeSettings, get_settings
@@ -70,29 +70,29 @@ setup_tracing(get_settings())
 if TYPE_CHECKING:
     # Modules
     from aiforge.modules.chat.module import ChatAgent as ChatAgent
-    from aiforge.modules.classify.module import Classifier as Classifier
-    from aiforge.modules.extract.module import Extractor as Extractor
-    from aiforge.modules.generate.module import Generator as Generator
-    from aiforge.modules.moderate.module import Moderator as Moderator
-    from aiforge.modules.qa.module import DocQA as DocQA
-    from aiforge.modules.search.module import SemanticSearch as SemanticSearch
-    from aiforge.modules.summarize.module import Summarizer as Summarizer
-    from aiforge.modules.translate.module import Translator as Translator
-    from aiforge.modules.vision.module import Vision as Vision
 
     # Response schemas
     from aiforge.modules.chat.schemas import ChatResponse as ChatResponse
+    from aiforge.modules.classify.module import Classifier as Classifier
     from aiforge.modules.classify.schemas import ClassifyResponse as ClassifyResponse
     from aiforge.modules.classify.schemas import SentimentResponse as SentimentResponse
+    from aiforge.modules.extract.module import Extractor as Extractor
     from aiforge.modules.extract.schemas import ExtractResponse as ExtractResponse
+    from aiforge.modules.generate.module import Generator as Generator
     from aiforge.modules.generate.schemas import GenerateResponse as GenerateResponse
+    from aiforge.modules.moderate.module import Moderator as Moderator
     from aiforge.modules.moderate.schemas import ModerateResponse as ModerateResponse
+    from aiforge.modules.qa.module import DocQA as DocQA
     from aiforge.modules.qa.schemas import IngestResponse as IngestResponse
     from aiforge.modules.qa.schemas import QAResponse as QAResponse
+    from aiforge.modules.search.module import SemanticSearch as SemanticSearch
     from aiforge.modules.search.schemas import IndexResponse as IndexResponse
     from aiforge.modules.search.schemas import SearchResponse as SearchResponse
+    from aiforge.modules.summarize.module import Summarizer as Summarizer
     from aiforge.modules.summarize.schemas import SummarizeResponse as SummarizeResponse
+    from aiforge.modules.translate.module import Translator as Translator
     from aiforge.modules.translate.schemas import TranslateResponse as TranslateResponse
+    from aiforge.modules.vision.module import Vision as Vision
     from aiforge.modules.vision.schemas import VisionResponse as VisionResponse
 else:
     try:

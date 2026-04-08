@@ -2,15 +2,14 @@
 
 from __future__ import annotations
 
-from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # Helpers — lightweight stand-ins for qdrant_client.models
 # ---------------------------------------------------------------------------
+
 
 class _FakeCollectionInfo:
     def __init__(self, name: str):
@@ -39,6 +38,7 @@ class _FakeCollectionDetail:
 # Fixtures
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture()
 def mock_qdrant():
     """Patch qdrant_client and return the mock client instance."""
@@ -51,10 +51,13 @@ def mock_qdrant():
 
     mock_models = MagicMock()
 
-    with patch.dict("sys.modules", {
-        "qdrant_client": mock_qdrant_module,
-        "qdrant_client.models": mock_models,
-    }):
+    with patch.dict(
+        "sys.modules",
+        {
+            "qdrant_client": mock_qdrant_module,
+            "qdrant_client.models": mock_models,
+        },
+    ):
         yield mock_client, mock_models
 
 
@@ -87,9 +90,7 @@ class TestInit:
 
     def test_skips_create_if_exists(self, mock_qdrant) -> None:
         mock_client, _ = mock_qdrant
-        mock_client.get_collections.return_value = _FakeGetCollectionsResponse(
-            ["test_col"]
-        )
+        mock_client.get_collections.return_value = _FakeGetCollectionsResponse(["test_col"])
         from aiforge.core.vectorstore_qdrant import QdrantVectorStore
 
         QdrantVectorStore(
@@ -189,9 +190,7 @@ class TestDeleteCollection:
 class TestListCollections:
     def test_returns_names(self, store) -> None:
         s, mock_client, _ = store
-        mock_client.get_collections.return_value = _FakeGetCollectionsResponse(
-            ["col_a", "col_b"]
-        )
+        mock_client.get_collections.return_value = _FakeGetCollectionsResponse(["col_a", "col_b"])
         assert set(s.list_collections()) == {"col_a", "col_b"}
 
 

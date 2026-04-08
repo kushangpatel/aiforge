@@ -33,15 +33,13 @@ class ClassifyRequest(BaseModel):
         return v
 
     @model_validator(mode="after")
-    def _validate_example_labels(self) -> "ClassifyRequest":
+    def _validate_example_labels(self) -> ClassifyRequest:
         """Ensure every example label exists in the provided taxonomy (I5 / I6)."""
         if self.labels and self.examples:
             label_set = set(self.labels)
             bad = [e.label for e in self.examples if e.label not in label_set]
             if bad:
-                raise ValueError(
-                    f"Example labels not in taxonomy: {sorted(set(bad))}"
-                )
+                raise ValueError(f"Example labels not in taxonomy: {sorted(set(bad))}")
         return self
 
 
@@ -75,7 +73,7 @@ async def run_classify(body: ClassifyRequest) -> Any:
         )
         result = await c.aclassify(body.text)
     except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc))
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     return ClassifyResponse(
         label=result.label,
         scores=[_LabelScoreOut(**s.model_dump()) for s in result.scores],
@@ -130,11 +128,14 @@ async def run_sentiment(body: SentimentRequest) -> Any:
         c = Classifier(labels=["positive", "negative", "neutral"])
         result = await c.asentiment(body.text, aspects=body.aspects or None)
     except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc))
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     return SentimentRouteResponse(
         overall=result.overall,
         score=result.score,
-        aspects=[_AspectOut(aspect=a.aspect, sentiment=a.sentiment, score=a.score) for a in result.aspects],
+        aspects=[
+            _AspectOut(aspect=a.aspect, sentiment=a.sentiment, score=a.score)
+            for a in result.aspects
+        ],
         emotions=[_EmotionOut(emotion=e.emotion, intensity=e.intensity) for e in result.emotions],
         rationale=result.rationale,
         model=result.model,

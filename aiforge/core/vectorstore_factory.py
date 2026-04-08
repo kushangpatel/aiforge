@@ -11,8 +11,9 @@ details come from ``.env`` / env vars (never from YAML).
 
 from __future__ import annotations
 
-import structlog
 from typing import Any
+
+import structlog
 
 from aiforge.core.types import ConfigError
 from aiforge.core.vectorstore import VectorStoreAdapter
@@ -32,9 +33,7 @@ def _check_credentials(store_name: str, cfg: AIForgeSettings) -> None:
     """Raise :class:`ConfigError` if required credentials are missing."""
     for attr, env_name in _REQUIRED_CREDENTIALS.get(store_name, []):
         if not getattr(cfg, attr, None):
-            raise ConfigError(
-                f"{env_name} must be set when AIFORGE_VECTOR_STORE={store_name!r}"
-            )
+            raise ConfigError(f"{env_name} must be set when AIFORGE_VECTOR_STORE={store_name!r}")
 
 
 def build_vectorstore(

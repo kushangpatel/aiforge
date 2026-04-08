@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import logging
 import threading
-from typing import Any
 
 from aiforge.core.types import BaseModule
 from aiforge.core.vectorstore import VectorStoreAdapter
@@ -63,10 +62,7 @@ def get_module(name: str) -> type[BaseModule]:
     """
     key = _validate_name(name)
     if key not in _module_registry:
-        raise KeyError(
-            f"Module {key!r} not registered. "
-            f"Available: {sorted(_module_registry)}"
-        )
+        raise KeyError(f"Module {key!r} not registered. Available: {sorted(_module_registry)}")
     return _module_registry[key]
 
 
@@ -111,8 +107,7 @@ def get_vectorstore(name: str) -> type[VectorStoreAdapter]:
     key = _validate_name(name)
     if key not in _vectorstore_registry:
         raise KeyError(
-            f"Vector store {key!r} not registered. "
-            f"Available: {sorted(_vectorstore_registry)}"
+            f"Vector store {key!r} not registered. Available: {sorted(_vectorstore_registry)}"
         )
     return _vectorstore_registry[key]
 
@@ -130,8 +125,16 @@ def list_vectorstores() -> list[str]:
 # settings-based resolution).  We re-export the registration and listing
 # functions here so that registry.py is the unified plugin entry point.
 
-from aiforge.providers import (  # noqa: E402
-    get_provider,
-    list_providers,
-    register_provider,
-)
+from aiforge.providers import get_provider, list_providers, register_provider
+
+__all__ = [
+    "register_module",
+    "get_module",
+    "list_modules",
+    "register_vectorstore",
+    "get_vectorstore",
+    "list_vectorstores",
+    "get_provider",
+    "list_providers",
+    "register_provider",
+]

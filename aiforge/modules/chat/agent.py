@@ -15,10 +15,10 @@ from __future__ import annotations
 
 import json
 import operator
-from typing import Annotated, Any, Callable, TypedDict
+from collections.abc import Callable
+from typing import Annotated, Any, TypedDict
 
 from langgraph.graph import END, StateGraph
-
 
 # ---------------------------------------------------------------------------
 # Agent state
@@ -96,9 +96,7 @@ def build_chat_graph(
         else:
             # Direct answer — append AI message
             updates["tool_calls"] = []
-            updates["messages"] = state["messages"] + [
-                {"role": "assistant", "content": raw}
-            ]
+            updates["messages"] = state["messages"] + [{"role": "assistant", "content": raw}]
             updates["trace"] = [{"step": "route", "decision": "direct_answer"}]
 
         return updates
@@ -116,9 +114,7 @@ def build_chat_graph(
                     if isinstance(tool_input, dict):
                         # Auto-coerce: LLMs often produce dict/list values
                         # for parameters that tools expect as JSON strings.
-                        tool_input = _coerce_tool_input(
-                            tool_map[tool_name], tool_input
-                        )
+                        tool_input = _coerce_tool_input(tool_map[tool_name], tool_input)
                         output = str(tool_map[tool_name].invoke(tool_input))
                     else:
                         output = str(tool_map[tool_name].invoke(str(tool_input)))
@@ -127,16 +123,15 @@ def build_chat_graph(
             else:
                 output = f"Error: Unknown tool '{tool_name}'"
 
-            new_results.append(
-                {"tool": tool_name, "input": tool_input, "output": output}
-            )
+            new_results.append({"tool": tool_name, "input": tool_input, "output": output})
 
         # Append tool results as a message so the LLM can see them
-        tool_summary = "\n".join(
-            f"Tool '{r['tool']}' returned: {r['output']}" for r in new_results
-        )
+        tool_summary = "\n".join(f"Tool '{r['tool']}' returned: {r['output']}" for r in new_results)
         new_messages = state["messages"] + [
-            {"role": "assistant", "content": f"[Tool calls: {', '.join(tc['tool'] for tc in state['tool_calls'])}]"},
+            {
+                "role": "assistant",
+                "content": f"[Tool calls: {', '.join(tc['tool'] for tc in state['tool_calls'])}]",
+            },
             {"role": "user", "content": f"Tool results:\n{tool_summary}"},
         ]
 
@@ -178,12 +173,8 @@ def build_chat_graph(
             ]
         else:
             updates["tool_calls"] = []
-            updates["messages"] = state["messages"] + [
-                {"role": "assistant", "content": raw}
-            ]
-            updates["trace"] = [
-                {"step": "process_result", "decision": "respond"}
-            ]
+            updates["messages"] = state["messages"] + [{"role": "assistant", "content": raw}]
+            updates["trace"] = [{"step": "process_result", "decision": "respond"}]
 
         return updates
 
@@ -195,10 +186,7 @@ def build_chat_graph(
         return "end"
 
     def should_continue_after_tool(state: ChatAgentState) -> str:
-        if (
-            state["tool_calls"]
-            and state["iteration"] < state["max_tool_iterations"]
-        ):
+        if state["tool_calls"] and state["iteration"] < state["max_tool_iterations"]:
             return "execute_tool"
         return "end"
 

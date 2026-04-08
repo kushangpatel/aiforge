@@ -7,8 +7,9 @@ Pinecone is a pure-vector store with no native text column.
 
 from __future__ import annotations
 
-import structlog
 from typing import Any
+
+import structlog
 
 from aiforge.core.vectorstore import VectorStoreAdapter
 
@@ -50,7 +51,7 @@ class PineconeVectorStore(VectorStoreAdapter):
         ids: list[str],
     ) -> None:
         vectors = []
-        for doc_id, emb, text, meta in zip(ids, embeddings, texts, metadatas):
+        for doc_id, emb, text, meta in zip(ids, embeddings, texts, metadatas, strict=False):
             if "_text" in meta:
                 logger.warning(
                     "vectorstore.pinecone.reserved_key",

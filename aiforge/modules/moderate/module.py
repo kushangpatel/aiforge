@@ -32,8 +32,8 @@ from aiforge.modules.moderate.prompts import (
     TOXICITY_USER,
 )
 from aiforge.modules.moderate.schemas import (
-    ModerationFlag,
     ModerateResponse,
+    ModerationFlag,
     RedactResponse,
 )
 
@@ -90,6 +90,7 @@ _VALID_PII_TYPES = frozenset({"email", "phone", "ssn", "credit_card"})
 # Luhn checksum
 # ---------------------------------------------------------------------------
 
+
 def _luhn_ok(number: str) -> bool:
     """Return True if *number* (digits + optional separators) passes Luhn."""
     digits = [int(d) for d in number if d.isdigit()]
@@ -109,6 +110,7 @@ def _luhn_ok(number: str) -> bool:
 # JSON extraction helper (C1 fix: handle markdown-fenced LLM responses)
 # ---------------------------------------------------------------------------
 
+
 def _extract_json(raw: str) -> str:
     """Strip markdown code fences from LLM output before JSON parsing."""
     text = raw.strip()
@@ -124,6 +126,7 @@ def _extract_json(raw: str) -> str:
 # ---------------------------------------------------------------------------
 # Redaction helper
 # ---------------------------------------------------------------------------
+
 
 def _apply_redactions(text: str, flags: list[ModerationFlag]) -> str:
     """Replace each PII span with its placeholder label.
@@ -149,6 +152,7 @@ def _apply_redactions(text: str, flags: list[ModerationFlag]) -> str:
 # ---------------------------------------------------------------------------
 # Moderator class
 # ---------------------------------------------------------------------------
+
 
 class Moderator(BaseModule):
     """Content safety, PII detection, and prompt injection scanner.
@@ -365,7 +369,10 @@ class Moderator(BaseModule):
                 if _luhn_ok(m.group()) and not _overlaps(m.start(), m.end()):
                     flags.append(
                         ModerationFlag(
-                            type="pii", subtype="credit_card", span=m.group().strip(), confidence=1.0
+                            type="pii",
+                            subtype="credit_card",
+                            span=m.group().strip(),
+                            confidence=1.0,
                         )
                     )
                     occupied.append((m.start(), m.end()))

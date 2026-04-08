@@ -45,7 +45,7 @@ class CostTracker:
     # ------------------------------------------------------------------
 
     @classmethod
-    def get_session(cls, warn_threshold: float = 1.0) -> "CostTracker":
+    def get_session(cls, warn_threshold: float = 1.0) -> CostTracker:
         """Return (or create) the process-level session singleton."""
         global _session
         if _session is None:

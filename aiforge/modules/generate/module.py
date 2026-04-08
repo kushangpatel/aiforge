@@ -32,7 +32,8 @@ from __future__ import annotations
 import re
 import threading
 import time
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 from aiforge.core.prompt_override import resolve_prompt
 from aiforge.core.types import BaseModule
@@ -70,7 +71,9 @@ _GUARDRAIL_LOCK = threading.Lock()
 _CUSTOM_GUARDRAILS: dict[str, Callable[[str], GuardrailResult]] = {}
 
 
-def register_guardrail(name: str) -> Callable[[Callable[[str], GuardrailResult]], Callable[[str], GuardrailResult]]:
+def register_guardrail(
+    name: str,
+) -> Callable[[Callable[[str], GuardrailResult]], Callable[[str], GuardrailResult]]:
     """Decorator to register a custom guardrail function.
 
     The decorated function receives the generated text and must return a
@@ -84,10 +87,12 @@ def register_guardrail(name: str) -> Callable[[Callable[[str], GuardrailResult]]
             ok = len(text.split()) <= 200
             return GuardrailResult(passed=ok, message="Too many words" if not ok else "")
     """
+
     def decorator(fn: Callable[[str], GuardrailResult]) -> Callable[[str], GuardrailResult]:
         with _GUARDRAIL_LOCK:
             _CUSTOM_GUARDRAILS[name] = fn
         return fn
+
     return decorator
 
 
@@ -112,6 +117,7 @@ def _get_pii_moderator() -> Any:
 # ---------------------------------------------------------------------------
 # Generator class
 # ---------------------------------------------------------------------------
+
 
 class Generator(BaseModule):
     """Content generator with template rendering and guardrail enforcement.
@@ -155,7 +161,9 @@ class Generator(BaseModule):
     # Public API
     # ------------------------------------------------------------------
 
-    def generate(self, prompt: str | None = None, *, system_prompt: str | None = None, **variables: Any) -> GenerateResponse:
+    def generate(
+        self, prompt: str | None = None, *, system_prompt: str | None = None, **variables: Any
+    ) -> GenerateResponse:
         """Generate content synchronously.
 
         Either *self.template* (with ``**variables``) **or** *prompt* must
@@ -171,7 +179,9 @@ class Generator(BaseModule):
         )
         return self._generate_loop(final_prompt, t0, resolved_system)
 
-    async def agenerate(self, prompt: str | None = None, *, system_prompt: str | None = None, **variables: Any) -> GenerateResponse:
+    async def agenerate(
+        self, prompt: str | None = None, *, system_prompt: str | None = None, **variables: Any
+    ) -> GenerateResponse:
         """Async version of :meth:`generate`."""
         t0 = time.monotonic()
         final_prompt = self._resolve_prompt(prompt, variables)
@@ -350,7 +360,9 @@ class Generator(BaseModule):
             guardrail_flags = violations
             if attempt < _MAX_RETRIES:
                 current_prompt = self._build_retry_prompt(
-                    final_prompt, generated_text, violations,
+                    final_prompt,
+                    generated_text,
+                    violations,
                 )
 
         # All retries exhausted — return last result with remaining flags
@@ -410,7 +422,9 @@ class Generator(BaseModule):
             guardrail_flags = violations
             if attempt < _MAX_RETRIES:
                 current_prompt = self._build_retry_prompt(
-                    final_prompt, generated_text, violations,
+                    final_prompt,
+                    generated_text,
+                    violations,
                 )
 
         return GenerateResponse(
@@ -512,7 +526,9 @@ class Generator(BaseModule):
         """Return *True* if currency / pricing patterns are found."""
         return any(p.search(text) for p in _PRICE_PATTERNS)
 
-    def _check_professional_tone(self, text: str, *, sync: bool = True) -> tuple[bool, int, int, float]:
+    def _check_professional_tone(
+        self, text: str, *, sync: bool = True
+    ) -> tuple[bool, int, int, float]:
         """LLM-based tone check.  Returns ``(is_professional, in_tokens, out_tokens, cost)``."""
         user_content = PROFESSIONAL_TONE_CHECK.format(text=text)
         llm = self._call_llm(
@@ -544,7 +560,9 @@ class Generator(BaseModule):
 
     @staticmethod
     def _build_retry_prompt(
-        original_prompt: str, generated_text: str, violations: list[str],
+        original_prompt: str,
+        generated_text: str,
+        violations: list[str],
     ) -> str:
         """Construct the retry message with violation feedback."""
         return GENERATE_RETRY.format(

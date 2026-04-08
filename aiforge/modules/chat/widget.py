@@ -5,10 +5,10 @@ from __future__ import annotations
 import ast
 import math
 import operator as op
+from datetime import UTC
 from typing import Any
 
 import streamlit as st
-
 
 # ---------------------------------------------------------------------------
 # Built-in safe tools (available in the playground)
@@ -131,9 +131,9 @@ def _safe_calculator(expression: str) -> str:
 
 def _current_time() -> str:
     """Return the current date and time in ISO format."""
-    from datetime import datetime, timezone
+    from datetime import datetime
 
-    return datetime.now(tz=timezone.utc).isoformat()
+    return datetime.now(tz=UTC).isoformat()
 
 
 def _research(query: str) -> str:
@@ -192,13 +192,18 @@ def _web_search(query: str, max_results: int = 5) -> str:
         # Each result is in a table row with class "result-link" (title)
         # and a subsequent snippet row.
         titles = re.findall(
-            r'class="result-link"[^>]*>(.*?)</a>', html, re.DOTALL,
+            r'class="result-link"[^>]*>(.*?)</a>',
+            html,
+            re.DOTALL,
         )
         snippets = re.findall(
-            r'class="result-snippet"[^>]*>(.*?)</td>', html, re.DOTALL,
+            r'class="result-snippet"[^>]*>(.*?)</td>',
+            html,
+            re.DOTALL,
         )
         links = re.findall(
-            r'class="result-link"\s+href="([^"]+)"', html,
+            r'class="result-link"\s+href="([^"]+)"',
+            html,
         )
 
         if not titles:
@@ -261,12 +266,12 @@ def _unit_converter(expression: str) -> str:
 
     expression = expression.strip().lower()
     match = re.match(
-        r"^(-?\d+\.?\d*)\s+(\w+)\s+to\s+(\w+)$", expression,
+        r"^(-?\d+\.?\d*)\s+(\w+)\s+to\s+(\w+)$",
+        expression,
     )
     if not match:
         raise ValueError(
-            "Format: '<value> <from_unit> to <to_unit>' "
-            "(e.g., '100 celsius to fahrenheit')"
+            "Format: '<value> <from_unit> to <to_unit>' (e.g., '100 celsius to fahrenheit')"
         )
 
     value = float(match.group(1))
@@ -318,10 +323,7 @@ def _unit_converter(expression: str) -> str:
         return f"{value} {from_u} = {value} {to_u} (same unit)"
 
     available = sorted({f"{a} to {b}" for a, b in {**temp_conversions, **linear}})
-    raise ValueError(
-        f"Unknown conversion: {from_u} to {to_u}. "
-        f"Supported: {', '.join(available)}"
-    )
+    raise ValueError(f"Unknown conversion: {from_u} to {to_u}. Supported: {', '.join(available)}")
 
 
 def _get_builtin_tools() -> list[Any]:
@@ -386,7 +388,9 @@ def render() -> None:
     col1, col2 = st.columns(2)
     with col1:
         memory_mode = st.selectbox(
-            "Memory mode", ["buffer", "summary", "none"], index=0,
+            "Memory mode",
+            ["buffer", "summary", "none"],
+            index=0,
         )
     with col2:
         memory_k = st.slider("Buffer size (K)", 2, 50, 20)
@@ -395,10 +399,7 @@ def render() -> None:
 
     # ── MCP servers ──
     with st.expander("MCP Servers (optional)"):
-        st.caption(
-            "Connect to external MCP tool servers. "
-            "Paste a JSON array of server configs."
-        )
+        st.caption("Connect to external MCP tool servers. Paste a JSON array of server configs.")
         mcp_json = st.text_area(
             "MCP config (JSON)",
             value="",
@@ -412,9 +413,10 @@ def render() -> None:
         mcp_servers: list[dict[str, Any]] | None = None
         if mcp_json.strip():
             import json
+
             try:
                 mcp_servers = json.loads(mcp_json)
-                st.success(f"{len(mcp_servers)} server(s) configured")
+                st.success(f"{len(mcp_servers or [])} server(s) configured")
             except (json.JSONDecodeError, TypeError) as exc:
                 st.error(f"Invalid JSON: {exc}")
                 mcp_servers = None
@@ -456,9 +458,7 @@ def render() -> None:
         return
 
     # Show user message
-    st.session_state.setdefault("chat_history", []).append(
-        {"role": "user", "content": user_input}
-    )
+    st.session_state.setdefault("chat_history", []).append({"role": "user", "content": user_input})
     with st.chat_message("user"):
         st.markdown(user_input)
 

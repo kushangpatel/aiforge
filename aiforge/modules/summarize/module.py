@@ -26,9 +26,9 @@ _STYLE_PROMPTS: dict[str, str] = {
 }
 
 # Context-window usage thresholds
-_STUFF_THRESHOLD_RATIO = 0.8   # auto-select map_reduce above this
-_CHUNK_SIZE_RATIO = 0.6        # each chunk ≈ 60 % of context window
-_CHUNK_OVERLAP = 200           # character overlap between chunks
+_STUFF_THRESHOLD_RATIO = 0.8  # auto-select map_reduce above this
+_CHUNK_SIZE_RATIO = 0.6  # each chunk ≈ 60 % of context window
+_CHUNK_OVERLAP = 200  # character overlap between chunks
 
 
 def _count_tokens(text: str, model: str) -> int:
@@ -39,6 +39,7 @@ def _count_tokens(text: str, model: str) -> int:
     """
     try:
         import tiktoken
+
         enc = tiktoken.encoding_for_model(model)
         return len(enc.encode(text))
     except Exception:  # noqa: BLE001
@@ -53,6 +54,7 @@ def _split_text(text: str, chunk_size: int, overlap: int = _CHUNK_OVERLAP) -> li
     """
     try:
         from aiforge.core.text_splitter import TextSplitter
+
         splitter = TextSplitter(chunk_size=chunk_size, chunk_overlap=overlap)
         return splitter.split_text(text, ext=".txt")
     except Exception:  # noqa: BLE001
@@ -168,6 +170,7 @@ class Summarizer(BaseModule):
                 raise ValueError("strategy must be 'stuff' or 'map_reduce'")
             return explicit
         from aiforge.core.pricing import get_context_window
+
         ctx = get_context_window(self.settings.MODEL)
         token_count = _count_tokens(text, self.settings.MODEL)
         threshold = int(ctx * _STUFF_THRESHOLD_RATIO)
@@ -202,6 +205,7 @@ class Summarizer(BaseModule):
         messages = self._build_stuff_messages(text, system)
         llm = self._call_llm(messages, temperature=self.temperature)
         from aiforge.core.pricing import calculate_cost
+
         cost = calculate_cost(llm.model, llm.input_tokens, llm.output_tokens)
         return SummarizeResponse(
             summary=llm.text.strip(),
@@ -218,6 +222,7 @@ class Summarizer(BaseModule):
         messages = self._build_stuff_messages(text, system)
         llm = await self._acall_llm(messages, temperature=self.temperature)
         from aiforge.core.pricing import calculate_cost
+
         cost = calculate_cost(llm.model, llm.input_tokens, llm.output_tokens)
         return SummarizeResponse(
             summary=llm.text.strip(),
@@ -236,6 +241,7 @@ class Summarizer(BaseModule):
 
     def _get_chunk_size(self) -> int:
         from aiforge.core.pricing import get_context_window
+
         ctx = get_context_window(self.settings.MODEL)
         return int(ctx * _CHUNK_SIZE_RATIO)
 
@@ -248,7 +254,8 @@ class Summarizer(BaseModule):
 
     def _build_reduce_messages(self, summaries: str, system: str) -> list[dict[str, str]]:
         user_content = SUMMARIZE_REDUCE.format(
-            summaries=summaries, max_length=self.max_length,
+            summaries=summaries,
+            max_length=self.max_length,
         )
         return [
             {"role": "system", "content": system},
@@ -269,6 +276,7 @@ class Summarizer(BaseModule):
             messages = self._build_map_messages(chunk, system)
             llm = self._call_llm(messages, temperature=self.temperature)
             from aiforge.core.pricing import calculate_cost
+
             cost = calculate_cost(llm.model, llm.input_tokens, llm.output_tokens)
             total_in += llm.input_tokens
             total_out += llm.output_tokens
@@ -281,6 +289,7 @@ class Summarizer(BaseModule):
         messages = self._build_reduce_messages(combined, system)
         llm = self._call_llm(messages, temperature=self.temperature)
         from aiforge.core.pricing import calculate_cost
+
         cost = calculate_cost(llm.model, llm.input_tokens, llm.output_tokens)
         total_in += llm.input_tokens
         total_out += llm.output_tokens
@@ -317,6 +326,7 @@ class Summarizer(BaseModule):
         map_results = await asyncio.gather(*[_summarize_chunk(c) for c in chunks])
         for llm in map_results:
             from aiforge.core.pricing import calculate_cost
+
             cost = calculate_cost(llm.model, llm.input_tokens, llm.output_tokens)
             total_in += llm.input_tokens
             total_out += llm.output_tokens
@@ -329,6 +339,7 @@ class Summarizer(BaseModule):
         messages = self._build_reduce_messages(combined, system)
         llm = await self._acall_llm(messages, temperature=self.temperature)
         from aiforge.core.pricing import calculate_cost
+
         cost = calculate_cost(llm.model, llm.input_tokens, llm.output_tokens)
         total_in += llm.input_tokens
         total_out += llm.output_tokens

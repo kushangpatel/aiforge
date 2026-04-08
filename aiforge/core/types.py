@@ -7,7 +7,8 @@ from __future__ import annotations
 
 import asyncio
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any, AsyncGenerator, Iterator, cast
+from collections.abc import AsyncGenerator, Iterator
+from typing import TYPE_CHECKING, Any, cast
 
 from pydantic import BaseModel, Field
 
@@ -123,7 +124,9 @@ class BaseModule(ABC):
     are handled by ``_call_llm()`` and ``_call_embedding()`` provided here.
     """
 
-    def __init__(self, *, quality: str | None = None, provider: str | None = None, **kwargs: Any) -> None:  # noqa: ANN401
+    def __init__(
+        self, *, quality: str | None = None, provider: str | None = None, **kwargs: Any
+    ) -> None:  # noqa: ANN401
         """Initialise the module.
 
         Args:
@@ -142,10 +145,10 @@ class BaseModule(ABC):
         if provider is not None:
             kwargs["PROVIDER"] = provider
         # Lazy imports to avoid circular deps at class-definition time.
+        import structlog
+
         from aiforge.infra.config import AIForgeSettings, get_settings
         from aiforge.infra.cost_tracker import CostTracker
-
-        import structlog
 
         explicit_model = "MODEL" in kwargs
 
@@ -394,7 +397,9 @@ class BaseModule(ABC):
 
         # Post-hoc TPM accounting
         await asyncio.get_event_loop().run_in_executor(
-            None, limiter.record_tokens, result.input_tokens + result.output_tokens,
+            None,
+            limiter.record_tokens,
+            result.input_tokens + result.output_tokens,
         )
 
         self._record_cost(result)

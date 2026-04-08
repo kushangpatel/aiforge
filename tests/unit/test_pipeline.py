@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from typing import Any
-from unittest.mock import MagicMock
 
 import pytest
 
@@ -12,10 +11,10 @@ from aiforge.pipeline.pipeline import Pipeline
 from aiforge.pipeline.router import Router
 from aiforge.pipeline.schemas import PipelineResult
 
-
 # ---------------------------------------------------------------------------
 # Helpers: minimal module stubs
 # ---------------------------------------------------------------------------
+
 
 class _TextResponse(ModuleResponse):
     text: str = ""
@@ -63,6 +62,7 @@ class _ClassifyModule(BaseModule):
 # Tests
 # ---------------------------------------------------------------------------
 
+
 class TestSequentialPipeline:
     def test_single_step(self) -> None:
         pipe = Pipeline([("echo", _EchoModule())])
@@ -72,18 +72,22 @@ class TestSequentialPipeline:
         assert result.steps["echo"].to_text() == "hello"
 
     def test_two_steps_chained(self) -> None:
-        pipe = Pipeline([
-            ("step1", _EchoModule(suffix=" world")),
-            ("step2", _EchoModule(suffix="!"))  ,
-        ])
+        pipe = Pipeline(
+            [
+                ("step1", _EchoModule(suffix=" world")),
+                ("step2", _EchoModule(suffix="!")),
+            ]
+        )
         result = pipe.run("hello")
         assert result.steps["step2"].to_text() == "hello world!"
 
     def test_cost_aggregated(self) -> None:
-        pipe = Pipeline([
-            ("a", _EchoModule()),
-            ("b", _EchoModule()),
-        ])
+        pipe = Pipeline(
+            [
+                ("a", _EchoModule()),
+                ("b", _EchoModule()),
+            ]
+        )
         result = pipe.run("text")
         assert pytest.approx(result.total_cost) == 0.002  # 2 × 0.001
 
@@ -102,51 +106,69 @@ class TestSequentialPipeline:
 
 class TestConditionalRouter:
     def test_router_routes_to_correct_branch(self) -> None:
-        pipe = Pipeline([
-            ("classify", _ClassifyModule(label="support")),
-            ("route", Router({
-                "support": _EchoModule(suffix="-support"),
-                "sales":   _EchoModule(suffix="-sales"),
-            })),
-        ])
+        pipe = Pipeline(
+            [
+                ("classify", _ClassifyModule(label="support")),
+                (
+                    "route",
+                    Router(
+                        {
+                            "support": _EchoModule(suffix="-support"),
+                            "sales": _EchoModule(suffix="-sales"),
+                        }
+                    ),
+                ),
+            ]
+        )
         result = pipe.run("help me")
         assert result.steps["route"].to_text() == "help me-support"
 
     def test_router_none_branch_halts(self) -> None:
-        pipe = Pipeline([
-            ("classify", _ClassifyModule(label="spam")),
-            ("route", Router({"spam": None, "real": _EchoModule()})),
-        ])
+        pipe = Pipeline(
+            [
+                ("classify", _ClassifyModule(label="spam")),
+                ("route", Router({"spam": None, "real": _EchoModule()})),
+            ]
+        )
         result = pipe.run("buy now")
         assert result.halted is True
         assert result.halted_at == "route"
         assert "route" not in result.steps
 
     def test_router_unknown_label_raises(self) -> None:
-        pipe = Pipeline([
-            ("classify", _ClassifyModule(label="unknown_label")),
-            ("route", Router({"a": _EchoModule(), "b": _EchoModule()})),
-        ])
+        pipe = Pipeline(
+            [
+                ("classify", _ClassifyModule(label="unknown_label")),
+                ("route", Router({"a": _EchoModule(), "b": _EchoModule()})),
+            ]
+        )
         with pytest.raises(KeyError, match="unknown_label"):
             pipe.run("text")
 
     def test_router_default_branch(self) -> None:
-        pipe = Pipeline([
-            ("classify", _ClassifyModule(label="other")),
-            ("route", Router(
-                {"known": _EchoModule(suffix="-known")},
-                default=_EchoModule(suffix="-default"),
-            )),
-        ])
+        pipe = Pipeline(
+            [
+                ("classify", _ClassifyModule(label="other")),
+                (
+                    "route",
+                    Router(
+                        {"known": _EchoModule(suffix="-known")},
+                        default=_EchoModule(suffix="-default"),
+                    ),
+                ),
+            ]
+        )
         result = pipe.run("text")
         assert result.steps["route"].to_text() == "text-default"
 
     def test_router_without_previous_label_raises(self) -> None:
         """Router after a non-label step raises PipelineError."""
-        pipe = Pipeline([
-            ("echo", _EchoModule()),
-            ("route", Router({"a": _EchoModule()})),
-        ])
+        pipe = Pipeline(
+            [
+                ("echo", _EchoModule()),
+                ("route", Router({"a": _EchoModule()})),
+            ]
+        )
         with pytest.raises(PipelineError):
             pipe.run("text")
 
@@ -160,33 +182,44 @@ class TestAsyncPipeline:
 
     @pytest.mark.asyncio
     async def test_async_two_steps(self) -> None:
-        pipe = Pipeline([
-            ("a", _EchoModule(suffix=" A")),
-            ("b", _EchoModule(suffix=" B")),
-        ])
+        pipe = Pipeline(
+            [
+                ("a", _EchoModule(suffix=" A")),
+                ("b", _EchoModule(suffix=" B")),
+            ]
+        )
         result = await pipe.arun("start")
         assert result.steps["b"].to_text() == "start A B"
 
     @pytest.mark.asyncio
     async def test_async_router_routes_correctly(self) -> None:
         """Router.resolve_async() is used in arun() -- must not block event loop."""
-        pipe = Pipeline([
-            ("classify", _ClassifyModule(label="sales")),
-            ("route", Router({
-                "support": _EchoModule(suffix="-support"),
-                "sales":   _EchoModule(suffix="-sales"),
-            })),
-        ])
+        pipe = Pipeline(
+            [
+                ("classify", _ClassifyModule(label="sales")),
+                (
+                    "route",
+                    Router(
+                        {
+                            "support": _EchoModule(suffix="-support"),
+                            "sales": _EchoModule(suffix="-sales"),
+                        }
+                    ),
+                ),
+            ]
+        )
         result = await pipe.arun("buy something")
         assert result.steps["route"].to_text() == "buy something-sales"
 
     @pytest.mark.asyncio
     async def test_async_router_halt(self) -> None:
         """Router with None branch halts async pipeline."""
-        pipe = Pipeline([
-            ("classify", _ClassifyModule(label="spam")),
-            ("route", Router({"spam": None, "real": _EchoModule()})),
-        ])
+        pipe = Pipeline(
+            [
+                ("classify", _ClassifyModule(label="spam")),
+                ("route", Router({"spam": None, "real": _EchoModule()})),
+            ]
+        )
         result = await pipe.arun("junk")
         assert result.halted is True
         assert "route" not in result.steps
@@ -242,6 +275,7 @@ class TestPipelineRoute:
     def test_empty_steps_rejected(self) -> None:
         from fastapi import FastAPI
         from fastapi.testclient import TestClient
+
         from aiforge.server.routes.pipeline import router
 
         app = FastAPI()
@@ -254,14 +288,18 @@ class TestPipelineRoute:
     def test_unknown_module_rejected(self) -> None:
         from fastapi import FastAPI
         from fastapi.testclient import TestClient
+
         from aiforge.server.routes.pipeline import router
 
         app = FastAPI()
         app.include_router(router)
         client = TestClient(app)
 
-        resp = client.post("/pipeline", json={
-            "steps": [{"name": "s1", "module": "nonexistent_xyz"}],
-            "text": "hello",
-        })
+        resp = client.post(
+            "/pipeline",
+            json={
+                "steps": [{"name": "s1", "module": "nonexistent_xyz"}],
+                "text": "hello",
+            },
+        )
         assert resp.status_code == 422

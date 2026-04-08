@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import pytest
 
-from aiforge.core.pricing import calculate_cost, get_context_window, get_model_pricing
 from aiforge.core.pricing import (
     _context_window_overrides,
     _pricing_overrides,
     apply_context_window_overrides,
     apply_pricing_overrides,
+    calculate_cost,
+    get_context_window,
+    get_model_pricing,
 )
 from aiforge.core.types import APIConnectionError, CompletionResult, ProviderError
 
@@ -131,9 +133,7 @@ class TestProviderRegistry:
                 return "fake"
 
             def complete(self, messages, **kwargs) -> CompletionResult:
-                return CompletionResult(
-                    text="fake", input_tokens=0, output_tokens=0, model="fake"
-                )
+                return CompletionResult(text="fake", input_tokens=0, output_tokens=0, model="fake")
 
             async def complete_async(self, messages, **kwargs) -> CompletionResult:
                 return self.complete(messages)

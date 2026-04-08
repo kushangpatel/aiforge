@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 from collections import OrderedDict
 from typing import Any
 
@@ -26,10 +27,8 @@ def _store_conversation(conversation_id: str, agent: Any) -> None:
         _, evicted_agent = _conversations.popitem(last=False)
         # Close MCP connections on evicted agents to avoid leaking subprocesses
         if hasattr(evicted_agent, "close"):
-            try:
+            with contextlib.suppress(Exception):
                 evicted_agent.close()
-            except Exception:  # noqa: BLE001
-                pass
 
 
 # ---------------------------------------------------------------------------
@@ -142,4 +141,3 @@ async def list_conversations() -> dict[str, Any]:
         "conversations": list(_conversations.keys()),
         "count": len(_conversations),
     }
-

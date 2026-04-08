@@ -2,15 +2,14 @@
 
 from __future__ import annotations
 
-from typing import Any
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
-
 
 # ---------------------------------------------------------------------------
 # Fixture: mock the pinecone import so tests don't need pinecone-client
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture()
 def mock_pinecone():
@@ -21,7 +20,8 @@ def mock_pinecone():
 
     with patch.dict("sys.modules", {"pinecone": MagicMock()}):
         import sys
-        sys.modules["pinecone"].Pinecone = mock_pc_cls
+
+        setattr(sys.modules["pinecone"], "Pinecone", mock_pc_cls)
         yield mock_pc_cls, mock_index
 
 
@@ -132,7 +132,8 @@ class TestDeleteCollection:
         s, mock_index = store
         s.delete_collection("my-ns")
         mock_index.delete.assert_called_once_with(
-            delete_all=True, namespace="my-ns",
+            delete_all=True,
+            namespace="my-ns",
         )
 
 

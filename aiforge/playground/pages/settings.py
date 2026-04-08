@@ -1,4 +1,5 @@
 """Settings page — full configuration dashboard."""
+
 import streamlit as st
 
 st.title("⚙️ Settings")
@@ -40,23 +41,31 @@ try:
     # Provider & Model
     # ------------------------------------------------------------------
     with st.expander("**Provider & Model**", expanded=True):
-        st.markdown(_table([
-            ("Provider", s.PROVIDER),
-            ("Model", s.MODEL),
-            ("Embedding Model", f"`{s.EMBEDDING_MODEL}`"),
-            ("Temperature", s.TEMPERATURE),
-            ("Max Tokens", s.MAX_TOKENS or "default"),
-        ]))
+        st.markdown(
+            _table(
+                [
+                    ("Provider", s.PROVIDER),
+                    ("Model", s.MODEL),
+                    ("Embedding Model", f"`{s.EMBEDDING_MODEL}`"),
+                    ("Temperature", s.TEMPERATURE),
+                    ("Max Tokens", s.MAX_TOKENS or "default"),
+                ]
+            )
+        )
 
     # ------------------------------------------------------------------
     # Model Router
     # ------------------------------------------------------------------
     with st.expander("**Model Router**"):
-        st.markdown(_table([
-            ("Enabled", _flag(s.MODEL_ROUTER_ENABLED)),
-            ("Default Quality", s.DEFAULT_QUALITY),
-            ("Prefer Local", _flag(s.PREFER_LOCAL)),
-        ]))
+        st.markdown(
+            _table(
+                [
+                    ("Enabled", _flag(s.MODEL_ROUTER_ENABLED)),
+                    ("Default Quality", s.DEFAULT_QUALITY),
+                    ("Prefer Local", _flag(s.PREFER_LOCAL)),
+                ]
+            )
+        )
         if s.CUSTOM_MODELS:
             st.json(s.CUSTOM_MODELS)
 
@@ -79,22 +88,30 @@ try:
     # Rate Limiting & Cost Tracking
     # ------------------------------------------------------------------
     with st.expander("**Rate Limiting & Cost Tracking**"):
-        st.markdown(_table([
-            ("Requests / min", f"{s.RATE_LIMIT_RPM:,}"),
-            ("Tokens / min", f"{s.RATE_LIMIT_TPM:,}"),
-            ("Cost Tracking", _flag(s.COST_TRACKING_ENABLED)),
-            ("Warning Threshold", f"${s.COST_WARN_THRESHOLD:.2f} / call"),
-        ]))
+        st.markdown(
+            _table(
+                [
+                    ("Requests / min", f"{s.RATE_LIMIT_RPM:,}"),
+                    ("Tokens / min", f"{s.RATE_LIMIT_TPM:,}"),
+                    ("Cost Tracking", _flag(s.COST_TRACKING_ENABLED)),
+                    ("Warning Threshold", f"${s.COST_WARN_THRESHOLD:.2f} / call"),
+                ]
+            )
+        )
 
         tracker = CostTracker.get_session()
         if tracker.call_count > 0:
             st.markdown("---")
             st.markdown("**Session Usage**")
-            st.markdown(_table([
-                ("Total Cost", f"${tracker.total_cost:.4f}"),
-                ("Total Tokens", f"{tracker.total_tokens:,}"),
-                ("API Calls", tracker.call_count),
-            ]))
+            st.markdown(
+                _table(
+                    [
+                        ("Total Cost", f"${tracker.total_cost:.4f}"),
+                        ("Total Tokens", f"{tracker.total_tokens:,}"),
+                        ("API Calls", tracker.call_count),
+                    ]
+                )
+            )
             if tracker.by_module:
                 st.markdown("**By Module**")
                 st.json(dict(tracker.by_module))
@@ -106,22 +123,30 @@ try:
     # Request Cache
     # ------------------------------------------------------------------
     with st.expander("**Request Cache**"):
-        st.markdown(_table([
-            ("Enabled", _flag(s.CACHE_ENABLED)),
-            ("Backend", s.CACHE_BACKEND),
-            ("TTL", f"{s.CACHE_TTL}s"),
-            ("Max Entries", f"{s.CACHE_MAX_ENTRIES:,}"),
-        ]))
+        st.markdown(
+            _table(
+                [
+                    ("Enabled", _flag(s.CACHE_ENABLED)),
+                    ("Backend", s.CACHE_BACKEND),
+                    ("TTL", f"{s.CACHE_TTL}s"),
+                    ("Max Entries", f"{s.CACHE_MAX_ENTRIES:,}"),
+                ]
+            )
+        )
 
     # ------------------------------------------------------------------
     # Webhooks
     # ------------------------------------------------------------------
     with st.expander("**Webhooks**"):
-        st.markdown(_table([
-            ("Enabled", _flag(s.WEBHOOK_ENABLED)),
-            ("Timeout", f"{s.WEBHOOK_TIMEOUT}s"),
-            ("Allow Insecure", "⚠️ Yes" if s.WEBHOOK_ALLOW_INSECURE else "No"),
-        ]))
+        st.markdown(
+            _table(
+                [
+                    ("Enabled", _flag(s.WEBHOOK_ENABLED)),
+                    ("Timeout", f"{s.WEBHOOK_TIMEOUT}s"),
+                    ("Allow Insecure", "⚠️ Yes" if s.WEBHOOK_ALLOW_INSECURE else "No"),
+                ]
+            )
+        )
 
     # ------------------------------------------------------------------
     # Observability
@@ -141,11 +166,15 @@ try:
     # API Server
     # ------------------------------------------------------------------
     with st.expander("**API Server**"):
-        st.markdown(_table([
-            ("Host", f"`{s.API_HOST}`"),
-            ("Port", s.API_PORT),
-            ("Auth", "🔒 Key set" if s.API_KEY else "🔓 Open"),
-        ]))
+        st.markdown(
+            _table(
+                [
+                    ("Host", f"`{s.API_HOST}`"),
+                    ("Port", s.API_PORT),
+                    ("Auth", "🔒 Key set" if s.API_KEY else "🔓 Open"),
+                ]
+            )
+        )
 
     # ------------------------------------------------------------------
     # API Keys (presence only — never show values)

@@ -38,6 +38,7 @@ from __future__ import annotations
 import asyncio
 import time
 import uuid
+from collections.abc import Sequence
 from typing import Any
 
 from aiforge.core.pricing import calculate_cost
@@ -124,7 +125,7 @@ class SemanticSearch(BaseModule):
 
     def index(
         self,
-        documents: list[dict | SearchDocument],
+        documents: Sequence[dict | SearchDocument],
         *,
         batch_size: int = 100,
     ) -> IndexResponse:
@@ -193,7 +194,7 @@ class SemanticSearch(BaseModule):
 
     async def aindex(
         self,
-        documents: list[dict | SearchDocument],
+        documents: Sequence[dict | SearchDocument],
         *,
         batch_size: int = 100,
     ) -> IndexResponse:
@@ -270,9 +271,7 @@ class SemanticSearch(BaseModule):
         lang_docs, _ = loader.load(source)
 
         if not lang_docs:
-            self.logger.warning(
-                "search.index_files.no_documents_loaded", source=str(source)
-            )
+            self.logger.warning("search.index_files.no_documents_loaded", source=str(source))
             stats = self._store.collection_stats(self.collection_name)
             return IndexResponse(
                 indexed_count=0,

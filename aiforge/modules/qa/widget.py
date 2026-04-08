@@ -87,18 +87,14 @@ def _render_ask(collection: str) -> None:
     if "qa_history" not in st.session_state:
         st.session_state.qa_history = []
 
-    query = st.text_input(
-        "Question", placeholder="How does the auth middleware work?"
-    )
+    query = st.text_input("Question", placeholder="How does the auth middleware work?")
     col1, col2 = st.columns(2)
     with col1:
         filter_repo = st.text_input("Filter by source path (optional)")
     with col2:
         show_trace = st.checkbox("Show agent trace")
 
-    if not st.button(
-        "Ask", type="primary", disabled=not query.strip() or not collection.strip()
-    ):
+    if not st.button("Ask", type="primary", disabled=not query.strip() or not collection.strip()):
         # still render history
         _render_history()
         return

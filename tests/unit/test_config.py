@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import warnings
 from pathlib import Path
-from unittest.mock import patch
 
 import pytest
 import yaml
+from pydantic import ValidationError
 
 from aiforge.infra.config import AIForgeSettings
 
@@ -28,16 +28,16 @@ class TestDefaults:
 
 class TestValidation:
     def test_invalid_provider_raises(self) -> None:
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             AIForgeSettings(PROVIDER="unsupported_provider")
 
     def test_temperature_out_of_range_raises(self) -> None:
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             AIForgeSettings(TEMPERATURE=3.0, OPENAI_API_KEY="sk-test")
 
     def test_embedding_mismatch_raises(self) -> None:
         """voyage-3 is an Anthropic-ecosystem embedding, not valid for openai provider."""
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             AIForgeSettings(
                 PROVIDER="openai",
                 EMBEDDING_MODEL="voyage-3",

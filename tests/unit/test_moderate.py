@@ -2,17 +2,18 @@
 
 from __future__ import annotations
 
+from typing import cast
 from unittest.mock import MagicMock, patch
 
 import pytest
 
 from aiforge.modules.moderate.module import Moderator, _apply_redactions, _luhn_ok
-from aiforge.modules.moderate.schemas import ModerationFlag, ModerateResponse, RedactResponse
-
+from aiforge.modules.moderate.schemas import ModerateResponse, ModerationFlag, RedactResponse
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _mod(checks: list[str] | None = None, pii_types: list[str] | None = None) -> Moderator:
     """Create a Moderator bypassing BaseModule provider initialisation."""
@@ -20,8 +21,10 @@ def _mod(checks: list[str] | None = None, pii_types: list[str] | None = None) ->
     m.checks = checks if checks is not None else ["pii"]
     m.pii_types = pii_types if pii_types is not None else ["email", "phone", "ssn", "credit_card"]
 
-    import structlog
     from unittest.mock import MagicMock as MM
+
+    import structlog
+
     m.logger = structlog.get_logger()
     m._provider = None
     m._embedding_provider = None
@@ -32,6 +35,7 @@ def _mod(checks: list[str] | None = None, pii_types: list[str] | None = None) ->
     m.settings = settings
     m._system_prompt_override = None
     from aiforge.infra.cost_tracker import CostTracker
+
     m.cost_tracker = CostTracker.get_session()
     return m
 
@@ -48,6 +52,7 @@ def _fake_llm(text: str) -> MagicMock:
 # ---------------------------------------------------------------------------
 # Luhn algorithm
 # ---------------------------------------------------------------------------
+
 
 class TestLuhn:
     def test_valid_visa(self) -> None:
@@ -66,6 +71,7 @@ class TestLuhn:
 # ---------------------------------------------------------------------------
 # PII detection — regex
 # ---------------------------------------------------------------------------
+
 
 class TestPIIDetection:
     def test_detects_email(self) -> None:
@@ -118,6 +124,7 @@ class TestPIIDetection:
 # Redact
 # ---------------------------------------------------------------------------
 
+
 class TestRedact:
     def test_redacts_email(self) -> None:
         result = _mod(pii_types=["email"]).redact("Send to alice@example.com now.")
@@ -145,6 +152,7 @@ class TestRedact:
 # ---------------------------------------------------------------------------
 # LLM-based checks (mocked)
 # ---------------------------------------------------------------------------
+
 
 class TestToxicityCheck:
     def test_detects_toxicity(self) -> None:
@@ -194,6 +202,7 @@ class TestInjectionCheck:
 # Pipeline compatibility
 # ---------------------------------------------------------------------------
 
+
 class TestPipelineCompatibility:
     def test_run_returns_moderate_response(self) -> None:
         m = _mod(checks=["pii"], pii_types=["email"])
@@ -232,6 +241,7 @@ class TestPipelineCompatibility:
 # Async check (mocked)
 # ---------------------------------------------------------------------------
 
+
 class TestAsyncCheck:
     @pytest.mark.asyncio
     async def test_acheck_pii_only(self) -> None:
@@ -250,6 +260,7 @@ class TestAsyncCheck:
 # ---------------------------------------------------------------------------
 # M1 — Markdown-fenced JSON from LLM (C1 fix coverage)
 # ---------------------------------------------------------------------------
+
 
 class TestMarkdownFencedJSON:
     def test_fenced_toxicity_detected(self) -> None:
@@ -282,6 +293,7 @@ class TestMarkdownFencedJSON:
 # ---------------------------------------------------------------------------
 # M2 — Server route tests
 # ---------------------------------------------------------------------------
+
 
 class TestModerateServerRoute:
     @pytest.fixture()
@@ -353,14 +365,15 @@ class TestModerateServerRoute:
 # M3 — run_batch coverage
 # ---------------------------------------------------------------------------
 
+
 class TestRunBatch:
     def test_run_batch_pii(self) -> None:
         m = _mod(checks=["pii"], pii_types=["email"])
         batch = m.run_batch(["alice@x.com", "bob@y.com", "clean text"])
         assert len(batch.results) == 3
-        assert batch.results[0].flagged is True   # alice@x.com
-        assert batch.results[1].flagged is True   # bob@y.com
-        assert batch.results[2].flagged is False  # clean text
+        assert cast(ModerateResponse, batch.results[0]).flagged is True  # alice@x.com
+        assert cast(ModerateResponse, batch.results[1]).flagged is True  # bob@y.com
+        assert cast(ModerateResponse, batch.results[2]).flagged is False  # clean text
 
     def test_run_batch_empty(self) -> None:
         m = _mod(checks=["pii"], pii_types=["email"])
@@ -371,6 +384,7 @@ class TestRunBatch:
 # ---------------------------------------------------------------------------
 # I4 — ModerateResponse.label property
 # ---------------------------------------------------------------------------
+
 
 class TestModerateResponseLabel:
     def test_label_clean(self) -> None:
@@ -387,6 +401,7 @@ class TestModerateResponseLabel:
 # ---------------------------------------------------------------------------
 # I5 — redact() respects self.checks
 # ---------------------------------------------------------------------------
+
 
 class TestRedactRespectsChecks:
     def test_redact_without_pii_check_returns_original(self) -> None:
@@ -405,6 +420,7 @@ class TestRedactRespectsChecks:
 # ---------------------------------------------------------------------------
 # M4 — _apply_redactions deduplicates identical spans
 # ---------------------------------------------------------------------------
+
 
 class TestApplyRedactionsDeduplicate:
     def test_duplicate_spans_not_double_processed(self) -> None:
@@ -432,6 +448,7 @@ class TestApplyRedactionsDeduplicate:
 # ---------------------------------------------------------------------------
 # I1 — Positional overlap detection (phone vs. other PII)
 # ---------------------------------------------------------------------------
+
 
 class TestPositionalOverlap:
     def test_phone_not_double_flagged_when_card_present(self) -> None:

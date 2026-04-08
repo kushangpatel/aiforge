@@ -6,9 +6,9 @@ All fixtures are available to every test file automatically.
 
 from __future__ import annotations
 
-import os
+from collections.abc import Iterator
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -16,13 +16,13 @@ from aiforge.core.types import CompletionResult
 from aiforge.infra.cost_tracker import CostTracker
 from aiforge.infra.rate_limiter import RateLimiter
 
-
 # ---------------------------------------------------------------------------
 # Environment setup: ensure no real API keys are needed for unit tests
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture(autouse=True)
-def isolate_env(monkeypatch: pytest.MonkeyPatch) -> None:
+def isolate_env(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     """Unset real API keys during unit tests and inject dummies."""
     from aiforge.infra.config import get_settings
     from aiforge.infra.tracing import reset_tracing
@@ -44,11 +44,14 @@ def isolate_env(monkeypatch: pytest.MonkeyPatch) -> None:
 # Provider registry — restore state between tests
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture(autouse=True)
-def reset_provider_registry() -> None:
+def reset_provider_registry() -> Iterator[None]:
     """Prevent test-registered providers from leaking into other tests."""
     import copy
+
     import aiforge.providers as _reg
+
     snapshot = copy.copy(_reg._REGISTRY)
     builtins_loaded = _reg._BUILTINS_LOADED
     yield
@@ -58,10 +61,12 @@ def reset_provider_registry() -> None:
 
 
 @pytest.fixture(autouse=True)
-def reset_plugin_registry() -> None:
+def reset_plugin_registry() -> Iterator[None]:
     """Prevent test-registered modules/vectorstores from leaking."""
     import copy
+
     import aiforge.registry as _reg
+
     mod_snapshot = copy.copy(_reg._module_registry)
     vs_snapshot = copy.copy(_reg._vectorstore_registry)
     yield
@@ -75,8 +80,9 @@ def reset_plugin_registry() -> None:
 # Cost tracker — reset between tests
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture(autouse=True)
-def reset_cost_tracker() -> None:
+def reset_cost_tracker() -> Iterator[None]:
     """Ensure each test starts with a fresh cost tracker."""
     CostTracker.reset_session()
     yield
@@ -92,8 +98,9 @@ def cost_tracker() -> CostTracker:
 # Rate limiter — reset between tests
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture(autouse=True)
-def reset_rate_limiter() -> None:
+def reset_rate_limiter() -> Iterator[None]:
     RateLimiter.reset_instance()
     yield
     RateLimiter.reset_instance()
@@ -102,6 +109,7 @@ def reset_rate_limiter() -> None:
 # ---------------------------------------------------------------------------
 # Mock LLM provider
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture()
 def mock_completion_result() -> CompletionResult:
@@ -129,6 +137,7 @@ def mock_llm(mock_completion_result: CompletionResult) -> MagicMock:
 # Mock embedding provider
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture()
 def mock_embeddings() -> MagicMock:
     """A mock EmbeddingProvider returning fixed 4-dimensional vectors."""
@@ -145,18 +154,32 @@ def mock_embeddings() -> MagicMock:
 # Sample documents
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture()
 def sample_documents() -> list[dict[str, Any]]:
     return [
-        {"id": "doc1", "text": "AIForge is a modular AI toolkit.", "metadata": {"source": "readme"}},
-        {"id": "doc2", "text": "LangChain provides LLM abstractions.", "metadata": {"source": "docs"}},
-        {"id": "doc3", "text": "ChromaDB stores vector embeddings.", "metadata": {"source": "docs"}},
+        {
+            "id": "doc1",
+            "text": "AIForge is a modular AI toolkit.",
+            "metadata": {"source": "readme"},
+        },
+        {
+            "id": "doc2",
+            "text": "LangChain provides LLM abstractions.",
+            "metadata": {"source": "docs"},
+        },
+        {
+            "id": "doc3",
+            "text": "ChromaDB stores vector embeddings.",
+            "metadata": {"source": "docs"},
+        },
     ]
 
 
 # ---------------------------------------------------------------------------
 # Temp vector store
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture()
 def temp_vector_store(tmp_path: Any) -> Any:
@@ -173,10 +196,12 @@ def temp_vector_store(tmp_path: Any) -> Any:
 # Settings fixture
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture()
 def test_settings() -> Any:
     """Return an AIForgeSettings instance with test values."""
     import warnings
+
     from aiforge.infra.config import AIForgeSettings
 
     with warnings.catch_warnings():

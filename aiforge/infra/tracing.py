@@ -20,7 +20,7 @@ _logger = structlog.get_logger(__name__)
 _tracing_initialised = False
 
 
-def setup_tracing(settings: "AIForgeSettings") -> None:
+def setup_tracing(settings: AIForgeSettings) -> None:
     """Initialise tracing backend based on *settings*.
 
     Safe to call multiple times — subsequent calls are no-ops.
@@ -43,14 +43,12 @@ def setup_tracing(settings: "AIForgeSettings") -> None:
     _tracing_initialised = True
 
 
-def _setup_langsmith(settings: "AIForgeSettings") -> None:
+def _setup_langsmith(settings: AIForgeSettings) -> None:
     """Configure LangSmith tracing via environment variables."""
     import os
 
     if not settings.LANGSMITH_API_KEY:
-        _logger.warning(
-            "AIFORGE_LANGSMITH_API_KEY not set — LangSmith tracing will not work"
-        )
+        _logger.warning("AIFORGE_LANGSMITH_API_KEY not set — LangSmith tracing will not work")
         return
 
     os.environ.setdefault("LANGCHAIN_TRACING_V2", "true")
@@ -63,16 +61,18 @@ def _setup_langsmith(settings: "AIForgeSettings") -> None:
     )
 
 
-def _setup_otel(settings: "AIForgeSettings") -> None:
+def _setup_otel(settings: AIForgeSettings) -> None:
     """Configure OpenTelemetry tracing."""
     try:
         from opentelemetry import trace  # type: ignore[import-untyped]
         from opentelemetry.sdk.trace import TracerProvider  # type: ignore[import-untyped]
-        from opentelemetry.sdk.trace.export import BatchSpanProcessor  # type: ignore[import-untyped]
+        from opentelemetry.sdk.trace.export import (
+            BatchSpanProcessor,  # type: ignore[import-untyped]
+        )
     except ImportError:
         _logger.warning(
             "opentelemetry-sdk not installed. "
-            "Run: pip install \"aiforge[observability]\" to enable OTel tracing."
+            'Run: pip install "aiforge[observability]" to enable OTel tracing.'
         )
         return
 
@@ -118,7 +118,7 @@ class _NoOpTracer:
     """Minimal no-op tracer used when OpenTelemetry is not installed."""
 
     class _NoOpSpan:
-        def __enter__(self) -> "_NoOpTracer._NoOpSpan":
+        def __enter__(self) -> _NoOpTracer._NoOpSpan:
             return self
 
         def __exit__(self, *args: Any) -> None:
@@ -127,5 +127,5 @@ class _NoOpTracer:
         def set_attribute(self, *args: Any) -> None:
             pass
 
-    def start_as_current_span(self, name: str, **kwargs: Any) -> "_NoOpTracer._NoOpSpan":  # noqa: ARG002
+    def start_as_current_span(self, name: str, **kwargs: Any) -> _NoOpTracer._NoOpSpan:  # noqa: ARG002
         return self._NoOpSpan()

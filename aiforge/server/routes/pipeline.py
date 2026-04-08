@@ -1,5 +1,7 @@
 """Pipeline endpoint (/pipeline)."""
+
 from __future__ import annotations
+
 from typing import Any
 
 from fastapi import APIRouter, HTTPException
@@ -10,6 +12,7 @@ router = APIRouter(prefix="/pipeline", tags=["pipeline"])
 
 class PipelineStepDef(BaseModel):
     """Definition for a single pipeline step."""
+
     name: str
     module: str
     config: dict[str, Any] = Field(default_factory=dict)

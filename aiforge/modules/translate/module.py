@@ -192,7 +192,10 @@ class Translator(BaseModule):
         return ""
 
     def _build_messages(
-        self, text: str, source_language: str, system: str,
+        self,
+        text: str,
+        source_language: str,
+        system: str,
     ) -> list[dict[str, str]]:
         """Construct the system + user message list for the LLM call."""
         domain_instruction = self._domain_instruction()

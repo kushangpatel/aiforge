@@ -24,12 +24,12 @@ if TYPE_CHECKING:
 class OllamaProvider(LLMProvider):
     """LLM provider backed by Ollama (local models)."""
 
-    def __init__(self, settings: "AIForgeSettings") -> None:
+    def __init__(self, settings: AIForgeSettings) -> None:
         try:
             from langchain_ollama import ChatOllama
         except ImportError as exc:
             raise ImportError(
-                "langchain-ollama not installed. Run: pip install \"aiforge[local]\""
+                'langchain-ollama not installed. Run: pip install "aiforge[local]"'
             ) from exc
 
         self._model_name = settings.MODEL
@@ -100,12 +100,12 @@ class OllamaProvider(LLMProvider):
 class OllamaEmbeddingProvider(EmbeddingProvider):
     """Embedding provider backed by Ollama local embeddings."""
 
-    def __init__(self, settings: "AIForgeSettings") -> None:
+    def __init__(self, settings: AIForgeSettings) -> None:
         try:
             from langchain_ollama import OllamaEmbeddings
         except ImportError as exc:
             raise ImportError(
-                "langchain-ollama not installed. Run: pip install \"aiforge[local]\""
+                'langchain-ollama not installed. Run: pip install "aiforge[local]"'
             ) from exc
 
         self._model_name = settings.EMBEDDING_MODEL
@@ -139,6 +139,7 @@ def _count_tokens_fallback(text: str) -> int:
     """Estimate token count using tiktoken (cl100k_base) when the model doesn't report usage."""
     try:
         import tiktoken
+
         enc = tiktoken.get_encoding("cl100k_base")
         return len(enc.encode(text))
     except Exception:  # noqa: BLE001
@@ -161,7 +162,5 @@ def _wrap_ollama_error(exc: Exception) -> ProviderError:
     """Convert an Ollama exception into the appropriate AIForge error type."""
     msg = str(exc).lower()
     if "connection" in msg or "refused" in msg:
-        return APIConnectionError(
-            f"Cannot connect to Ollama server. Is it running? Error: {exc}"
-        )
+        return APIConnectionError(f"Cannot connect to Ollama server. Is it running? Error: {exc}")
     return ProviderError(str(exc))

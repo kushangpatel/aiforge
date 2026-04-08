@@ -28,9 +28,11 @@ Usage::
 
 from __future__ import annotations
 
+import contextlib
 import time
 import uuid
-from typing import Any, AsyncGenerator, Iterator
+from collections.abc import AsyncGenerator, Iterator
+from typing import Any
 
 from aiforge.core.pricing import calculate_cost
 from aiforge.core.prompt_override import resolve_prompt
@@ -89,9 +91,7 @@ class ChatAgent(BaseModule):
     ) -> None:
         super().__init__(**kwargs)
         if memory not in ("buffer", "summary", "none"):
-            raise ValueError(
-                f"memory must be 'buffer', 'summary', or 'none', got {memory!r}"
-            )
+            raise ValueError(f"memory must be 'buffer', 'summary', or 'none', got {memory!r}")
         if memory_k < 1:
             raise ValueError("memory_k must be >= 1")
         if max_tool_iterations < 1:
@@ -118,9 +118,7 @@ class ChatAgent(BaseModule):
             default=DEFAULT_SYSTEM_PROMPT,
         )
         if self.tools:
-            tool_descs = "\n".join(
-                _describe_tool(t) for t in self.tools
-            )
+            tool_descs = "\n".join(_describe_tool(t) for t in self.tools)
             tool_instructions = TOOL_USE_SYSTEM.format(
                 tool_descriptions=tool_descs,
             )
@@ -130,9 +128,7 @@ class ChatAgent(BaseModule):
             self.system_prompt = base_prompt
 
         # Conversation history — list of ``{"role": ..., "content": ...}`` dicts
-        self._messages: list[dict[str, str]] = [
-            {"role": "system", "content": self.system_prompt}
-        ]
+        self._messages: list[dict[str, str]] = [{"role": "system", "content": self.system_prompt}]
 
     # ------------------------------------------------------------------
     # MCP helpers
@@ -169,16 +165,14 @@ class ChatAgent(BaseModule):
             self._mcp_manager = None
 
     def __del__(self) -> None:
-        try:
+        with contextlib.suppress(Exception):
             self.close()
-        except Exception:  # noqa: BLE001
-            pass
 
     # Async context manager for proper lifecycle management:
     #   async with ChatAgent(mcp_servers=[...]) as agent:
     #       response = await agent.achat("...")
 
-    async def __aenter__(self) -> "ChatAgent":
+    async def __aenter__(self) -> ChatAgent:
         return self
 
     async def __aexit__(self, *exc: Any) -> None:
@@ -262,7 +256,9 @@ class ChatAgent(BaseModule):
 
         return self._build_response(final, response_text, t0)
 
-    async def chat_stream(self, message: str, *, system_prompt: str | None = None) -> AsyncGenerator[str, None]:
+    async def chat_stream(
+        self, message: str, *, system_prompt: str | None = None
+    ) -> AsyncGenerator[str, None]:
         """Stream the assistant's response token-by-token.
 
         Yields text chunks as they become available.
@@ -294,7 +290,7 @@ class ChatAgent(BaseModule):
                         content = last.get("content") or ""
                         if content.startswith(full_response):
                             # Cumulative: extract only the new suffix
-                            new_text = content[len(full_response):]
+                            new_text = content[len(full_response) :]
                         else:
                             # Non-cumulative delta: treat entire content as new
                             new_text = content
@@ -303,21 +299,19 @@ class ChatAgent(BaseModule):
                             yield new_text
 
         if full_response:
-            self._messages.append(
-                {"role": "assistant", "content": full_response}
-            )
+            self._messages.append({"role": "assistant", "content": full_response})
             self._manage_memory()
 
-    async def achat_stream(self, message: str, *, system_prompt: str | None = None) -> AsyncGenerator[str, None]:
+    async def achat_stream(
+        self, message: str, *, system_prompt: str | None = None
+    ) -> AsyncGenerator[str, None]:
         """Alias for :meth:`chat_stream`."""
         async for chunk in self.chat_stream(message, system_prompt=system_prompt):
             yield chunk
 
     def reset(self) -> None:
         """Clear conversation history. Keeps the system prompt and MCP connections."""
-        self._messages = [
-            {"role": "system", "content": self.system_prompt}
-        ]
+        self._messages = [{"role": "system", "content": self.system_prompt}]
         self.conversation_id = uuid.uuid4().hex[:16]
 
     # ------------------------------------------------------------------
@@ -351,6 +345,7 @@ class ChatAgent(BaseModule):
 
         if loop and loop.is_running():
             import concurrent.futures
+
             with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
                 return iter(pool.submit(asyncio.run, _collect()).result())
         return iter(asyncio.run(_collect()))
@@ -373,9 +368,7 @@ class ChatAgent(BaseModule):
             default=DEFAULT_SYSTEM_PROMPT,
         )
         if self.tools:
-            tool_descs = "\n".join(
-                _describe_tool(t) for t in self.tools
-            )
+            tool_descs = "\n".join(_describe_tool(t) for t in self.tools)
             effective = f"{base}\n\n{TOOL_USE_SYSTEM.format(tool_descriptions=tool_descs)}"
         else:
             effective = base
@@ -387,34 +380,25 @@ class ChatAgent(BaseModule):
         if self.memory_mode == "none":
             # Stateless: keep only the system prompt for next turn
             self._messages = [
-                self._messages[0],       # system prompt
+                self._messages[0],  # system prompt
             ]
         elif self.memory_mode == "buffer":
             # Keep last K messages + system prompt
             if len(self._messages) > self.memory_k + 1:
-                self._messages = (
-                    [self._messages[0]] + self._messages[-self.memory_k:]
-                )
-        elif self.memory_mode == "summary":
+                self._messages = [self._messages[0]] + self._messages[-self.memory_k :]
+        elif self.memory_mode == "summary" and len(self._messages) > self.memory_k * 2:
             # When buffer exceeds 2×K, summarize older messages
-            if len(self._messages) > self.memory_k * 2:
-                old_messages = self._messages[1:-self.memory_k]
-                recent_messages = self._messages[-self.memory_k:]
+            old_messages = self._messages[1 : -self.memory_k]
+            recent_messages = self._messages[-self.memory_k :]
 
-                convo_text = "\n".join(
-                    f"{m['role']}: {m['content']}" for m in old_messages
-                )
-                prompt = SUMMARIZE_MEMORY_PROMPT.format(conversation=convo_text)
-                summary_result = self._call_llm(
-                    [{"role": "user", "content": prompt}]
-                )
-                summary_msg = {
-                    "role": "system",
-                    "content": f"Previous conversation summary: {summary_result.text}",
-                }
-                self._messages = (
-                    [self._messages[0], summary_msg] + recent_messages
-                )
+            convo_text = "\n".join(f"{m['role']}: {m['content']}" for m in old_messages)
+            prompt = SUMMARIZE_MEMORY_PROMPT.format(conversation=convo_text)
+            summary_result = self._call_llm([{"role": "user", "content": prompt}])
+            summary_msg = {
+                "role": "system",
+                "content": f"Previous conversation summary: {summary_result.text}",
+            }
+            self._messages = [self._messages[0], summary_msg] + recent_messages
 
     # ------------------------------------------------------------------
     # Internal helpers

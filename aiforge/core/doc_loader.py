@@ -22,7 +22,6 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
 
 from langchain_core.documents import Document
 
@@ -35,34 +34,94 @@ _logger = logging.getLogger(__name__)
 # Extensions handled as plain text (no special loader needed)
 _TEXT_EXTENSIONS = frozenset(
     {
-        ".py", ".js", ".ts", ".jsx", ".tsx",
-        ".go", ".java", ".rs", ".c", ".cpp", ".h", ".hpp",
-        ".rb", ".php", ".swift", ".kt", ".scala",
-        ".md", ".txt", ".rst", ".sh", ".bash", ".zsh",
-        ".json", ".yaml", ".yml", ".toml", ".ini", ".cfg",
-        ".csv", ".xml", ".html", ".htm",
-        ".sql", ".dockerfile",
+        ".py",
+        ".js",
+        ".ts",
+        ".jsx",
+        ".tsx",
+        ".go",
+        ".java",
+        ".rs",
+        ".c",
+        ".cpp",
+        ".h",
+        ".hpp",
+        ".rb",
+        ".php",
+        ".swift",
+        ".kt",
+        ".scala",
+        ".md",
+        ".txt",
+        ".rst",
+        ".sh",
+        ".bash",
+        ".zsh",
+        ".json",
+        ".yaml",
+        ".yml",
+        ".toml",
+        ".ini",
+        ".cfg",
+        ".csv",
+        ".xml",
+        ".html",
+        ".htm",
+        ".sql",
+        ".dockerfile",
     }
 )
 
 _IGNORE_EXTENSIONS = frozenset(
     {
-        ".pyc", ".pyo", ".class", ".o", ".so", ".dll", ".exe",
-        ".zip", ".tar", ".gz", ".bz2", ".xz",
-        ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".svg", ".ico",
-        ".mp3", ".mp4", ".avi", ".mov",
-        ".whl", ".egg-info",
+        ".pyc",
+        ".pyo",
+        ".class",
+        ".o",
+        ".so",
+        ".dll",
+        ".exe",
+        ".zip",
+        ".tar",
+        ".gz",
+        ".bz2",
+        ".xz",
+        ".png",
+        ".jpg",
+        ".jpeg",
+        ".gif",
+        ".bmp",
+        ".svg",
+        ".ico",
+        ".mp3",
+        ".mp4",
+        ".avi",
+        ".mov",
+        ".whl",
+        ".egg-info",
         ".lock",  # package lock files — usually large & uninteresting
     }
 )
 
 _IGNORE_DIR_NAMES = frozenset(
     {
-        ".git", ".svn", ".hg",
-        "__pycache__", ".mypy_cache", ".ruff_cache", ".pytest_cache",
-        "node_modules", ".next", ".nuxt",
-        "venv", ".venv", "env", ".env",
-        "dist", "build", ".build",
+        ".git",
+        ".svn",
+        ".hg",
+        "__pycache__",
+        ".mypy_cache",
+        ".ruff_cache",
+        ".pytest_cache",
+        "node_modules",
+        ".next",
+        ".nuxt",
+        "venv",
+        ".venv",
+        "env",
+        ".env",
+        "dist",
+        "build",
+        ".build",
         "aiforge_data",
     }
 )
@@ -95,9 +154,7 @@ class DocLoader:
             encoding:        Text encoding for plain-text files.
         """
         self._allowed_extensions: frozenset[str] | None = (
-            frozenset(e.lower() for e in file_extensions)
-            if file_extensions is not None
-            else None
+            frozenset(e.lower() for e in file_extensions) if file_extensions is not None else None
         )
         self._encoding = encoding
 
@@ -144,9 +201,7 @@ class DocLoader:
             docs.extend(file_docs)
         return docs
 
-    def _load_file_list(
-        self, paths: list[str], stats: IngestStats
-    ) -> list[Document]:
+    def _load_file_list(self, paths: list[str], stats: IngestStats) -> list[Document]:
         docs: list[Document] = []
         for p in paths:
             file_docs = self._load_single_file(Path(p), stats)
@@ -227,7 +282,7 @@ class DocLoader:
                 from langchain.document_loaders import PyPDFLoader  # type: ignore[no-redef]
             except ImportError:
                 raise ImportError(
-                    "PyPDF not installed. Run: pip install \"aiforge[docs]\" to add PDF support."
+                    'PyPDF not installed. Run: pip install "aiforge[docs]" to add PDF support.'
                 ) from None
         loader = PyPDFLoader(str(path))
         return loader.load()
@@ -237,7 +292,7 @@ class DocLoader:
             from langchain_community.document_loaders import Docx2txtLoader
         except ImportError:
             raise ImportError(
-                "python-docx not installed. Run: pip install \"aiforge[docs]\" for DOCX support."
+                'python-docx not installed. Run: pip install "aiforge[docs]" for DOCX support.'
             ) from None
         loader = Docx2txtLoader(str(path))
         return loader.load()
@@ -264,9 +319,7 @@ class DocLoader:
                 check=False,
             )
             if result.returncode != 0:
-                raise RuntimeError(
-                    f"git clone failed for {git_url!r}:\n{result.stderr}"
-                )
+                raise RuntimeError(f"git clone failed for {git_url!r}:\n{result.stderr}")
             docs = self._load_directory(Path(tmpdir), stats)
 
         # Rewrite metadata source paths so they reference the git URL rather

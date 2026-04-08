@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from aiforge.modules.qa.agent import QAAgentState, build_qa_graph
+from aiforge.modules.qa.agent import build_qa_graph
 from aiforge.modules.qa.module import DocQA, _estimate_tokens
 from aiforge.modules.qa.prompts import (
     CLASSIFY_PROMPT,
@@ -15,7 +15,6 @@ from aiforge.modules.qa.prompts import (
     RESPOND_PROMPT,
 )
 from aiforge.modules.qa.schemas import IngestResponse, QAResponse
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -218,7 +217,9 @@ class TestAgentGraphSingleIteration:
                 _fake_llm("Auth uses JWT tokens."),  # respond
             ]
         )
-        llm_fn = lambda prompt: next(calls)
+        def llm_fn(prompt: Any) -> Any:
+            return next(calls)
+
         retrieve_fn = MagicMock(return_value=_sample_hits(2))
 
         graph = build_qa_graph(llm_fn=llm_fn, retrieve_fn=retrieve_fn, retrieval_k=6)
@@ -247,17 +248,21 @@ class TestAgentGraphSingleIteration:
         assert steps == ["classify", "retrieve", "reason", "respond"]
 
     def test_token_accumulation(self) -> None:
-        calls = iter([_fake_llm(inp=10, out=5), _fake_llm(inp=20, out=10), _fake_llm(inp=30, out=15)])
+        calls = iter(
+            [_fake_llm(inp=10, out=5), _fake_llm(inp=20, out=10), _fake_llm(inp=30, out=15)]
+        )
         graph = build_qa_graph(
             llm_fn=lambda p: next(calls),
             retrieve_fn=MagicMock(return_value=_sample_hits()),
         )
         # Provide default text for LLM responses
-        calls = iter([
-            _fake_llm("factual", 10, 5),
-            _fake_llm("SUFFICIENT: 0.9", 20, 10),
-            _fake_llm("answer", 30, 15),
-        ])
+        calls = iter(
+            [
+                _fake_llm("factual", 10, 5),
+                _fake_llm("SUFFICIENT: 0.9", 20, 10),
+                _fake_llm("answer", 30, 15),
+            ]
+        )
         graph = build_qa_graph(
             llm_fn=lambda p: next(calls),
             retrieve_fn=MagicMock(return_value=_sample_hits()),
@@ -282,7 +287,9 @@ class TestAgentGraphMultiIteration:
         retrieve_fn = MagicMock(return_value=_sample_hits(1))
 
         graph = build_qa_graph(
-            llm_fn=lambda p: next(calls), retrieve_fn=retrieve_fn, retrieval_k=4,
+            llm_fn=lambda p: next(calls),
+            retrieve_fn=retrieve_fn,
+            retrieval_k=4,
         )
         result = graph.invoke(_initial_state(max_iterations=3))
 
@@ -324,9 +331,10 @@ class TestAgentGraphMultiIteration:
         )
         retrieve_fn = MagicMock(return_value=_sample_hits())
         graph = build_qa_graph(
-            llm_fn=lambda p: next(calls), retrieve_fn=retrieve_fn,
+            llm_fn=lambda p: next(calls),
+            retrieve_fn=retrieve_fn,
         )
-        result = graph.invoke(_initial_state())
+        graph.invoke(_initial_state())
         # Second retrieve call should use refined query
         second_call_args = retrieve_fn.call_args_list[1]
         assert second_call_args[0][0] == "refined auth question"
@@ -342,10 +350,21 @@ class TestAgentGraphMultiIteration:
         )
         # Different hits per call
         retrieve_fn = MagicMock(
-            side_effect=[_sample_hits(2), [{"id": "c3", "text": "new chunk", "metadata": {"source": "new.py"}, "distance": 0.05}]]
+            side_effect=[
+                _sample_hits(2),
+                [
+                    {
+                        "id": "c3",
+                        "text": "new chunk",
+                        "metadata": {"source": "new.py"},
+                        "distance": 0.05,
+                    }
+                ],
+            ]
         )
         graph = build_qa_graph(
-            llm_fn=lambda p: next(calls), retrieve_fn=retrieve_fn,
+            llm_fn=lambda p: next(calls),
+            retrieve_fn=retrieve_fn,
         )
         result = graph.invoke(_initial_state())
         # 2 chunks from first retrieval + 1 from second
@@ -355,9 +374,7 @@ class TestAgentGraphMultiIteration:
 
 class TestAgentRepoFilter:
     def test_passes_filter_to_retrieve(self) -> None:
-        calls = iter(
-            [_fake_llm("factual"), _fake_llm("SUFFICIENT: 0.9"), _fake_llm("answer")]
-        )
+        calls = iter([_fake_llm("factual"), _fake_llm("SUFFICIENT: 0.9"), _fake_llm("answer")])
         retrieve_fn = MagicMock(return_value=_sample_hits())
         graph = build_qa_graph(llm_fn=lambda p: next(calls), retrieve_fn=retrieve_fn)
 
@@ -369,9 +386,7 @@ class TestAgentRepoFilter:
         assert kwargs["filter"] == {"source": {"$contains": "dal-ingest"}}
 
     def test_no_filter_when_none(self) -> None:
-        calls = iter(
-            [_fake_llm("factual"), _fake_llm("SUFFICIENT: 0.9"), _fake_llm("answer")]
-        )
+        calls = iter([_fake_llm("factual"), _fake_llm("SUFFICIENT: 0.9"), _fake_llm("answer")])
         retrieve_fn = MagicMock(return_value=_sample_hits())
         graph = build_qa_graph(llm_fn=lambda p: next(calls), retrieve_fn=retrieve_fn)
         graph.invoke(_initial_state())
@@ -381,9 +396,7 @@ class TestAgentRepoFilter:
 
 class TestAgentConfidenceParsing:
     def test_parses_valid_confidence(self) -> None:
-        calls = iter(
-            [_fake_llm("factual"), _fake_llm("SUFFICIENT: 0.92"), _fake_llm("a")]
-        )
+        calls = iter([_fake_llm("factual"), _fake_llm("SUFFICIENT: 0.92"), _fake_llm("a")])
         graph = build_qa_graph(
             llm_fn=lambda p: next(calls),
             retrieve_fn=MagicMock(return_value=_sample_hits()),
@@ -392,9 +405,7 @@ class TestAgentConfidenceParsing:
         assert result["confidence"] == pytest.approx(0.92)
 
     def test_defaults_on_bad_confidence(self) -> None:
-        calls = iter(
-            [_fake_llm("factual"), _fake_llm("SUFFICIENT: not-a-number"), _fake_llm("a")]
-        )
+        calls = iter([_fake_llm("factual"), _fake_llm("SUFFICIENT: not-a-number"), _fake_llm("a")])
         graph = build_qa_graph(
             llm_fn=lambda p: next(calls),
             retrieve_fn=MagicMock(return_value=_sample_hits()),
@@ -403,9 +414,7 @@ class TestAgentConfidenceParsing:
         assert result["confidence"] == pytest.approx(0.7)
 
     def test_clamps_confidence(self) -> None:
-        calls = iter(
-            [_fake_llm("factual"), _fake_llm("SUFFICIENT: 1.5"), _fake_llm("a")]
-        )
+        calls = iter([_fake_llm("factual"), _fake_llm("SUFFICIENT: 1.5"), _fake_llm("a")])
         graph = build_qa_graph(
             llm_fn=lambda p: next(calls),
             retrieve_fn=MagicMock(return_value=_sample_hits()),
@@ -414,9 +423,7 @@ class TestAgentConfidenceParsing:
         assert result["confidence"] == 1.0
 
     def test_clamps_negative(self) -> None:
-        calls = iter(
-            [_fake_llm("factual"), _fake_llm("SUFFICIENT: -0.5"), _fake_llm("a")]
-        )
+        calls = iter([_fake_llm("factual"), _fake_llm("SUFFICIENT: -0.5"), _fake_llm("a")])
         graph = build_qa_graph(
             llm_fn=lambda p: next(calls),
             retrieve_fn=MagicMock(return_value=_sample_hits()),
@@ -428,7 +435,11 @@ class TestAgentConfidenceParsing:
 class TestAgentEmptyRetrieval:
     def test_no_hits_still_completes(self) -> None:
         calls = iter(
-            [_fake_llm("factual"), _fake_llm("SUFFICIENT: 0.3"), _fake_llm("No relevant docs found.")]
+            [
+                _fake_llm("factual"),
+                _fake_llm("SUFFICIENT: 0.3"),
+                _fake_llm("No relevant docs found."),
+            ]
         )
         graph = build_qa_graph(
             llm_fn=lambda p: next(calls),
@@ -466,7 +477,6 @@ class TestDocQAConstructor:
             DocQA(collection="   ")
 
     def test_collection_stripped(self) -> None:
-        qa = _qa(collection="  myc  ")
         # _qa bypasses validation, test the real constructor
         with patch("aiforge.modules.qa.module.BaseModule.__init__"):
             obj = DocQA.__new__(DocQA)
@@ -612,6 +622,7 @@ class TestDocQAAsk:
     def _setup_ask_mocks(self, qa: DocQA, llm_responses: list) -> None:
         """Set up _call_llm with side_effect and embed_query mock."""
         qa._call_llm = MagicMock(side_effect=llm_responses)
+        assert qa._embedding_provider is not None
         qa._embedding_provider.embed_query.return_value = [0.1] * 384
 
     def test_ask_returns_answer(self) -> None:
@@ -619,11 +630,14 @@ class TestDocQAAsk:
         store.collection_stats.return_value = {"chunks": 10}
         store.query.return_value = _sample_hits()
         qa = _qa(store=store)
-        self._setup_ask_mocks(qa, [
-            _fake_llm("factual"),
-            _fake_llm("SUFFICIENT: 0.85"),
-            _fake_llm("The auth module uses JWT."),
-        ])
+        self._setup_ask_mocks(
+            qa,
+            [
+                _fake_llm("factual"),
+                _fake_llm("SUFFICIENT: 0.85"),
+                _fake_llm("The auth module uses JWT."),
+            ],
+        )
 
         result = qa.ask("How does auth work?")
         assert result.text == "The auth module uses JWT."
@@ -634,11 +648,14 @@ class TestDocQAAsk:
         store.collection_stats.return_value = {"chunks": 10}
         store.query.return_value = _sample_hits()
         qa = _qa(store=store)
-        self._setup_ask_mocks(qa, [
-            _fake_llm("factual"),
-            _fake_llm("SUFFICIENT: 0.92"),
-            _fake_llm("answer"),
-        ])
+        self._setup_ask_mocks(
+            qa,
+            [
+                _fake_llm("factual"),
+                _fake_llm("SUFFICIENT: 0.92"),
+                _fake_llm("answer"),
+            ],
+        )
 
         result = qa.ask("test?")
         assert result.confidence == pytest.approx(0.92)
@@ -648,11 +665,14 @@ class TestDocQAAsk:
         store.collection_stats.return_value = {"chunks": 10}
         store.query.return_value = _sample_hits(2)
         qa = _qa(store=store)
-        self._setup_ask_mocks(qa, [
-            _fake_llm("factual"),
-            _fake_llm("SUFFICIENT: 0.9"),
-            _fake_llm("answer"),
-        ])
+        self._setup_ask_mocks(
+            qa,
+            [
+                _fake_llm("factual"),
+                _fake_llm("SUFFICIENT: 0.9"),
+                _fake_llm("answer"),
+            ],
+        )
 
         result = qa.ask("test?")
         assert "src/file0.py" in result.sources
@@ -663,11 +683,14 @@ class TestDocQAAsk:
         store.collection_stats.return_value = {"chunks": 10}
         store.query.return_value = _sample_hits()
         qa = _qa(store=store)
-        self._setup_ask_mocks(qa, [
-            _fake_llm("factual"),
-            _fake_llm("SUFFICIENT: 0.9"),
-            _fake_llm("answer"),
-        ])
+        self._setup_ask_mocks(
+            qa,
+            [
+                _fake_llm("factual"),
+                _fake_llm("SUFFICIENT: 0.9"),
+                _fake_llm("answer"),
+            ],
+        )
 
         result = qa.ask("test?", include_trace=True)
         assert result.trace is not None
@@ -682,11 +705,14 @@ class TestDocQAAsk:
         store.collection_stats.return_value = {"chunks": 10}
         store.query.return_value = _sample_hits()
         qa = _qa(store=store)
-        self._setup_ask_mocks(qa, [
-            _fake_llm("factual"),
-            _fake_llm("SUFFICIENT: 0.9"),
-            _fake_llm("answer"),
-        ])
+        self._setup_ask_mocks(
+            qa,
+            [
+                _fake_llm("factual"),
+                _fake_llm("SUFFICIENT: 0.9"),
+                _fake_llm("answer"),
+            ],
+        )
 
         result = qa.ask("test?", include_trace=False)
         assert result.trace is None
@@ -696,11 +722,14 @@ class TestDocQAAsk:
         store.collection_stats.return_value = {"chunks": 10}
         store.query.return_value = _sample_hits()
         qa = _qa(store=store)
-        self._setup_ask_mocks(qa, [
-            _fake_llm("factual"),
-            _fake_llm("SUFFICIENT: 0.9"),
-            _fake_llm("answer"),
-        ])
+        self._setup_ask_mocks(
+            qa,
+            [
+                _fake_llm("factual"),
+                _fake_llm("SUFFICIENT: 0.9"),
+                _fake_llm("answer"),
+            ],
+        )
 
         result = qa.ask("test?", filter_repo="dal-ingest")
         assert result.text == "answer"
@@ -714,6 +743,7 @@ class TestDocQAAsk:
         qa = _qa(store=store)
 
         from aiforge.core.types import AIForgeError
+
         with pytest.raises(AIForgeError, match="No documents ingested"):
             qa.ask("test?")
 
@@ -722,11 +752,14 @@ class TestDocQAAsk:
         store.collection_stats.return_value = {"chunks": 10}
         store.query.return_value = _sample_hits()
         qa = _qa(store=store)
-        self._setup_ask_mocks(qa, [
-            _fake_llm("factual", 10, 5),
-            _fake_llm("SUFFICIENT: 0.9", 20, 10),
-            _fake_llm("answer", 30, 15),
-        ])
+        self._setup_ask_mocks(
+            qa,
+            [
+                _fake_llm("factual", 10, 5),
+                _fake_llm("SUFFICIENT: 0.9", 20, 10),
+                _fake_llm("answer", 30, 15),
+            ],
+        )
 
         result = qa.ask("test?")
         assert result.input_tokens == 60
@@ -737,12 +770,15 @@ class TestDocQAAsk:
         store.collection_stats.return_value = {"chunks": 10}
         store.query.return_value = _sample_hits()
         qa = _qa(store=store, max_iterations=2)
-        self._setup_ask_mocks(qa, [
-            _fake_llm("factual"),
-            _fake_llm("INSUFFICIENT: better query"),
-            _fake_llm("SUFFICIENT: 0.8"),
-            _fake_llm("answer"),
-        ])
+        self._setup_ask_mocks(
+            qa,
+            [
+                _fake_llm("factual"),
+                _fake_llm("INSUFFICIENT: better query"),
+                _fake_llm("SUFFICIENT: 0.8"),
+                _fake_llm("answer"),
+            ],
+        )
 
         result = qa.ask("test?")
         assert result.iterations == 2
@@ -752,12 +788,15 @@ class TestDocQAAsk:
         store.collection_stats.return_value = {"chunks": 10}
         store.query.return_value = _sample_hits()
         qa = _qa(store=store, max_iterations=2)
-        self._setup_ask_mocks(qa, [
-            _fake_llm("factual"),
-            _fake_llm("INSUFFICIENT: q1"),
-            _fake_llm("INSUFFICIENT: q2"),
-            _fake_llm("forced answer"),
-        ])
+        self._setup_ask_mocks(
+            qa,
+            [
+                _fake_llm("factual"),
+                _fake_llm("INSUFFICIENT: q1"),
+                _fake_llm("INSUFFICIENT: q2"),
+                _fake_llm("forced answer"),
+            ],
+        )
 
         result = qa.ask("test?")
         assert result.iterations <= 2
@@ -767,11 +806,14 @@ class TestDocQAAsk:
         store.collection_stats.return_value = {"chunks": 10}
         store.query.return_value = _sample_hits()
         qa = _qa(store=store)
-        self._setup_ask_mocks(qa, [
-            _fake_llm("factual"),
-            _fake_llm("SUFFICIENT: 0.9"),
-            _fake_llm("answer"),
-        ])
+        self._setup_ask_mocks(
+            qa,
+            [
+                _fake_llm("factual"),
+                _fake_llm("SUFFICIENT: 0.9"),
+                _fake_llm("answer"),
+            ],
+        )
 
         result = qa.ask("test?")
         assert result.latency_ms > 0
@@ -781,11 +823,14 @@ class TestDocQAAsk:
         store.collection_stats.return_value = {"chunks": 10}
         store.query.return_value = _sample_hits()
         qa = _qa(store=store)
-        self._setup_ask_mocks(qa, [
-            _fake_llm("factual"),
-            _fake_llm("SUFFICIENT: 0.9"),
-            _fake_llm("answer"),
-        ])
+        self._setup_ask_mocks(
+            qa,
+            [
+                _fake_llm("factual"),
+                _fake_llm("SUFFICIENT: 0.9"),
+                _fake_llm("answer"),
+            ],
+        )
 
         result = qa.ask("test?")
         assert len(result.trace_id) == 16
@@ -798,11 +843,13 @@ class TestDocQAAskAsync:
         store.collection_stats.return_value = {"chunks": 10}
         store.query.return_value = _sample_hits()
         qa = _qa(store=store)
-        qa._call_llm = MagicMock(side_effect=[
-            _fake_llm("factual"),
-            _fake_llm("SUFFICIENT: 0.9"),
-            _fake_llm("async answer"),
-        ])
+        qa._call_llm = MagicMock(
+            side_effect=[
+                _fake_llm("factual"),
+                _fake_llm("SUFFICIENT: 0.9"),
+                _fake_llm("async answer"),
+            ]
+        )
 
         result = await qa.aask("test?")
         assert result.text == "async answer"
@@ -814,11 +861,13 @@ class TestDocQAAskAsync:
         store.collection_stats.return_value = {"chunks": 10}
         store.query.return_value = _sample_hits()
         qa = _qa(store=store)
-        qa._call_llm = MagicMock(side_effect=[
-            _fake_llm("factual"),
-            _fake_llm("SUFFICIENT: 0.85"),
-            _fake_llm("answer"),
-        ])
+        qa._call_llm = MagicMock(
+            side_effect=[
+                _fake_llm("factual"),
+                _fake_llm("SUFFICIENT: 0.85"),
+                _fake_llm("answer"),
+            ]
+        )
 
         result = await qa.aask("test?", include_trace=True)
         assert result.trace is not None
@@ -831,6 +880,7 @@ class TestDocQAAskAsync:
         qa = _qa(store=store)
 
         from aiforge.core.types import AIForgeError
+
         with pytest.raises(AIForgeError, match="No documents ingested"):
             await qa.aask("test?")
 
@@ -884,11 +934,13 @@ class TestDocQAPipeline:
         store.collection_stats.return_value = {"chunks": 10}
         store.query.return_value = _sample_hits()
         qa = _qa(store=store)
-        qa._call_llm = MagicMock(side_effect=[
-            _fake_llm("factual"),
-            _fake_llm("SUFFICIENT: 0.9"),
-            _fake_llm("pipeline answer"),
-        ])
+        qa._call_llm = MagicMock(
+            side_effect=[
+                _fake_llm("factual"),
+                _fake_llm("SUFFICIENT: 0.9"),
+                _fake_llm("pipeline answer"),
+            ]
+        )
 
         result = qa.run("test?")
         assert result.text == "pipeline answer"
@@ -899,11 +951,13 @@ class TestDocQAPipeline:
         store.collection_stats.return_value = {"chunks": 10}
         store.query.return_value = _sample_hits()
         qa = _qa(store=store)
-        qa._call_llm = MagicMock(side_effect=[
-            _fake_llm("factual"),
-            _fake_llm("SUFFICIENT: 0.9"),
-            _fake_llm("async pipeline"),
-        ])
+        qa._call_llm = MagicMock(
+            side_effect=[
+                _fake_llm("factual"),
+                _fake_llm("SUFFICIENT: 0.9"),
+                _fake_llm("async pipeline"),
+            ]
+        )
 
         result = await qa.arun("test?")
         assert result.text == "async pipeline"
@@ -937,6 +991,7 @@ class TestRoutes:
     def client(self):
         from fastapi import FastAPI
         from fastapi.testclient import TestClient
+
         from aiforge.server.routes.qa import router
 
         app = FastAPI()
@@ -947,20 +1002,25 @@ class TestRoutes:
         (tmp_path / "test.py").write_text("x = 1\n")
         with patch("aiforge.modules.qa.module.DocQA") as MockQA:
             mock_qa = MagicMock()
-            mock_qa.aingest = AsyncMock(return_value=IngestResponse(
-                chunks_indexed=5,
-                files_processed=1,
-                languages={"py": 1},
-                skipped_files=[],
-                collection="test",
-                cost=0.001,
-            ))
+            mock_qa.aingest = AsyncMock(
+                return_value=IngestResponse(
+                    chunks_indexed=5,
+                    files_processed=1,
+                    languages={"py": 1},
+                    skipped_files=[],
+                    collection="test",
+                    cost=0.001,
+                )
+            )
             MockQA.return_value = mock_qa
 
-            resp = client.post("/qa/ingest", json={
-                "source": str(tmp_path),
-                "collection": "test",
-            })
+            resp = client.post(
+                "/qa/ingest",
+                json={
+                    "source": str(tmp_path),
+                    "collection": "test",
+                },
+            )
 
         assert resp.status_code == 200
         data = resp.json()
@@ -970,21 +1030,26 @@ class TestRoutes:
     def test_ask_endpoint(self, client) -> None:
         with patch("aiforge.modules.qa.module.DocQA") as MockQA:
             mock_qa = MagicMock()
-            mock_qa.aask = AsyncMock(return_value=QAResponse(
-                text="JWT is used.",
-                sources=["auth.py"],
-                confidence=0.9,
-                iterations=1,
-                cost=0.01,
-                model="gpt-4o-mini",
-                trace_id="abc123",
-            ))
+            mock_qa.aask = AsyncMock(
+                return_value=QAResponse(
+                    text="JWT is used.",
+                    sources=["auth.py"],
+                    confidence=0.9,
+                    iterations=1,
+                    cost=0.01,
+                    model="gpt-4o-mini",
+                    trace_id="abc123",
+                )
+            )
             MockQA.return_value = mock_qa
 
-            resp = client.post("/qa/ask", json={
-                "query": "How does auth work?",
-                "collection": "test",
-            })
+            resp = client.post(
+                "/qa/ask",
+                json={
+                    "query": "How does auth work?",
+                    "collection": "test",
+                },
+            )
 
         assert resp.status_code == 200
         data = resp.json()
@@ -994,18 +1059,23 @@ class TestRoutes:
     def test_ask_with_trace(self, client) -> None:
         with patch("aiforge.modules.qa.module.DocQA") as MockQA:
             mock_qa = MagicMock()
-            mock_qa.aask = AsyncMock(return_value=QAResponse(
-                text="answer",
-                trace=[{"step": "classify"}],
-                confidence=0.8,
-                iterations=1,
-            ))
+            mock_qa.aask = AsyncMock(
+                return_value=QAResponse(
+                    text="answer",
+                    trace=[{"step": "classify"}],
+                    confidence=0.8,
+                    iterations=1,
+                )
+            )
             MockQA.return_value = mock_qa
 
-            resp = client.post("/qa/ask", json={
-                "query": "test?",
-                "include_trace": True,
-            })
+            resp = client.post(
+                "/qa/ask",
+                json={
+                    "query": "test?",
+                    "include_trace": True,
+                },
+            )
 
         data = resp.json()
         assert data["trace"] is not None
@@ -1013,6 +1083,7 @@ class TestRoutes:
     def test_ask_empty_collection(self, client) -> None:
         with patch("aiforge.modules.qa.module.DocQA") as MockQA:
             from aiforge.core.types import AIForgeError
+
             mock_qa = MagicMock()
             mock_qa.aask = AsyncMock(side_effect=AIForgeError("No documents ingested"))
             MockQA.return_value = mock_qa
@@ -1139,7 +1210,8 @@ class TestAgentInsufficientNoColon:
         )
         retrieve_fn = MagicMock(return_value=_sample_hits())
         graph = build_qa_graph(
-            llm_fn=lambda p: next(calls), retrieve_fn=retrieve_fn,
+            llm_fn=lambda p: next(calls),
+            retrieve_fn=retrieve_fn,
         )
         result = graph.invoke(_initial_state(query="original q", max_iterations=3))
         # Second retrieve call should reuse original query (not updated)
@@ -1280,7 +1352,7 @@ class TestReasonNodeInsufficientQuotedQuery:
             llm_fn=lambda p: next(calls),
             retrieve_fn=retrieve_fn,
         )
-        result = graph.invoke(_initial_state(max_iterations=3))
+        graph.invoke(_initial_state(max_iterations=3))
         # The refined query should have quotes stripped
         second_retrieve = retrieve_fn.call_args_list[1]
         assert second_retrieve[0][0] == "How did Romeo and Juliet meet?"
@@ -1299,6 +1371,6 @@ class TestReasonNodeInsufficientQuotedQuery:
             llm_fn=lambda p: next(calls),
             retrieve_fn=retrieve_fn,
         )
-        result = graph.invoke(_initial_state(max_iterations=3))
+        graph.invoke(_initial_state(max_iterations=3))
         second_retrieve = retrieve_fn.call_args_list[1]
         assert second_retrieve[0][0] == "a better query"

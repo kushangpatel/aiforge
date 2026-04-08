@@ -63,6 +63,7 @@ _LABELS_MAX = 100
 # Module-level helpers
 # ---------------------------------------------------------------------------
 
+
 def _extract_json(raw: str) -> str:
     """Strip markdown code fences from LLM output before JSON parsing."""
     text = raw.strip()
@@ -94,6 +95,7 @@ def _fmt_examples(examples: list[ClassifyExample]) -> str:
 # ---------------------------------------------------------------------------
 # Classifier class
 # ---------------------------------------------------------------------------
+
 
 class Classifier(BaseModule):
     """Zero/few-shot text classifier backed by an LLM.
@@ -156,9 +158,12 @@ class Classifier(BaseModule):
         if not text or not text.strip():
             raise ValueError("text must not be empty or whitespace-only")
         t0 = time.monotonic()
-        llm = self._call_llm(self._build_messages(text, system_prompt=system_prompt), temperature=self.temperature)
+        llm = self._call_llm(
+            self._build_messages(text, system_prompt=system_prompt), temperature=self.temperature
+        )
         result = self._parse_response(llm.text)
         from aiforge.core.pricing import calculate_cost
+
         cost = calculate_cost(llm.model, llm.input_tokens, llm.output_tokens)
         return ClassifyResponse(
             label=result.label,
@@ -176,9 +181,12 @@ class Classifier(BaseModule):
         if not text or not text.strip():
             raise ValueError("text must not be empty or whitespace-only")
         t0 = time.monotonic()
-        llm = await self._acall_llm(self._build_messages(text, system_prompt=system_prompt), temperature=self.temperature)
+        llm = await self._acall_llm(
+            self._build_messages(text, system_prompt=system_prompt), temperature=self.temperature
+        )
         result = self._parse_response(llm.text)
         from aiforge.core.pricing import calculate_cost
+
         cost = calculate_cost(llm.model, llm.input_tokens, llm.output_tokens)
         return ClassifyResponse(
             label=result.label,
@@ -227,6 +235,7 @@ class Classifier(BaseModule):
         llm = self._call_llm(messages, temperature=self.temperature)
         parsed = self._parse_sentiment(llm.text, aspects)
         from aiforge.core.pricing import calculate_cost
+
         cost = calculate_cost(llm.model, llm.input_tokens, llm.output_tokens)
         return SentimentResponse(
             overall=parsed.overall,
@@ -256,6 +265,7 @@ class Classifier(BaseModule):
         llm = await self._acall_llm(messages, temperature=self.temperature)
         parsed = self._parse_sentiment(llm.text, aspects)
         from aiforge.core.pricing import calculate_cost
+
         cost = calculate_cost(llm.model, llm.input_tokens, llm.output_tokens)
         return SentimentResponse(
             overall=parsed.overall,
@@ -280,7 +290,9 @@ class Classifier(BaseModule):
         resolved_system = resolve_prompt(
             call_override=system_prompt,
             instance_override=self._system_prompt_override,
-            config_override=self.settings.CUSTOM_PROMPTS.get("classify", {}).get("sentiment_system"),
+            config_override=self.settings.CUSTOM_PROMPTS.get("classify", {}).get(
+                "sentiment_system"
+            ),
             default=SENTIMENT_SYSTEM,
         )
         if aspects:
@@ -343,7 +355,9 @@ class Classifier(BaseModule):
     # Private helpers
     # ------------------------------------------------------------------
 
-    def _build_messages(self, text: str, *, system_prompt: str | None = None) -> list[dict[str, str]]:
+    def _build_messages(
+        self, text: str, *, system_prompt: str | None = None
+    ) -> list[dict[str, str]]:
         """Construct the system + user message list for the LLM call."""
         resolved_system = resolve_prompt(
             call_override=system_prompt,
@@ -407,9 +421,7 @@ class Classifier(BaseModule):
                 return raw
             matched = next((lbl for lbl in self.labels if lbl.lower() == raw.lower()), None)
             if matched:
-                self.logger.warning(
-                    "classify.label_case_mismatch", returned=raw, matched=matched
-                )
+                self.logger.warning("classify.label_case_mismatch", returned=raw, matched=matched)
             return matched
 
         if self.multi_label:

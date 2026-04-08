@@ -31,7 +31,7 @@ def read_input(
 
 
 def format_output(
-    data: dict[str, Any],
+    data: dict[str, Any] | list[Any],
     fmt: str,
     *,
     table_columns: list[tuple[str, str]] | None = None,
@@ -73,6 +73,5 @@ def print_metrics(resp: Any) -> None:
     latency = getattr(resp, "latency_ms", 0.0)
     model = getattr(resp, "model", "")
     console.print(
-        f"\n[dim]model={model}  tokens={inp}+{out}  "
-        f"cost=${cost:.4f}  latency={latency:.0f}ms[/dim]"
+        f"\n[dim]model={model}  tokens={inp}+{out}  cost=${cost:.4f}  latency={latency:.0f}ms[/dim]"
     )

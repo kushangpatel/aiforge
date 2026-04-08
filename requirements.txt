@@ -46,7 +46,7 @@ langchain-openai>=0.2.0
 # ============================================================
 # Playground UI (uncomment to enable Streamlit playground)
 # ============================================================
-# streamlit>=1.40.0
+streamlit>=1.40.0
 
 # ============================================================
 # Observability (uncomment to enable tracing)

@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
+from typing import cast
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from aiforge.modules.classify.module import Classifier, _extract_json, _fmt_examples, _fmt_labels
 from aiforge.modules.classify.schemas import ClassifyExample, ClassifyResponse, LabelScore
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -32,8 +32,9 @@ def _clf(
     c.temperature = temperature
     c.min_confidence = min_confidence
 
-    import structlog
     from unittest.mock import MagicMock as MM
+
+    import structlog
 
     c.logger = structlog.get_logger()
     c._provider = None
@@ -45,6 +46,7 @@ def _clf(
     c.settings = settings
     c._system_prompt_override = None
     from aiforge.infra.cost_tracker import CostTracker
+
     c.cost_tracker = CostTracker.get_session()
     return c
 
@@ -61,6 +63,7 @@ def _fake_llm(text: str) -> MagicMock:
 # ---------------------------------------------------------------------------
 # Constructor validation
 # ---------------------------------------------------------------------------
+
 
 class TestClassifierConstructor:
     def test_empty_labels_raises(self) -> None:
@@ -117,6 +120,7 @@ class TestClassifierConstructor:
 # _extract_json helper
 # ---------------------------------------------------------------------------
 
+
 class TestExtractJson:
     def test_bare_json_unchanged(self) -> None:
         raw = '{"label": "positive"}'
@@ -143,6 +147,7 @@ class TestExtractJson:
 # ---------------------------------------------------------------------------
 # Prompt formatting helpers
 # ---------------------------------------------------------------------------
+
 
 class TestPromptHelpers:
     def test_fmt_labels_bullets(self) -> None:
@@ -172,6 +177,7 @@ class TestPromptHelpers:
 # ---------------------------------------------------------------------------
 # Message building
 # ---------------------------------------------------------------------------
+
 
 class TestBuildMessages:
     def test_zero_shot_single_label(self) -> None:
@@ -212,6 +218,7 @@ class TestBuildMessages:
 # Edge case input validation (I1)
 # ---------------------------------------------------------------------------
 
+
 class TestEdgeCases:
     def test_classify_empty_text_raises(self) -> None:
         c = _clf()
@@ -233,6 +240,7 @@ class TestEdgeCases:
 # ---------------------------------------------------------------------------
 # Confidence clamping (C1)
 # ---------------------------------------------------------------------------
+
 
 class TestConfidenceClamping:
     def test_confidence_above_one_clamped(self) -> None:
@@ -258,6 +266,7 @@ class TestConfidenceClamping:
 # min_confidence threshold (M6)
 # ---------------------------------------------------------------------------
 
+
 class TestMinConfidence:
     def test_low_confidence_returns_none(self) -> None:
         c = _clf(min_confidence=0.8)
@@ -280,6 +289,7 @@ class TestMinConfidence:
 # ---------------------------------------------------------------------------
 # Case-insensitive label matching (I6 / I7)
 # ---------------------------------------------------------------------------
+
 
 class TestCaseInsensitiveLabels:
     def test_case_mismatch_matched_via_fallback(self) -> None:
@@ -307,6 +317,7 @@ class TestCaseInsensitiveLabels:
 # ---------------------------------------------------------------------------
 # _parse_response
 # ---------------------------------------------------------------------------
+
 
 class TestParseResponse:
     def test_single_label_known(self) -> None:
@@ -367,6 +378,7 @@ class TestParseResponse:
 # classify() — mocked LLM
 # ---------------------------------------------------------------------------
 
+
 class TestClassify:
     def test_classify_positive(self) -> None:
         c = _clf()
@@ -404,6 +416,7 @@ class TestClassify:
 # aclassify() — mocked async LLM
 # ---------------------------------------------------------------------------
 
+
 class TestAClassify:
     @pytest.mark.asyncio
     async def test_aclassify_returns_classify_response(self) -> None:
@@ -428,6 +441,7 @@ class TestAClassify:
 # ---------------------------------------------------------------------------
 # Pipeline compatibility — run() / arun()
 # ---------------------------------------------------------------------------
+
 
 class TestPipelineCompatibility:
     def test_run_returns_classify_response(self) -> None:
@@ -470,6 +484,7 @@ class TestPipelineCompatibility:
 # run_batch()
 # ---------------------------------------------------------------------------
 
+
 class TestRunBatch:
     def test_run_batch_classifies_all(self) -> None:
         c = _clf()
@@ -480,9 +495,9 @@ class TestRunBatch:
         with patch.object(c, "_acall_llm", AsyncMock(side_effect=llm_responses)):
             batch = c.run_batch(["I love it!", "I hate it.", "It is fine."])
         assert len(batch.results) == 3
-        assert batch.results[0].label == "positive"
-        assert batch.results[1].label == "negative"
-        assert batch.results[2].label == "neutral"
+        assert cast(ClassifyResponse, batch.results[0]).label == "positive"
+        assert cast(ClassifyResponse, batch.results[1]).label == "negative"
+        assert cast(ClassifyResponse, batch.results[2]).label == "neutral"
 
     def test_run_batch_empty(self) -> None:
         c = _clf()
@@ -493,6 +508,7 @@ class TestRunBatch:
 # ---------------------------------------------------------------------------
 # Server route
 # ---------------------------------------------------------------------------
+
 
 class TestClassifyServerRoute:
     @pytest.fixture()

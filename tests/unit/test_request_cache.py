@@ -15,7 +15,6 @@ from aiforge.infra.cache import (
     _make_cache_key,
 )
 
-
 # ======================================================================
 # Cache key determinism
 # ======================================================================
@@ -36,7 +35,9 @@ class TestMakeCacheKey:
         assert k1 != k2
 
     def test_varies_on_messages(self) -> None:
-        k1 = _make_cache_key("gpt-4o", [{"role": "user", "content": "hello"}], 0.0, None, "classify")
+        k1 = _make_cache_key(
+            "gpt-4o", [{"role": "user", "content": "hello"}], 0.0, None, "classify"
+        )
         k2 = _make_cache_key("gpt-4o", [{"role": "user", "content": "bye"}], 0.0, None, "classify")
         assert k1 != k2
 
@@ -278,10 +279,12 @@ class TestBaseModuleCacheIntegration:
     def setup_method(self) -> None:
         """Reset the class-level cache before each test."""
         from aiforge.core.types import BaseModule
+
         BaseModule._cache = None
 
     def teardown_method(self) -> None:
         from aiforge.core.types import BaseModule
+
         BaseModule._cache = None
 
     def _make_module(self, cache_enabled: bool = True) -> Any:
@@ -373,7 +376,6 @@ class TestBaseModuleCacheIntegration:
         mod.provider.complete_async = MagicMock(return_value=mock_result)
 
         # Make complete_async actually awaitable
-        import asyncio
 
         async def _async_complete(msgs: Any, **kw: Any) -> CompletionResult:
             return mock_result
@@ -408,17 +410,20 @@ class TestBaseModuleCacheIntegration:
     def test_redis_backend_selected_from_settings(self) -> None:
         """When CACHE_BACKEND='redis', _get_cache() should create a
         RedisBackend (BUG-1 fix).  We mock Redis to avoid a real connection."""
+        from aiforge.core.types import BaseModule, ModuleResponse
         from aiforge.infra.cache import RedisBackend
-        from aiforge.core.types import BaseModule, CompletionResult, ModuleResponse
 
         class _Stub(BaseModule):
             def run(self, text: str, **kw: Any) -> ModuleResponse:
                 return ModuleResponse()
+
             async def arun(self, text: str, **kw: Any) -> ModuleResponse:
                 return ModuleResponse()
 
-        with patch.dict("os.environ", {"AIFORGE_OPENAI_API_KEY": "test-key"}), \
-             patch("aiforge.infra.cache.RedisBackend.__init__", return_value=None):
+        with (
+            patch.dict("os.environ", {"AIFORGE_OPENAI_API_KEY": "test-key"}),
+            patch("aiforge.infra.cache.RedisBackend.__init__", return_value=None),
+        ):
             instance = _Stub(CACHE_BACKEND="redis", CACHE_REDIS_URL="redis://fake:6379/0")
             cache = instance._get_cache()
             assert cache is not None
@@ -431,18 +436,22 @@ class TestCacheBackendValidator:
     def test_valid_memory(self) -> None:
         with patch.dict("os.environ", {"AIFORGE_OPENAI_API_KEY": "test-key"}):
             from aiforge.infra.config import AIForgeSettings
+
             s = AIForgeSettings(CACHE_BACKEND="memory")
             assert s.CACHE_BACKEND == "memory"
 
     def test_valid_redis(self) -> None:
         with patch.dict("os.environ", {"AIFORGE_OPENAI_API_KEY": "test-key"}):
             from aiforge.infra.config import AIForgeSettings
+
             s = AIForgeSettings(CACHE_BACKEND="redis")
             assert s.CACHE_BACKEND == "redis"
 
     def test_invalid_backend_rejected(self) -> None:
         import pydantic
+
         with patch.dict("os.environ", {"AIFORGE_OPENAI_API_KEY": "test-key"}):
             from aiforge.infra.config import AIForgeSettings
+
             with pytest.raises(pydantic.ValidationError, match="AIFORGE_CACHE_BACKEND"):
                 AIForgeSettings(CACHE_BACKEND="memcached")

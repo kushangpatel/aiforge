@@ -2,12 +2,9 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, patch
-
-import pytest
+from unittest.mock import MagicMock, patch
 
 from aiforge.core.prompt_override import resolve_prompt
-
 
 # ---------------------------------------------------------------------------
 # resolve_prompt() tests
@@ -118,9 +115,10 @@ def _mock_settings(custom_prompts: dict | None = None) -> MagicMock:
 
 class TestClassifierOverride:
     def _make(self, *, system_prompt=None, custom_prompts=None):
-        from aiforge.modules.classify.module import Classifier
         import structlog
+
         from aiforge.infra.cost_tracker import CostTracker
+        from aiforge.modules.classify.module import Classifier
 
         c = object.__new__(Classifier)
         c.labels = ["positive", "negative"]
@@ -138,6 +136,7 @@ class TestClassifierOverride:
 
     def test_no_override_uses_default(self) -> None:
         from aiforge.modules.classify.prompts import CLASSIFY_SYSTEM
+
         c = self._make()
         resp = '{"label": "positive", "confidence": 0.9, "rationale": "good"}'
         with patch.object(c, "_call_llm", return_value=_fake_llm(resp)) as mock:
@@ -185,9 +184,10 @@ class TestClassifierOverride:
 
 class TestSummarizerOverride:
     def _make(self, *, system_prompt=None, custom_prompts=None):
-        from aiforge.modules.summarize.module import Summarizer
         import structlog
+
         from aiforge.infra.cost_tracker import CostTracker
+        from aiforge.modules.summarize.module import Summarizer
 
         s = object.__new__(Summarizer)
         s.style = "concise"
@@ -203,36 +203,45 @@ class TestSummarizerOverride:
 
     def test_no_override_uses_default(self) -> None:
         from aiforge.modules.summarize.prompts import SUMMARIZE_SYSTEM
+
         s = self._make()
-        with patch.object(s, "_call_llm", return_value=_fake_llm("summary")) as mock:
-            with patch("aiforge.core.pricing.get_context_window", return_value=100_000):
-                s.summarize("Hello world this is text.")
-                messages = mock.call_args[0][0]
-                assert messages[0]["content"] == SUMMARIZE_SYSTEM
+        with (
+            patch.object(s, "_call_llm", return_value=_fake_llm("summary")) as mock,
+            patch("aiforge.core.pricing.get_context_window", return_value=100_000),
+        ):
+            s.summarize("Hello world this is text.")
+            messages = mock.call_args[0][0]
+            assert messages[0]["content"] == SUMMARIZE_SYSTEM
 
     def test_constructor_override_used(self) -> None:
         s = self._make(system_prompt="Custom summarizer")
-        with patch.object(s, "_call_llm", return_value=_fake_llm("summary")) as mock:
-            with patch("aiforge.core.pricing.get_context_window", return_value=100_000):
-                s.summarize("Hello world this is text.")
-                messages = mock.call_args[0][0]
-                assert messages[0]["content"] == "Custom summarizer"
+        with (
+            patch.object(s, "_call_llm", return_value=_fake_llm("summary")) as mock,
+            patch("aiforge.core.pricing.get_context_window", return_value=100_000),
+        ):
+            s.summarize("Hello world this is text.")
+            messages = mock.call_args[0][0]
+            assert messages[0]["content"] == "Custom summarizer"
 
     def test_per_call_override_used(self) -> None:
         s = self._make(system_prompt="Constructor")
-        with patch.object(s, "_call_llm", return_value=_fake_llm("summary")) as mock:
-            with patch("aiforge.core.pricing.get_context_window", return_value=100_000):
-                s.summarize("Hello world.", system_prompt="Call prompt")
-                messages = mock.call_args[0][0]
-                assert messages[0]["content"] == "Call prompt"
+        with (
+            patch.object(s, "_call_llm", return_value=_fake_llm("summary")) as mock,
+            patch("aiforge.core.pricing.get_context_window", return_value=100_000),
+        ):
+            s.summarize("Hello world.", system_prompt="Call prompt")
+            messages = mock.call_args[0][0]
+            assert messages[0]["content"] == "Call prompt"
 
     def test_config_override_used(self) -> None:
         s = self._make(custom_prompts={"summarize": {"system": "YAML sum"}})
-        with patch.object(s, "_call_llm", return_value=_fake_llm("summary")) as mock:
-            with patch("aiforge.core.pricing.get_context_window", return_value=100_000):
-                s.summarize("Hello world.")
-                messages = mock.call_args[0][0]
-                assert messages[0]["content"] == "YAML sum"
+        with (
+            patch.object(s, "_call_llm", return_value=_fake_llm("summary")) as mock,
+            patch("aiforge.core.pricing.get_context_window", return_value=100_000),
+        ):
+            s.summarize("Hello world.")
+            messages = mock.call_args[0][0]
+            assert messages[0]["content"] == "YAML sum"
 
 
 # ---------------------------------------------------------------------------
@@ -242,9 +251,10 @@ class TestSummarizerOverride:
 
 class TestExtractorOverride:
     def _make(self, *, system_prompt=None, custom_prompts=None):
-        from aiforge.modules.extract.module import Extractor
         import structlog
+
         from aiforge.infra.cost_tracker import CostTracker
+        from aiforge.modules.extract.module import Extractor
 
         e = object.__new__(Extractor)
         e.output_schema = {"type": "object", "properties": {"name": {"type": "string"}}}
@@ -261,6 +271,7 @@ class TestExtractorOverride:
 
     def test_no_override_uses_default(self) -> None:
         from aiforge.modules.extract.prompts import EXTRACT_SYSTEM
+
         e = self._make()
         with patch.object(e, "_call_llm", return_value=_fake_llm('{"name": "test"}')) as mock:
             e.extract("John is a developer.")
@@ -289,9 +300,10 @@ class TestExtractorOverride:
 
 class TestGeneratorOverride:
     def _make(self, *, system_prompt=None, custom_prompts=None):
-        from aiforge.modules.generate.module import Generator
         import structlog
+
         from aiforge.infra.cost_tracker import CostTracker
+        from aiforge.modules.generate.module import Generator
 
         g = object.__new__(Generator)
         g.template = None
@@ -309,6 +321,7 @@ class TestGeneratorOverride:
 
     def test_no_override_uses_default(self) -> None:
         from aiforge.modules.generate.prompts import GENERATE_SYSTEM
+
         g = self._make()
         with patch.object(g, "_call_llm", return_value=_fake_llm("content")) as mock:
             g.generate(prompt="Write something.")
@@ -337,9 +350,10 @@ class TestGeneratorOverride:
 
 class TestModeratorOverride:
     def _make(self, *, system_prompt=None, custom_prompts=None, checks=None):
-        from aiforge.modules.moderate.module import Moderator
         import structlog
+
         from aiforge.infra.cost_tracker import CostTracker
+        from aiforge.modules.moderate.module import Moderator
 
         m = object.__new__(Moderator)
         m.checks = checks or ["toxicity"]
@@ -354,6 +368,7 @@ class TestModeratorOverride:
 
     def test_no_override_uses_default(self) -> None:
         from aiforge.modules.moderate.prompts import TOXICITY_SYSTEM
+
         m = self._make()
         resp = '{"is_toxic": false, "confidence": 0.1, "reason": ""}'
         with patch.object(m, "_call_llm", return_value=_fake_llm(resp)) as mock:
@@ -380,13 +395,16 @@ class TestModeratorOverride:
     def test_toxicity_sub_key_used(self) -> None:
         """Config `moderate.toxicity_system` overrides only toxicity prompt."""
         from aiforge.modules.moderate.prompts import INJECTION_SYSTEM
+
         m = self._make(
             checks=["toxicity", "prompt_injection"],
             custom_prompts={"moderate": {"toxicity_system": "Custom tox"}},
         )
         tox_resp = '{"is_toxic": false, "confidence": 0.1, "reason": ""}'
         inj_resp = '{"is_injection": false, "confidence": 0.1, "reason": ""}'
-        with patch.object(m, "_call_llm", side_effect=[_fake_llm(tox_resp), _fake_llm(inj_resp)]) as mock:
+        with patch.object(
+            m, "_call_llm", side_effect=[_fake_llm(tox_resp), _fake_llm(inj_resp)]
+        ) as mock:
             m.check("text")
             tox_messages = mock.call_args_list[0][0][0]
             inj_messages = mock.call_args_list[1][0][0]
@@ -396,13 +414,16 @@ class TestModeratorOverride:
     def test_injection_sub_key_used(self) -> None:
         """Config `moderate.injection_system` overrides only injection prompt."""
         from aiforge.modules.moderate.prompts import TOXICITY_SYSTEM
+
         m = self._make(
             checks=["toxicity", "prompt_injection"],
             custom_prompts={"moderate": {"injection_system": "Custom inj"}},
         )
         tox_resp = '{"is_toxic": false, "confidence": 0.1, "reason": ""}'
         inj_resp = '{"is_injection": false, "confidence": 0.1, "reason": ""}'
-        with patch.object(m, "_call_llm", side_effect=[_fake_llm(tox_resp), _fake_llm(inj_resp)]) as mock:
+        with patch.object(
+            m, "_call_llm", side_effect=[_fake_llm(tox_resp), _fake_llm(inj_resp)]
+        ) as mock:
             m.check("text")
             tox_messages = mock.call_args_list[0][0][0]
             inj_messages = mock.call_args_list[1][0][0]
@@ -417,7 +438,9 @@ class TestModeratorOverride:
         )
         tox_resp = '{"is_toxic": false, "confidence": 0.1, "reason": ""}'
         inj_resp = '{"is_injection": false, "confidence": 0.1, "reason": ""}'
-        with patch.object(m, "_call_llm", side_effect=[_fake_llm(tox_resp), _fake_llm(inj_resp)]) as mock:
+        with patch.object(
+            m, "_call_llm", side_effect=[_fake_llm(tox_resp), _fake_llm(inj_resp)]
+        ) as mock:
             m.check("text")
             tox_messages = mock.call_args_list[0][0][0]
             inj_messages = mock.call_args_list[1][0][0]
@@ -432,9 +455,10 @@ class TestModeratorOverride:
 
 class TestDocQAOverride:
     def _make(self, *, system_prompt=None, custom_prompts=None):
-        from aiforge.modules.qa.module import DocQA
         import structlog
+
         from aiforge.infra.cost_tracker import CostTracker
+        from aiforge.modules.qa.module import DocQA
 
         qa = object.__new__(DocQA)
         qa.collection = "test-col"
@@ -497,10 +521,11 @@ class TestDocQAOverride:
 
 class TestChatAgentOverride:
     def _make(self, *, system_prompt=None, custom_prompts=None, tools=None):
+        import structlog
+
+        from aiforge.infra.cost_tracker import CostTracker
         from aiforge.modules.chat.module import ChatAgent
         from aiforge.modules.chat.prompts import DEFAULT_SYSTEM_PROMPT, TOOL_USE_SYSTEM
-        import structlog
-        from aiforge.infra.cost_tracker import CostTracker
 
         agent = object.__new__(ChatAgent)
         agent.tools = tools or []
@@ -516,6 +541,7 @@ class TestChatAgentOverride:
         agent.cost_tracker = CostTracker.get_session()
 
         from aiforge.core.prompt_override import resolve_prompt
+
         base = resolve_prompt(
             call_override=None,
             instance_override=system_prompt,
@@ -524,7 +550,9 @@ class TestChatAgentOverride:
         )
         if tools:
             tool_descs = "\n".join(f"- {t.name}: {t.description}" for t in tools)
-            agent.system_prompt = f"{base}\n\n{TOOL_USE_SYSTEM.format(tool_descriptions=tool_descs)}"
+            agent.system_prompt = (
+                f"{base}\n\n{TOOL_USE_SYSTEM.format(tool_descriptions=tool_descs)}"
+            )
         else:
             agent.system_prompt = base
         agent._messages = [{"role": "system", "content": agent.system_prompt}]
@@ -543,6 +571,7 @@ class TestChatAgentOverride:
 
     def test_no_override_uses_default(self) -> None:
         from aiforge.modules.chat.prompts import DEFAULT_SYSTEM_PROMPT
+
         agent = self._make()
         assert agent._messages[0]["content"] == DEFAULT_SYSTEM_PROMPT
 
@@ -585,13 +614,15 @@ class TestSettingsCustomPrompts:
     def test_default_empty(self) -> None:
         with patch.dict("os.environ", {"AIFORGE_OPENAI_API_KEY": "test-key"}, clear=False):
             from aiforge.infra.config import AIForgeSettings
+
             s = AIForgeSettings()
             assert s.CUSTOM_PROMPTS == {}
 
     def test_custom_prompts_dict(self) -> None:
         with patch.dict("os.environ", {"AIFORGE_OPENAI_API_KEY": "test-key"}, clear=False):
             from aiforge.infra.config import AIForgeSettings
+
             cp = {"classify": {"system": "Override"}}
             s = AIForgeSettings(CUSTOM_PROMPTS=cp)
-            assert s.CUSTOM_PROMPTS == cp
+            assert cp == s.CUSTOM_PROMPTS
             assert s.CUSTOM_PROMPTS["classify"]["system"] == "Override"

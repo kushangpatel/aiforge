@@ -2,16 +2,16 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from aiforge.modules.generate.module import (
-    Generator,
     _CUSTOM_GUARDRAILS,
     _MAX_RETRIES,
     _PRICE_PATTERNS,
+    Generator,
     register_guardrail,
 )
 from aiforge.modules.generate.prompts import (
@@ -20,7 +20,6 @@ from aiforge.modules.generate.prompts import (
     PROFESSIONAL_TONE_CHECK,
 )
 from aiforge.modules.generate.schemas import GenerateResponse, GuardrailResult
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -161,11 +160,14 @@ class TestRenderTemplate:
 
     def test_multiple_variables(self) -> None:
         tpl = "{greeting}, {name}. How is {thing}?"
-        got = Generator._render_template(tpl, {
-            "greeting": "Hi",
-            "name": "Alice",
-            "thing": "your day",
-        })
+        got = Generator._render_template(
+            tpl,
+            {
+                "greeting": "Hi",
+                "name": "Alice",
+                "thing": "your day",
+            },
+        )
         assert got == "Hi, Alice. How is your day?"
 
     def test_list_variable_joined(self) -> None:
@@ -512,7 +514,9 @@ class TestAsyncRetryLoop:
         good = _fake_llm("Affordable product.")
         calls = iter([bad, good])
         with patch.object(
-            g, "_acall_llm", new_callable=AsyncMock,
+            g,
+            "_acall_llm",
+            new_callable=AsyncMock,
             side_effect=lambda *a, **kw: next(calls),
         ):
             result = await g.agenerate(prompt="describe")
@@ -525,7 +529,10 @@ class TestAsyncRetryLoop:
         g = _gen(guardrails=["no_pricing"])
         bad = _fake_llm("€50 per month!")
         with patch.object(
-            g, "_acall_llm", new_callable=AsyncMock, return_value=bad,
+            g,
+            "_acall_llm",
+            new_callable=AsyncMock,
+            return_value=bad,
         ):
             result = await g.agenerate(prompt="describe")
         assert result.retry_count == _MAX_RETRIES
@@ -698,7 +705,7 @@ class TestBatchOperations:
         with patch.object(g, "_acall_llm", new_callable=AsyncMock, return_value=fake):
             batch = g.run_batch(["prompt 1", "prompt 2"])
         assert len(batch.results) == 2
-        assert all(r.text == "batch result" for r in batch.results)
+        assert all(cast(GenerateResponse, r).text == "batch result" for r in batch.results)
 
     def test_run_batch_empty_returns_empty(self) -> None:
         g = _gen()
@@ -714,6 +721,7 @@ class TestBatchOperations:
 class TestGenerateServerRoute:
     def _make_app(self) -> Any:
         from fastapi import FastAPI
+
         from aiforge.server.routes.generate import router
 
         app = FastAPI()
@@ -725,7 +733,6 @@ class TestGenerateServerRoute:
 
         app = self._make_app()
         with TestClient(app) as client:
-            fake = _fake_llm("Route result.")
             with (
                 patch(
                     "aiforge.modules.generate.module.Generator.agenerate",

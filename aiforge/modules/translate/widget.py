@@ -63,7 +63,9 @@ def render() -> None:
     st.subheader("Translation")
     st.write(result.text)
 
-    st.caption(f"Detected source: **{result.source_language}** → **{result.target_language}** ({result.formality})")
+    st.caption(
+        f"Detected source: **{result.source_language}** → **{result.target_language}** ({result.formality})"
+    )
 
     with st.expander("Metrics"):
         st.json(

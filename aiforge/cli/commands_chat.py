@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Optional
-
 import typer
 from rich.markdown import Markdown
 from rich.panel import Panel
@@ -16,16 +14,24 @@ chat_app = typer.Typer(name="chat", help="Interactive chat with an AI agent.")
 @chat_app.callback(invoke_without_command=True)
 def chat(
     ctx: typer.Context,
-    message: Optional[str] = typer.Argument(None, help="Single message (omit for interactive mode)."),
-    system_prompt: Optional[str] = typer.Option(
-        None, "--system", "-s", help="System prompt for the conversation.",
+    message: str | None = typer.Argument(None, help="Single message (omit for interactive mode)."),
+    system_prompt: str | None = typer.Option(
+        None,
+        "--system",
+        "-s",
+        help="System prompt for the conversation.",
     ),
     memory: str = typer.Option(
-        "buffer", "--memory", "-m", help="Memory mode: buffer|summary|none.",
+        "buffer",
+        "--memory",
+        "-m",
+        help="Memory mode: buffer|summary|none.",
     ),
     memory_k: int = typer.Option(10, "--memory-k", help="Messages to keep in memory."),
-    mcp_config: Optional[str] = typer.Option(
-        None, "--mcp-config", help="Path to JSON/YAML file with MCP server configs.",
+    mcp_config: str | None = typer.Option(
+        None,
+        "--mcp-config",
+        help="Path to JSON/YAML file with MCP server configs.",
     ),
 ) -> None:
     """Chat with an AI agent.
@@ -50,13 +56,14 @@ def chat(
         raw = path.read_text()
         if path.suffix in (".yaml", ".yml"):
             import yaml
+
             mcp_servers = yaml.safe_load(raw)
         else:
             mcp_servers = json.loads(raw)
 
     agent = ChatAgent(
         system_prompt=system_prompt,
-        memory=memory if memory != "none" else None,
+        memory=memory or "buffer",
         memory_k=memory_k,
         mcp_servers=mcp_servers,
     )

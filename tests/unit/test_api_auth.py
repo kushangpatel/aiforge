@@ -6,7 +6,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from aiforge.server.middleware import AuthMiddleware, _PUBLIC_PATHS
+from aiforge.server.middleware import _PUBLIC_PATHS, AuthMiddleware
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -198,4 +198,4 @@ class TestSecurityProperties:
     def test_public_paths_constant(self) -> None:
         """_PUBLIC_PATHS must be a frozenset with exactly the spec paths."""
         assert isinstance(_PUBLIC_PATHS, frozenset)
-        assert _PUBLIC_PATHS == {"/health", "/health/ready", "/docs", "/openapi.json", "/redoc"}
+        assert {"/health", "/health/ready", "/docs", "/openapi.json", "/redoc"} == _PUBLIC_PATHS

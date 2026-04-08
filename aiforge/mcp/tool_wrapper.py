@@ -13,7 +13,8 @@ from __future__ import annotations
 
 import asyncio
 import threading
-from typing import Any, Callable, Coroutine
+from collections.abc import Callable, Coroutine
+from typing import Any
 
 import structlog
 
@@ -58,7 +59,7 @@ def make_sync_tool_caller(
     session: Any,
     tool_name: str,
     timeout: float,
-    loop_thread: "_LoopThread",
+    loop_thread: _LoopThread,
 ) -> Callable[..., str]:
     """Return a sync callable that invokes an MCP tool via ``session.call_tool``.
 

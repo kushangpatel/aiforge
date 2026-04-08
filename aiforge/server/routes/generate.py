@@ -46,13 +46,13 @@ async def run_generate(body: GenerateRequest) -> Any:
         )
         result = await g.agenerate(prompt=body.prompt, **body.variables)
     except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc))
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     except Exception as exc:
         from aiforge.core.types import RateLimitError
 
         if isinstance(exc, RateLimitError):
-            raise HTTPException(status_code=429, detail=str(exc))
-        raise HTTPException(status_code=503, detail=str(exc))
+            raise HTTPException(status_code=429, detail=str(exc)) from exc
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
     return GenerateRouteResponse(
         text=result.text,
         guardrail_flags=result.guardrail_flags,
@@ -98,13 +98,13 @@ async def run_rewrite(body: RewriteRequest) -> Any:
             reading_level=body.reading_level,
         )
     except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc))
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     except Exception as exc:
         from aiforge.core.types import RateLimitError
 
         if isinstance(exc, RateLimitError):
-            raise HTTPException(status_code=429, detail=str(exc))
-        raise HTTPException(status_code=503, detail=str(exc))
+            raise HTTPException(status_code=429, detail=str(exc)) from exc
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
     return GenerateRouteResponse(
         text=result.text,
         guardrail_flags=result.guardrail_flags,

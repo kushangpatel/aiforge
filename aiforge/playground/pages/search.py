@@ -11,4 +11,3 @@ try:
     render()
 except ImportError as exc:
     st.error(f"Module unavailable: {exc}")
-

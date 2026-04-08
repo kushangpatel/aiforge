@@ -6,6 +6,7 @@ from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
+from pydantic import ValidationError
 
 from aiforge.core.types import BaseModule, ModuleResponse
 from aiforge.core.vectorstore import VectorStoreAdapter
@@ -17,7 +18,6 @@ from aiforge.registry import (
     register_module,
     register_vectorstore,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers — minimal concrete stubs
@@ -154,9 +154,7 @@ class TestBuiltinAutoRegistration:
             "moderate",
         }
         registered = set(list_modules())
-        assert expected.issubset(registered), (
-            f"Missing: {expected - registered}"
-        )
+        assert expected.issubset(registered), f"Missing: {expected - registered}"
 
     def test_builtin_modules_are_correct_classes(self) -> None:
         import aiforge
@@ -201,6 +199,7 @@ class TestCustomModuleInPipeline:
         instance = object.__new__(cls)
         # Manually set required BaseModule attributes (bypass __init__)
         import structlog
+
         from aiforge.infra.cost_tracker import CostTracker
 
         instance.settings = MagicMock()
@@ -357,8 +356,8 @@ class TestCustomProviderEndToEnd:
 
     def test_config_accepts_registered_provider(self) -> None:
         """AIForgeSettings should accept a custom provider name that is in the registry."""
-        from aiforge.registry import register_provider
         from aiforge.infra.config import AIForgeSettings
+        from aiforge.registry import register_provider
 
         class _DummyLLM:
             pass
@@ -395,5 +394,5 @@ class TestCustomProviderEndToEnd:
 
     def test_base_module_provider_kwarg_invalid_raises(self) -> None:
         """BaseModule(provider='nonexistent') should raise during settings creation."""
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             _StubModule(provider="nonexistent_provider_xyz")

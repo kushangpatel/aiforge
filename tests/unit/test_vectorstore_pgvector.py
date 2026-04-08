@@ -3,15 +3,14 @@
 from __future__ import annotations
 
 import json
-from typing import Any
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture()
 def mock_psycopg():
@@ -147,7 +146,7 @@ class TestQuery:
     def test_include_embeddings(self, store) -> None:
         s, _, mock_cursor = store
         mock_cursor.fetchall.return_value = [
-            ("doc-1", "hello", '{}', 0.1, [0.1, 0.2]),
+            ("doc-1", "hello", "{}", 0.1, [0.1, 0.2]),
         ]
         hits = s.query(embedding=[0.1], include_embeddings=True)
         assert hits[0]["embeddings"] == [0.1, 0.2]

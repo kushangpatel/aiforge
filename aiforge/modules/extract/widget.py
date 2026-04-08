@@ -59,9 +59,7 @@ def render() -> None:
                 st.error("Examples must be a JSON array.")
                 return
             for item in raw_list:
-                examples.append(
-                    ExtractExample(input=item["input"], output=item["output"])
-                )
+                examples.append(ExtractExample(input=item["input"], output=item["output"]))
         except (json.JSONDecodeError, KeyError, TypeError) as exc:
             st.error(f"Invalid examples format: {exc}")
             return

@@ -10,8 +10,8 @@ import pytest
 
 from aiforge.modules.chat.agent import (
     ChatAgentState,
-    build_chat_graph,
     _parse_tool_calls,
+    build_chat_graph,
 )
 from aiforge.modules.chat.module import ChatAgent
 from aiforge.modules.chat.prompts import (
@@ -20,7 +20,6 @@ from aiforge.modules.chat.prompts import (
     TOOL_USE_SYSTEM,
 )
 from aiforge.modules.chat.schemas import ChatResponse, ToolCallRecord
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -72,7 +71,9 @@ def _agent(
 
 
 def _fake_llm(
-    text: str = "test response", inp: int = 50, out: int = 30,
+    text: str = "test response",
+    inp: int = 50,
+    out: int = 30,
 ) -> MagicMock:
     """Create a fake CompletionResult."""
     result = MagicMock()
@@ -219,13 +220,13 @@ class TestParseToolCalls:
     def test_multiline_json_tool_call(self) -> None:
         """Tool call JSON spanning multiple lines should be parsed."""
         text = (
-            '{\n'
+            "{\n"
             '  "tool": "jira_post",\n'
             '  "input": {\n'
             '    "path": "/rest/api/3/issue",\n'
             '    "body": {"fields": {"project": {"key": "TC"}}}\n'
-            '  }\n'
-            '}'
+            "  }\n"
+            "}"
         )
         result = _parse_tool_calls(text)
         assert len(result) == 1
@@ -246,27 +247,31 @@ class TestParseToolCalls:
 
     def test_deeply_nested_json_tool_call(self) -> None:
         """Deeply nested JSON (like Jira ADF) should be parsed."""
-        text = json.dumps({
-            "tool": "jira_post",
-            "input": {
-                "path": "/rest/api/3/issue",
-                "body": {
-                    "fields": {
-                        "project": {"key": "TC"},
-                        "issuetype": {"name": "Bug"},
-                        "summary": "Login broken",
-                        "description": {
-                            "type": "doc",
-                            "version": 1,
-                            "content": [{
-                                "type": "paragraph",
-                                "content": [{"type": "text", "text": "Details here"}],
-                            }],
+        text = json.dumps(
+            {
+                "tool": "jira_post",
+                "input": {
+                    "path": "/rest/api/3/issue",
+                    "body": {
+                        "fields": {
+                            "project": {"key": "TC"},
+                            "issuetype": {"name": "Bug"},
+                            "summary": "Login broken",
+                            "description": {
+                                "type": "doc",
+                                "version": 1,
+                                "content": [
+                                    {
+                                        "type": "paragraph",
+                                        "content": [{"type": "text", "text": "Details here"}],
+                                    }
+                                ],
+                            },
                         },
                     },
                 },
-            },
-        })
+            }
+        )
         result = _parse_tool_calls(text)
         assert len(result) == 1
         assert result[0]["tool"] == "jira_post"
@@ -315,10 +320,12 @@ class TestAgentGraphToolUse:
     """Graph invokes tools when the LLM returns a tool call JSON."""
 
     def test_single_tool_call(self) -> None:
-        calls = iter([
-            _fake_llm('{"tool": "calculator", "input": {"expression": "2+2"}}'),
-            _fake_llm("The answer is 4."),
-        ])
+        calls = iter(
+            [
+                _fake_llm('{"tool": "calculator", "input": {"expression": "2+2"}}'),
+                _fake_llm("The answer is 4."),
+            ]
+        )
         tool = _mock_tool("calculator")
         graph = build_chat_graph(
             llm_fn=lambda m: next(calls),
@@ -330,10 +337,12 @@ class TestAgentGraphToolUse:
         assert result["messages"][-1]["content"] == "The answer is 4."
 
     def test_tool_call_trace(self) -> None:
-        calls = iter([
-            _fake_llm('{"tool": "calculator", "input": {}}'),
-            _fake_llm("Done."),
-        ])
+        calls = iter(
+            [
+                _fake_llm('{"tool": "calculator", "input": {}}'),
+                _fake_llm("Done."),
+            ]
+        )
         tool = _mock_tool("calculator")
         graph = build_chat_graph(
             llm_fn=lambda m: next(calls),
@@ -346,10 +355,12 @@ class TestAgentGraphToolUse:
         assert "process_result" in steps
 
     def test_unknown_tool_returns_error(self) -> None:
-        calls = iter([
-            _fake_llm('{"tool": "nonexistent_tool", "input": {}}'),
-            _fake_llm("Sorry, I couldn't use that tool."),
-        ])
+        calls = iter(
+            [
+                _fake_llm('{"tool": "nonexistent_tool", "input": {}}'),
+                _fake_llm("Sorry, I couldn't use that tool."),
+            ]
+        )
         graph = build_chat_graph(
             llm_fn=lambda m: next(calls),
             tools=[],
@@ -359,10 +370,12 @@ class TestAgentGraphToolUse:
         assert "Unknown tool" in result["tool_results"][0]["output"]
 
     def test_tool_exception_captured(self) -> None:
-        calls = iter([
-            _fake_llm('{"tool": "broken", "input": {}}'),
-            _fake_llm("The tool failed."),
-        ])
+        calls = iter(
+            [
+                _fake_llm('{"tool": "broken", "input": {}}'),
+                _fake_llm("The tool failed."),
+            ]
+        )
         broken_tool = _mock_tool("broken")
         broken_tool.invoke = MagicMock(side_effect=RuntimeError("Tool broke"))
         graph = build_chat_graph(
@@ -374,10 +387,12 @@ class TestAgentGraphToolUse:
         assert "Tool broke" in result["tool_results"][0]["output"]
 
     def test_iteration_increments(self) -> None:
-        calls = iter([
-            _fake_llm('{"tool": "calc", "input": {}}'),
-            _fake_llm("Done."),
-        ])
+        calls = iter(
+            [
+                _fake_llm('{"tool": "calc", "input": {}}'),
+                _fake_llm("Done."),
+            ]
+        )
         tool = _mock_tool("calc")
         graph = build_chat_graph(
             llm_fn=lambda m: next(calls),
@@ -396,11 +411,13 @@ class TestAgentGraphMultiTool:
     """Graph can chain multiple tool calls (tool → process → tool → respond)."""
 
     def test_two_tool_iterations(self) -> None:
-        calls = iter([
-            _fake_llm('{"tool": "calc", "input": {"expression": "1+1"}}'),
-            _fake_llm('{"tool": "calc", "input": {"expression": "2+3"}}'),
-            _fake_llm("Results: 2 and 5."),
-        ])
+        calls = iter(
+            [
+                _fake_llm('{"tool": "calc", "input": {"expression": "1+1"}}'),
+                _fake_llm('{"tool": "calc", "input": {"expression": "2+3"}}'),
+                _fake_llm("Results: 2 and 5."),
+            ]
+        )
         tool = _mock_tool("calc")
         graph = build_chat_graph(
             llm_fn=lambda m: next(calls),
@@ -412,12 +429,14 @@ class TestAgentGraphMultiTool:
 
     def test_max_tool_iterations_respected(self) -> None:
         """Even if LLM keeps requesting tools, cap at max_tool_iterations."""
-        calls = iter([
-            _fake_llm('{"tool": "calc", "input": {}}'),  # route
-            _fake_llm('{"tool": "calc", "input": {}}'),  # process 1
-            _fake_llm('{"tool": "calc", "input": {}}'),  # process 2 — at cap
-            _fake_llm("Final answer."),  # shouldn't reach this
-        ])
+        calls = iter(
+            [
+                _fake_llm('{"tool": "calc", "input": {}}'),  # route
+                _fake_llm('{"tool": "calc", "input": {}}'),  # process 1
+                _fake_llm('{"tool": "calc", "input": {}}'),  # process 2 — at cap
+                _fake_llm("Final answer."),  # shouldn't reach this
+            ]
+        )
         tool = _mock_tool("calc")
         graph = build_chat_graph(
             llm_fn=lambda m: next(calls),
@@ -427,10 +446,12 @@ class TestAgentGraphMultiTool:
         assert result["iteration"] <= 2
 
     def test_tokens_accumulate_across_iterations(self) -> None:
-        calls = iter([
-            _fake_llm('{"tool": "calc", "input": {}}', inp=100, out=10),
-            _fake_llm("Done.", inp=80, out=20),
-        ])
+        calls = iter(
+            [
+                _fake_llm('{"tool": "calc", "input": {}}', inp=100, out=10),
+                _fake_llm("Done.", inp=80, out=20),
+            ]
+        )
         tool = _mock_tool("calc")
         graph = build_chat_graph(
             llm_fn=lambda m: next(calls),
@@ -528,10 +549,12 @@ class TestChatAgentTools:
         tool = _mock_tool("calculator", "Math tool")
         agent = _agent(tools=[tool])
 
-        calls = iter([
-            _fake_llm('{"tool": "calculator", "input": {"expression": "2+2"}}'),
-            _fake_llm("The answer is 42."),
-        ])
+        calls = iter(
+            [
+                _fake_llm('{"tool": "calculator", "input": {"expression": "2+2"}}'),
+                _fake_llm("The answer is 42."),
+            ]
+        )
         agent._call_llm = MagicMock(side_effect=lambda m, **kw: next(calls))
 
         result = agent.chat("What is 2+2?")
@@ -750,9 +773,10 @@ class TestRoutes:
     """FastAPI route tests."""
 
     def test_chat_endpoint(self) -> None:
-        from fastapi.testclient import TestClient
-        from aiforge.server.routes.chat import router, _conversations
         from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+
+        from aiforge.server.routes.chat import _conversations, router
 
         app = FastAPI()
         app.include_router(router)
@@ -779,9 +803,10 @@ class TestRoutes:
             assert data["conversation_id"] == "test-id"
 
     def test_chat_validation_error(self) -> None:
-        from fastapi.testclient import TestClient
-        from aiforge.server.routes.chat import router, _conversations
         from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+
+        from aiforge.server.routes.chat import _conversations, router
 
         app = FastAPI()
         app.include_router(router)
@@ -792,9 +817,10 @@ class TestRoutes:
         assert resp.status_code == 422
 
     def test_reset_not_found(self) -> None:
-        from fastapi.testclient import TestClient
-        from aiforge.server.routes.chat import router, _conversations
         from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+
+        from aiforge.server.routes.chat import _conversations, router
 
         app = FastAPI()
         app.include_router(router)
@@ -808,9 +834,10 @@ class TestRoutes:
         assert resp.status_code == 404
 
     def test_reset_existing_conversation(self) -> None:
-        from fastapi.testclient import TestClient
-        from aiforge.server.routes.chat import router, _conversations
         from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+
+        from aiforge.server.routes.chat import _conversations, router
 
         app = FastAPI()
         app.include_router(router)
@@ -837,9 +864,10 @@ class TestRoutes:
         assert "new-id-after-reset" in _conversations
 
     def test_conversations_list(self) -> None:
-        from fastapi.testclient import TestClient
-        from aiforge.server.routes.chat import router, _conversations
         from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+
+        from aiforge.server.routes.chat import _conversations, router
 
         app = FastAPI()
         app.include_router(router)
@@ -856,9 +884,9 @@ class TestRoutes:
     def test_conversation_eviction_at_max(self) -> None:
         """_conversations should evict oldest when over _MAX_CONVERSATIONS."""
         from aiforge.server.routes.chat import (
+            _MAX_CONVERSATIONS,
             _conversations,
             _store_conversation,
-            _MAX_CONVERSATIONS,
         )
 
         _conversations.clear()
@@ -930,8 +958,8 @@ class TestSafeCalculator:
         assert _safe_calculator("sqrt(2)") == str(__import__("math").sqrt(2))
 
     def test_trig_functions(self) -> None:
+
         from aiforge.modules.chat.widget import _safe_calculator
-        import math as m
 
         assert abs(float(_safe_calculator("sin(0)")) - 0.0) < 1e-10
         assert abs(float(_safe_calculator("cos(0)")) - 1.0) < 1e-10
@@ -940,16 +968,17 @@ class TestSafeCalculator:
         assert abs(float(_safe_calculator("sin(pi / 2)")) - 1.0) < 1e-10
 
     def test_inverse_trig(self) -> None:
-        from aiforge.modules.chat.widget import _safe_calculator
         import math as m
+
+        from aiforge.modules.chat.widget import _safe_calculator
 
         assert abs(float(_safe_calculator("asin(1)")) - m.asin(1)) < 1e-10
         assert abs(float(_safe_calculator("acos(0)")) - m.acos(0)) < 1e-10
         assert abs(float(_safe_calculator("atan(1)")) - m.atan(1)) < 1e-10
 
     def test_log_functions(self) -> None:
+
         from aiforge.modules.chat.widget import _safe_calculator
-        import math as m
 
         assert abs(float(_safe_calculator("log(e)")) - 1.0) < 1e-10
         assert abs(float(_safe_calculator("log2(8)")) - 3.0) < 1e-10
@@ -958,8 +987,9 @@ class TestSafeCalculator:
         assert abs(float(_safe_calculator("log(100, 10)")) - 2.0) < 1e-10
 
     def test_exp(self) -> None:
-        from aiforge.modules.chat.widget import _safe_calculator
         import math as m
+
+        from aiforge.modules.chat.widget import _safe_calculator
 
         assert abs(float(_safe_calculator("exp(1)")) - m.e) < 1e-10
 
@@ -981,24 +1011,27 @@ class TestSafeCalculator:
         assert _safe_calculator("gcd(12, 8)") == "4"
 
     def test_constants(self) -> None:
-        from aiforge.modules.chat.widget import _safe_calculator
         import math as m
+
+        from aiforge.modules.chat.widget import _safe_calculator
 
         assert abs(float(_safe_calculator("pi")) - m.pi) < 1e-10
         assert abs(float(_safe_calculator("e")) - m.e) < 1e-10
         assert abs(float(_safe_calculator("tau")) - m.tau) < 1e-10
 
     def test_combined_expression(self) -> None:
-        from aiforge.modules.chat.widget import _safe_calculator
         import math as m
+
+        from aiforge.modules.chat.widget import _safe_calculator
 
         # sqrt(2) * pi
         expected = m.sqrt(2) * m.pi
         assert abs(float(_safe_calculator("sqrt(2) * pi")) - expected) < 1e-10
 
     def test_radians_degrees(self) -> None:
-        from aiforge.modules.chat.widget import _safe_calculator
         import math as m
+
+        from aiforge.modules.chat.widget import _safe_calculator
 
         assert abs(float(_safe_calculator("radians(180)")) - m.pi) < 1e-10
         assert abs(float(_safe_calculator("degrees(pi)")) - 180.0) < 1e-10
@@ -1120,9 +1153,9 @@ class TestResearchTool:
 
     def test_web_search_parses_html(self) -> None:
         """Web search should extract results from DuckDuckGo HTML."""
-        from aiforge.modules.chat.widget import _web_search
         from unittest.mock import MagicMock
-        import io
+
+        from aiforge.modules.chat.widget import _web_search
 
         fake_html = (
             '<a class="result-link" href="https://example.com">Example Title</a>'
@@ -1143,28 +1176,36 @@ class TestResearchTool:
         """Research should combine web and knowledge base results."""
         from aiforge.modules.chat.widget import _research
 
-        with patch("aiforge.modules.chat.widget._web_search", return_value="[1] Web result"):
-            with patch("aiforge.modules.chat.widget._knowledge_search", return_value="[1] KB result"):
-                result = _research("test")
-                assert "Web Results" in result
-                assert "Knowledge Base" in result
+        with (
+            patch("aiforge.modules.chat.widget._web_search", return_value="[1] Web result"),
+            patch(
+                "aiforge.modules.chat.widget._knowledge_search", return_value="[1] KB result"
+            ),
+        ):
+            result = _research("test")
+            assert "Web Results" in result
+            assert "Knowledge Base" in result
 
     def test_research_web_only_when_kb_empty(self) -> None:
         from aiforge.modules.chat.widget import _research
 
-        with patch("aiforge.modules.chat.widget._web_search", return_value="[1] Web result"):
-            with patch("aiforge.modules.chat.widget._knowledge_search", return_value=""):
-                result = _research("test")
-                assert "Web Results" in result
-                assert "Knowledge Base" not in result
+        with (
+            patch("aiforge.modules.chat.widget._web_search", return_value="[1] Web result"),
+            patch("aiforge.modules.chat.widget._knowledge_search", return_value=""),
+        ):
+            result = _research("test")
+            assert "Web Results" in result
+            assert "Knowledge Base" not in result
 
     def test_research_no_results(self) -> None:
         from aiforge.modules.chat.widget import _research
 
-        with patch("aiforge.modules.chat.widget._web_search", return_value=""):
-            with patch("aiforge.modules.chat.widget._knowledge_search", return_value=""):
-                result = _research("test")
-                assert "No results found" in result
+        with (
+            patch("aiforge.modules.chat.widget._web_search", return_value=""),
+            patch("aiforge.modules.chat.widget._knowledge_search", return_value=""),
+        ):
+            result = _research("test")
+            assert "No results found" in result
 
 
 class TestUnitConverter:
@@ -1193,8 +1234,9 @@ class TestUnitConverter:
         assert "2.2046" in result
 
     def test_degrees_to_radians(self) -> None:
-        from aiforge.modules.chat.widget import _unit_converter
         import math
+
+        from aiforge.modules.chat.widget import _unit_converter
 
         result = _unit_converter("180 degrees to radians")
         assert str(round(math.pi, 4)) in result
@@ -1269,10 +1311,12 @@ class TestHistoryDoesNotLeakToolIntermediates:
         tool = _mock_tool("calculator", "Math tool")
         agent = _agent(tools=[tool])
 
-        calls = iter([
-            _fake_llm('{"tool": "calculator", "input": {"expression": "2+2"}}'),
-            _fake_llm("The answer is 4."),
-        ])
+        calls = iter(
+            [
+                _fake_llm('{"tool": "calculator", "input": {"expression": "2+2"}}'),
+                _fake_llm("The answer is 4."),
+            ]
+        )
         agent._call_llm = MagicMock(side_effect=lambda m, **kw: next(calls))
         agent.chat("What is 2+2?")
 
@@ -1289,10 +1333,12 @@ class TestHistoryDoesNotLeakToolIntermediates:
         tool = _mock_tool("calc", "Math")
         agent = _agent(tools=[tool], memory="none")
 
-        calls = iter([
-            _fake_llm('{"tool": "calc", "input": {}}'),
-            _fake_llm("Done."),
-        ])
+        calls = iter(
+            [
+                _fake_llm('{"tool": "calc", "input": {}}'),
+                _fake_llm("Done."),
+            ]
+        )
         agent._call_llm = MagicMock(side_effect=lambda m, **kw: next(calls))
         agent.chat("Please calculate something")
 
@@ -1305,14 +1351,16 @@ class TestHistoryDoesNotLeakToolIntermediates:
         tool = _mock_tool("calc", "Math")
         agent = _agent(tools=[tool], memory="buffer", memory_k=4)
 
-        calls = iter([
-            _fake_llm('{"tool": "calc", "input": {}}'),
-            _fake_llm("r1"),
-            _fake_llm('{"tool": "calc", "input": {}}'),
-            _fake_llm("r2"),
-            _fake_llm('{"tool": "calc", "input": {}}'),
-            _fake_llm("r3"),
-        ])
+        calls = iter(
+            [
+                _fake_llm('{"tool": "calc", "input": {}}'),
+                _fake_llm("r1"),
+                _fake_llm('{"tool": "calc", "input": {}}'),
+                _fake_llm("r2"),
+                _fake_llm('{"tool": "calc", "input": {}}'),
+                _fake_llm("r3"),
+            ]
+        )
         agent._call_llm = MagicMock(side_effect=lambda m, **kw: next(calls))
 
         agent.chat("q1")

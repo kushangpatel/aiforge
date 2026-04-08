@@ -10,8 +10,8 @@ import ipaddress
 import socket
 import uuid
 from collections import OrderedDict
-from datetime import datetime, timezone
-from enum import Enum
+from datetime import UTC, datetime
+from enum import StrEnum
 from typing import Any
 from urllib.parse import urlparse
 
@@ -26,7 +26,7 @@ logger = structlog.get_logger()
 # ---------------------------------------------------------------------------
 
 
-class JobStatus(str, Enum):
+class JobStatus(StrEnum):
     ACCEPTED = "accepted"
     RUNNING = "running"
     COMPLETED = "completed"
@@ -36,7 +36,7 @@ class JobStatus(str, Enum):
 class JobRecord(BaseModel):
     job_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     status: JobStatus = JobStatus.ACCEPTED
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     completed_at: datetime | None = None
     webhook_url: str | None = None
     result: dict[str, Any] | None = None
@@ -68,9 +68,7 @@ def validate_webhook_url(url: str, *, allow_insecure: bool = False) -> str:
     parsed = urlparse(url)
 
     if not allow_insecure and parsed.scheme != "https":
-        raise ValueError(
-            f"Webhook URL must use https:// in production (got {parsed.scheme}://)"
-        )
+        raise ValueError(f"Webhook URL must use https:// in production (got {parsed.scheme}://)")
 
     if parsed.scheme not in ("http", "https"):
         raise ValueError(f"Webhook URL scheme must be http or https, got {parsed.scheme!r}")
@@ -86,9 +84,7 @@ def validate_webhook_url(url: str, *, allow_insecure: bool = False) -> str:
         addr = ipaddress.ip_address(hostname)
         for net in _PRIVATE_NETS:
             if addr in net:
-                raise ValueError(
-                    f"Webhook URL must not target private IP ranges ({hostname})"
-                )
+                raise ValueError(f"Webhook URL must not target private IP ranges ({hostname})")
     except ValueError as exc:
         # Re-raise our own validation errors; swallow parse errors for hostnames
         if "Webhook URL" in str(exc):
@@ -96,7 +92,7 @@ def validate_webhook_url(url: str, *, allow_insecure: bool = False) -> str:
         # hostname is not an IP literal — resolve DNS and check resolved addresses
         try:
             resolved = socket.getaddrinfo(hostname, None, proto=socket.IPPROTO_TCP)
-            for family, _type, _proto, _canon, sockaddr in resolved:
+            for _family, _type, _proto, _canon, sockaddr in resolved:
                 addr = ipaddress.ip_address(sockaddr[0])
                 for net in _PRIVATE_NETS:
                     if addr in net:
@@ -142,7 +138,7 @@ async def complete_job(job_id: str, result: dict[str, Any], *, timeout: float = 
     if not job:
         return
     job.status = JobStatus.COMPLETED
-    job.completed_at = datetime.now(timezone.utc)
+    job.completed_at = datetime.now(UTC)
     job.result = result
     if job.webhook_url:
         await _deliver_webhook(job, timeout=timeout)
@@ -154,7 +150,7 @@ async def fail_job(job_id: str, error: str, *, timeout: float = 10.0) -> None:
     if not job:
         return
     job.status = JobStatus.FAILED
-    job.completed_at = datetime.now(timezone.utc)
+    job.completed_at = datetime.now(UTC)
     job.error = error
     if job.webhook_url:
         await _deliver_webhook(job, timeout=timeout)
@@ -198,7 +194,7 @@ async def _deliver_webhook(job: JobRecord, *, timeout: float = 10.0, max_retries
                 attempt=attempt + 1,
             )
             if attempt < max_retries:
-                await asyncio.sleep(2 ** attempt)  # 1s, 2s, 4s
+                await asyncio.sleep(2**attempt)  # 1s, 2s, 4s
     logger.error(
         "webhook.delivery_failed",
         job_id=job.job_id,

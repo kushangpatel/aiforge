@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Optional
+from typing import cast
 
 import typer
 from rich.table import Table
@@ -56,19 +56,25 @@ models_app = typer.Typer(name="models", help="List available models and estimate
 
 @models_app.command("list")
 def models_list(
-    quality: Optional[str] = typer.Option(
-        None, "--quality", "-q", help="Filter by quality tier: fast|balanced|quality.",
+    quality: str | None = typer.Option(
+        None,
+        "--quality",
+        "-q",
+        help="Filter by quality tier: fast|balanced|quality.",
     ),
-    provider: Optional[str] = typer.Option(
-        None, "--provider", "-p", help="Filter by provider name.",
+    provider: str | None = typer.Option(
+        None,
+        "--provider",
+        "-p",
+        help="Filter by provider name.",
     ),
     fmt: str = typer.Option("table", "--format", help="Output format: json|yaml|table."),
 ) -> None:
     """List models known to the model router."""
-    from aiforge.core.model_router import ModelRouter
+    from aiforge.core.model_router import ModelRouter, QualityTier
 
     router = ModelRouter()
-    models = router.list_models(quality=quality, provider=provider)
+    models = router.list_models(quality=cast("QualityTier | None", quality), provider=provider)
 
     if fmt == "table":
         tbl = Table(title="Available Models", show_header=True)
@@ -116,7 +122,9 @@ def models_estimate(
 # aiforge registry
 # ---------------------------------------------------------------------------
 
-registry_app = typer.Typer(name="registry", help="Explore registered modules, providers, and stores.")
+registry_app = typer.Typer(
+    name="registry", help="Explore registered modules, providers, and stores."
+)
 
 
 @registry_app.callback(invoke_without_command=True)
