@@ -7,11 +7,12 @@ from __future__ import annotations
 
 import asyncio
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any, AsyncGenerator, Iterator
+from typing import TYPE_CHECKING, Any, AsyncGenerator, Iterator, cast
 
 from pydantic import BaseModel, Field
 
 if TYPE_CHECKING:
+    from aiforge.core.model_router import QualityTier
     from aiforge.infra.config import AIForgeSettings
     from aiforge.infra.cost_tracker import CostTracker
 
@@ -164,7 +165,7 @@ class BaseModule(ABC):
                 selected = ModelRouter(
                     custom_models=self.settings.CUSTOM_MODELS or None,
                 ).select(
-                    quality=quality,
+                    quality=cast("QualityTier", quality),
                     provider=self.settings.PROVIDER,
                     prefer_local=self.settings.PREFER_LOCAL,
                 )
