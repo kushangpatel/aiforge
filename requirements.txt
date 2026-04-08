@@ -81,4 +81,5 @@ mkdocs-material>=1.6.1
 # Vector Database Drivers (uncomment based on your choice of vector store)
 # ============================================================
 psycopg>=3.3.3
-pinecone>8.1.1
+pinecone>=8.1.1
+qdrant_client>=1.17.1
