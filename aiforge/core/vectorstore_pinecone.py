@@ -74,7 +74,9 @@ class PineconeVectorStore(VectorStoreAdapter):
         filter: dict[str, Any] | None = None,
         include_embeddings: bool = False,
     ) -> list[dict[str, Any]]:
-        results = self._index.query(
+        from pinecone import QueryResponse
+
+        raw = self._index.query(
             vector=embedding,
             top_k=top_k,
             namespace=self._namespace,
@@ -82,18 +84,19 @@ class PineconeVectorStore(VectorStoreAdapter):
             include_metadata=True,
             include_values=include_embeddings,
         )
+        results: QueryResponse = raw  # type: ignore[assignment]
 
         hits: list[dict[str, Any]] = []
-        for match in results.get("matches", []):
-            meta = dict(match.get("metadata", {}))
+        for match in results.matches:
+            meta = dict(match.metadata or {})
             text = meta.pop("_text", "")
             hit: dict[str, Any] = {
-                "id": match["id"],
+                "id": match.id,
                 "text": text,
                 "metadata": meta,
-                "distance": 1.0 - match["score"],  # similarity → distance
+                "distance": 1.0 - match.score,  # similarity → distance
             }
-            if include_embeddings and match.get("values"):
+            if include_embeddings and match.values:
                 hit["embeddings"] = match["values"]
             hits.append(hit)
         return hits
