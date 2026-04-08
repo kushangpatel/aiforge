@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import threading
 from abc import ABC, abstractmethod
-from typing import Any
+from typing import Any, cast
 
 
 class VectorStoreAdapter(ABC):
@@ -104,11 +104,13 @@ class ChromaVectorStore(VectorStoreAdapter):
         metadatas: list[dict[str, Any]],
         ids: list[str],
     ) -> None:
+        import chromadb.api.types as ct
+
         with self._write_lock:
             self._collection.upsert(
                 documents=texts,
-                embeddings=embeddings,
-                metadatas=metadatas,
+                embeddings=cast(ct.OneOrMany[ct.Embedding], embeddings),
+                metadatas=cast(ct.OneOrMany[ct.Metadata], metadatas),
                 ids=ids,
             )
 
@@ -137,19 +139,18 @@ class ChromaVectorStore(VectorStoreAdapter):
         if not results["documents"]:
             return output
 
-        raw_embeds = (
-            results["embeddings"][0]
-            if include_embeddings and results.get("embeddings")
-            else None
-        )
+        docs = results["documents"]
+        metas = results["metadatas"]
+        dists = results["distances"]
+        ids_list = results["ids"]
+        embeds = results.get("embeddings")
+
+        assert docs is not None and metas is not None and dists is not None and ids_list is not None
+
+        raw_embeds = embeds[0] if include_embeddings and embeds is not None else None
 
         for i, (doc, meta, dist, doc_id) in enumerate(
-            zip(
-                results["documents"][0],
-                results["metadatas"][0],
-                results["distances"][0],
-                results["ids"][0],
-            )
+            zip(docs[0], metas[0], dists[0], ids_list[0])
         ):
             hit: dict[str, Any] = {
                 "id": doc_id,
