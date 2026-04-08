@@ -78,6 +78,7 @@ langchain-openai>=0.2.0
 mkdocs-material>=1.6.1
 
 # ============================================================
-# Optional: Add any additional dependencies for specific features or providers as needed.
+# Vector Database Drivers (uncomment based on your choice of vector store)
 # ============================================================
 psycopg>=3.3.3
+pinecone>8.1.1
