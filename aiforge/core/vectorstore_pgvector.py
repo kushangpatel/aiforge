@@ -58,16 +58,17 @@ class PgVectorStore(VectorStoreAdapter):
         ids: list[str],
     ) -> None:
         import json
+        from psycopg import sql as pgsql
 
         table = self._collection_name
-        sql = f"""
+        stmt = pgsql.SQL("""
             INSERT INTO {table} (id, text, metadata, embedding)
             VALUES (%s, %s, %s, %s::vector)
             ON CONFLICT (id) DO UPDATE
                 SET text      = EXCLUDED.text,
                     metadata  = EXCLUDED.metadata,
                     embedding = EXCLUDED.embedding
-        """  # noqa: S608
+        """).format(table=pgsql.Identifier(table))
 
         with self._conn.cursor() as cur:
             for i in range(0, len(ids), _UPSERT_BATCH):
@@ -79,7 +80,7 @@ class PgVectorStore(VectorStoreAdapter):
                         [self._vec_literal(e) for e in embeddings[i : i + _UPSERT_BATCH]],
                     )
                 )
-                cur.executemany(sql, batch)
+                cur.executemany(stmt, batch)
 
     def query(
         self,
@@ -89,26 +90,30 @@ class PgVectorStore(VectorStoreAdapter):
         include_embeddings: bool = False,
     ) -> list[dict[str, Any]]:
         import json
+        from psycopg import sql as pgsql
 
         table = self._collection_name
         vec = self._vec_literal(embedding)
 
-        cols = "id, text, metadata, embedding <=> %s::vector AS distance"
         if include_embeddings:
-            cols += ", embedding"
+            cols_sql = pgsql.SQL("id, text, metadata, embedding <=> %s::vector AS distance, embedding")
+        else:
+            cols_sql = pgsql.SQL("id, text, metadata, embedding <=> %s::vector AS distance")
 
-        where = ""
         params: list[Any] = [vec]
+        where_sql = pgsql.SQL("")
         if filter:
-            where = " WHERE metadata @> %s::jsonb"
+            where_sql = pgsql.SQL(" WHERE metadata @> %s::jsonb")
             params.append(json.dumps(filter))
 
         params.append(vec)  # ORDER BY
         params.append(top_k)
-        sql = f"SELECT {cols} FROM {table}{where} ORDER BY embedding <=> %s::vector LIMIT %s"  # noqa: S608
+        stmt = pgsql.SQL(
+            "SELECT {cols} FROM {table}{where} ORDER BY embedding <=> %s::vector LIMIT %s"
+        ).format(cols=cols_sql, table=pgsql.Identifier(table), where=where_sql)
 
         with self._conn.cursor() as cur:
-            cur.execute(sql, params)
+            cur.execute(stmt, params)
             rows = cur.fetchall()
 
         hits: list[dict[str, Any]] = []
@@ -125,9 +130,11 @@ class PgVectorStore(VectorStoreAdapter):
         return hits
 
     def delete_collection(self, name: str) -> None:
+        from psycopg import sql as pgsql
+
         safe = self._sanitise_name(name)
         with self._conn.cursor() as cur:
-            cur.execute(f"DROP TABLE IF EXISTS {safe}")  # noqa: S608
+            cur.execute(pgsql.SQL("DROP TABLE IF EXISTS {}").format(pgsql.Identifier(safe)))
 
     def list_collections(self) -> list[str]:
         sql = """
@@ -140,10 +147,14 @@ class PgVectorStore(VectorStoreAdapter):
             return [row[0] for row in cur.fetchall()]
 
     def collection_stats(self, name: str) -> dict[str, Any]:
+        from psycopg import sql as pgsql
+
         safe = self._sanitise_name(name)
         with self._conn.cursor() as cur:
-            cur.execute(f"SELECT COUNT(*) FROM {safe}")  # noqa: S608
-            count = cur.fetchone()[0]
+            cur.execute(pgsql.SQL("SELECT COUNT(*) FROM {}").format(pgsql.Identifier(safe)))
+            row = cur.fetchone()
+            assert row is not None, f"COUNT(*) returned no rows for table {safe!r}"
+            count = row[0]
         return {
             "name": name,
             "chunks": count,
@@ -155,23 +166,32 @@ class PgVectorStore(VectorStoreAdapter):
 
     def _ensure_schema(self) -> None:
         """Create the pgvector extension and collection table if needed."""
+        from psycopg import sql as pgsql
+
         table = self._collection_name
+        idx_name = f"{table}_embedding_idx"
         with self._conn.cursor() as cur:
-            cur.execute("CREATE EXTENSION IF NOT EXISTS vector")
-            cur.execute(f"""
+            cur.execute(pgsql.SQL("CREATE EXTENSION IF NOT EXISTS vector"))
+            cur.execute(pgsql.SQL("""
                 CREATE TABLE IF NOT EXISTS {table} (
                     id        TEXT PRIMARY KEY,
                     text      TEXT NOT NULL,
-                    metadata  JSONB NOT NULL DEFAULT '{{}}'::jsonb,
-                    embedding vector({self._vector_size})
+                    metadata  JSONB NOT NULL DEFAULT '{}'::jsonb,
+                    embedding vector({size})
                 )
-            """)  # noqa: S608
-            cur.execute(f"""
-                CREATE INDEX IF NOT EXISTS {table}_embedding_idx
+            """).format(
+                table=pgsql.Identifier(table),
+                size=pgsql.Literal(self._vector_size),
+            ))
+            cur.execute(pgsql.SQL("""
+                CREATE INDEX IF NOT EXISTS {idx}
                 ON {table}
                 USING ivfflat (embedding vector_cosine_ops)
                 WITH (lists = 100)
-            """)  # noqa: S608
+            """).format(
+                idx=pgsql.Identifier(idx_name),
+                table=pgsql.Identifier(table),
+            ))
 
     def close(self) -> None:
         """Close the underlying database connection."""
