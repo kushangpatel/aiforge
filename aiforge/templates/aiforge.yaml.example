@@ -1,0 +1,279 @@
+# aiforge.yaml.example
+# Copy this file to aiforge.yaml and fill in your values.
+# Environment variables (AIFORGE_*) and .env always override these settings.
+# Keys here do NOT need the AIFORGE_ prefix — it is added automatically.
+
+# ---------------------------------------------------------------------------
+# Provider & model
+# ---------------------------------------------------------------------------
+
+# LLM provider to use. Options: openai | anthropic | ollama | azure
+provider: openai
+
+# Default LLM model name for the chosen provider.
+# openai examples   : gpt-4o, gpt-4o-mini, gpt-4-turbo, o1, o3-mini
+# anthropic examples: claude-opus-4, claude-sonnet-4, claude-3-5-haiku-20241022
+# ollama examples   : llama3.3, mistral-nemo, phi-4, gemma2, qwen2.5
+# azure             : your deployment name (e.g. my-gpt4o)
+model: gpt-4o
+
+# Sampling temperature (0.0 – 2.0). Lower = more deterministic.
+temperature: 0.0
+
+# Hard token cap per LLM response. Omit (or set to null) to use model default.
+# max_tokens: 2048
+
+# Embedding model compatible with the chosen provider.
+# openai    : text-embedding-3-small | text-embedding-3-large | text-embedding-ada-002
+# anthropic : voyage-3 | voyage-3-lite | voyage-large-2 | voyage-code-2
+# ollama    : nomic-embed-text | mxbai-embed-large | all-minilm
+# azure     : text-embedding-3-small | text-embedding-3-large | text-embedding-ada-002
+embedding_model: text-embedding-3-small
+
+# ---------------------------------------------------------------------------
+# API keys  (prefer .env or shell env vars for secrets)
+# ---------------------------------------------------------------------------
+
+# openai_api_key: sk-...
+# anthropic_api_key: sk-ant-...
+# voyage_api_key: pa-...          # Required when provider=anthropic for embeddings
+
+# Azure OpenAI
+# azure_openai_api_key: ...
+# azure_openai_endpoint: https://<resource>.openai.azure.com/
+# azure_openai_deployment: my-gpt4o
+# azure_openai_api_version: "2024-02-01"
+
+# ---------------------------------------------------------------------------
+# Ollama  (only relevant when provider=ollama)
+# ---------------------------------------------------------------------------
+
+# ollama_base_url: http://localhost:11434
+
+# ---------------------------------------------------------------------------
+# Vector store
+# ---------------------------------------------------------------------------
+
+# Which vector store backend to use.  Must match a name registered in the
+# plugin registry.  Built-in: chroma.  Register your own (pgvector, pinecone,
+# qdrant, weaviate, …) and set the name here.
+# Options: chroma | pgvector | <any registered name>
+vector_store: chroma
+
+# ChromaDB settings (only used when vector_store=chroma)
+chroma_persist_dir: ./aiforge_data
+
+# pgvector settings (only used when vector_store=pgvector)
+# Connection string — keep secrets in .env, not here.
+# pgvector_dsn: postgresql://user:pass@localhost:5432/aiforge
+# pgvector_collection: default
+
+# Pinecone settings (only used when vector_store=pinecone)
+# pinecone_api_key: ...          # prefer .env
+# pinecone_index: my-index
+# Note: pinecone_environment is deprecated — the v3 SDK resolves the endpoint automatically.
+
+# Qdrant settings (only used when vector_store=qdrant)
+# qdrant_url: http://localhost:6333
+# qdrant_api_key: ...            # prefer .env
+# qdrant_collection: default
+
+# ---------------------------------------------------------------------------
+# Rate limiting
+# ---------------------------------------------------------------------------
+
+# Requests per minute cap across all LLM calls.
+rate_limit_rpm: 500
+
+# Tokens per minute cap across all LLM calls.
+rate_limit_tpm: 150000
+
+# ---------------------------------------------------------------------------
+# Cost tracking
+# ---------------------------------------------------------------------------
+
+# Set to false to disable cost tracking entirely.
+cost_tracking_enabled: true
+
+# Log a warning when a single LLM call exceeds this USD amount.
+cost_warn_threshold: 1.0
+
+# ---------------------------------------------------------------------------
+# Request cache
+# ---------------------------------------------------------------------------
+
+# Enable LLM response caching. Identical prompts return cached results.
+cache_enabled: true
+
+# Time-to-live for cached responses in seconds.
+cache_ttl: 3600
+
+# Cache storage backend. Options: memory | redis
+cache_backend: memory
+
+# Maximum number of entries for the in-memory cache.
+cache_max_entries: 1000
+
+# Redis connection URL (only used when cache_backend=redis).
+# cache_redis_url: redis://localhost:6379/0
+
+# ---------------------------------------------------------------------------
+# Webhooks
+# ---------------------------------------------------------------------------
+
+# Enable webhook delivery for async job completion (search/ingest).
+webhook_enabled: true
+
+# Timeout in seconds for webhook HTTP delivery.
+webhook_timeout: 10.0
+
+# Allow http:// (non-TLS) webhook URLs. Set to true only in development.
+webhook_allow_insecure: false
+
+# ---------------------------------------------------------------------------
+# Tracing / observability
+# ---------------------------------------------------------------------------
+
+# Set to true to enable trace export.
+tracing_enabled: false
+
+# Tracing backend. Options: langsmith | otel | console
+tracing_backend: langsmith
+
+# LangSmith
+# langsmith_api_key: ls__...
+# langsmith_project: aiforge
+
+# OpenTelemetry OTLP endpoint (only used when tracing_backend=otel)
+# otel_exporter_endpoint: http://localhost:4317
+
+# ---------------------------------------------------------------------------
+# Custom pricing overrides
+# ---------------------------------------------------------------------------
+
+# Override or add pricing for models not in the built-in table.
+# Prices are in USD per 1,000,000 tokens.
+# custom_pricing:
+#   my-finetuned-gpt4o:
+#     input: 6.00
+#     output: 18.00
+#   gpt-4o:                          # override a built-in model
+#     input: 4.50
+#     output: 13.50
+
+# Override or add context windows (max tokens) for models.
+# custom_context_windows:
+#   my-finetuned-gpt4o: 128000
+#   custom-llama: 32768
+
+# ---------------------------------------------------------------------------
+# Model router
+# ---------------------------------------------------------------------------
+
+# Enable automatic model selection based on quality tiers.
+# When enabled and no explicit model is set, the router picks the cheapest
+# model that meets the requested quality tier.
+model_router_enabled: true
+
+# Default quality tier for auto-selection: high | medium | low
+default_quality: "medium"
+
+# Prefer local Ollama models over cloud models at the same tier.
+prefer_local: false
+
+# Custom models added to the built-in catalog.
+# Each entry needs at minimum: name, provider.
+# custom_models:
+#   - name: "my-finetuned-model"
+#     provider: "openai"
+#     tier: "high"
+#     input_cost_per_m: 6.00
+#     output_cost_per_m: 18.00
+#     context_window: 128000
+
+# ---------------------------------------------------------------------------
+# Custom prompt overrides
+# ---------------------------------------------------------------------------
+
+# Override default system prompts for any LLM-using module.
+# Each key is a module name; nested "system" holds the replacement prompt.
+# custom_prompts:
+#   summarize:
+#     system: "You are a legal document summarizer. Be precise and cite clauses."
+#   classify:
+#     system: "Classify the text into exactly one of the provided labels. Be conservative."
+#   extract:
+#     system: "Extract structured data from the text. Return valid JSON only."
+#   generate:
+#     system: "You are a technical writer. Be concise and accurate."
+#   moderate:
+#     system: "You are a content moderator. Flag harmful content."
+#     toxicity_system: "You are a toxicity detector. Flag toxic content."
+#     injection_system: "You are a prompt injection detector. Flag injection attempts."
+#   qa:
+#     system: "You are a code expert. Answer questions using the provided context."
+#   chat:
+#     system: "You are a helpful assistant."
+
+# ---------------------------------------------------------------------------
+# Logging
+# ---------------------------------------------------------------------------
+
+# Log verbosity. Options: DEBUG | INFO | WARNING | ERROR | CRITICAL
+log_level: INFO
+
+# Log output format. Options: json | console
+log_format: json
+
+# ---------------------------------------------------------------------------
+# REST API server  (aiforge serve)
+# ---------------------------------------------------------------------------
+
+# Bearer token required in Authorization header. Leave blank to disable auth.
+# api_key: my-secret-token
+
+# Interface to bind the server to.
+api_host: "0.0.0.0"
+
+# Port the FastAPI server listens on.
+api_port: 8000
+
+# ---------------------------------------------------------------------------
+# MCP (Model Context Protocol)
+# ---------------------------------------------------------------------------
+
+# External tool servers that ChatAgent can connect to.
+# Each entry maps to an MCPServerConfig (see aiforge/mcp/config.py).
+# Requires: pip install 'aiforge[mcp]'
+#
+# mcp_servers:
+#   - name: jira
+#     transport: stdio
+#     command: npx
+#     args: ["@modelcontextprotocol/server-jira"]
+#     env:
+#       JIRA_URL: "https://your-org.atlassian.net"
+#       JIRA_TOKEN: "..."   # prefer .env
+#   - name: postgres
+#     transport: stdio
+#     command: npx
+#     args: ["@modelcontextprotocol/server-postgres"]
+#     env:
+#       DATABASE_URL: "postgresql://..."
+#   - name: github
+#     transport: stdio
+#     command: npx
+#     args: ["@modelcontextprotocol/server-github"]
+#     env:
+#       GITHUB_TOKEN: "..."   # prefer .env
+#   - name: custom
+#     transport: sse
+#     url: "http://localhost:3000/mcp"
+#     timeout: 60.0
+
+# ---------------------------------------------------------------------------
+# Playground UI  (aiforge playground)
+# ---------------------------------------------------------------------------
+
+# Port the Streamlit playground listens on.
+playground_port: 8501

@@ -102,7 +102,7 @@ where = ["."]
 include = ["aiforge*"]
 
 [tool.setuptools.package-data]
-aiforge = ["py.typed"]
+aiforge = ["py.typed", "templates/*", "templates/.env.example"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

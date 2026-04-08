@@ -25,6 +25,7 @@ Commands:
 
 from __future__ import annotations
 
+import importlib.resources
 import shutil
 from pathlib import Path
 
@@ -192,10 +193,7 @@ def migrate(
 
 
 def _copy_template(src_name: str, dest_name: str, force: bool) -> None:
-    """Copy a template file from the package root to cwd."""
-    # Template lives next to pyproject.toml (package root)
-    pkg_root = Path(__file__).parent.parent.parent
-    src = pkg_root / src_name
+    """Copy a template file from the package's templates directory to cwd."""
     dest = Path.cwd() / dest_name
 
     if dest.exists() and not force:
@@ -204,11 +202,13 @@ def _copy_template(src_name: str, dest_name: str, force: bool) -> None:
         )
         return
 
-    if src.exists():
-        shutil.copy2(src, dest)
+    try:
+        ref = importlib.resources.files("aiforge.templates").joinpath(src_name)
+        with importlib.resources.as_file(ref) as src:
+            shutil.copy2(src, dest)
         console.print(f"[green]✓[/green] Created {dest_name}")
-    else:
-        console.print(f"[yellow]Template {src_name!r} not found in package root.[/yellow]")
+    except (FileNotFoundError, TypeError):
+        console.print(f"[yellow]Template {src_name!r} not found in package.[/yellow]")
 
 
 if __name__ == "__main__":
