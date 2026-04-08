@@ -95,17 +95,20 @@ class QdrantVectorStore(VectorStoreAdapter):
         filter: dict[str, Any] | None = None,
         include_embeddings: bool = False,
     ) -> list[dict[str, Any]]:
-        results = self._client.search(
+        from qdrant_client.models import Filter as QdrantFilter
+
+        qdrant_filter = QdrantFilter.model_validate(filter) if filter is not None else None
+        response = self._client.query_points(
             collection_name=self._collection_name,
-            query_vector=embedding,
+            query=embedding,
             limit=top_k,
-            query_filter=filter,
+            query_filter=qdrant_filter,
             with_payload=True,
             with_vectors=include_embeddings,
         )
 
         hits: list[dict[str, Any]] = []
-        for point in results:
+        for point in response.points:
             payload = dict(point.payload or {})
             text = payload.pop("_text", "")
             hit: dict[str, Any] = {
