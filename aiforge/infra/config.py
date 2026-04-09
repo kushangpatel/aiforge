@@ -11,15 +11,13 @@ Layered priority (low → high):
 
 from __future__ import annotations
 
-import json
-import os
 from functools import lru_cache
 from pathlib import Path
-from typing import Any
+from typing import Any, Tuple, Type
 
 import yaml
 from pydantic import field_validator, model_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, PydanticBaseSettingsSource, SettingsConfigDict
 
 # ---------------------------------------------------------------------------
 # Supported combinations (provider → allowed embedding models)
@@ -49,21 +47,77 @@ _PROVIDER_EMBEDDING_MAP: dict[str, list[str]] = {
     ],
 }
 
+# ---------------------------------------------------------------------------
+# YAML settings source
+# ---------------------------------------------------------------------------
 
-def _load_yaml_config(yaml_path: Path) -> dict[str, Any]:
-    """Load YAML config file, returning empty dict if not present."""
-    if yaml_path.exists():
-        with yaml_path.open() as fh:
-            data = yaml.safe_load(fh) or {}
-        # Flatten top-level keys to AIFORGE_* env-var style
-        flat: dict[str, Any] = {}
-        for k, v in data.items():
+#: Path checked automatically on every settings load.
+_DEFAULT_YAML_PATH = Path("aiforge.yaml")
+
+#: Temporarily overridden by AIForgeSettings.from_yaml() for one instantiation.
+_YAML_PATH_OVERRIDE: Path | None = None
+
+
+class YamlConfigSettingsSource(PydanticBaseSettingsSource):
+    """Pydantic-settings v2 source that loads from an ``aiforge.yaml`` file.
+
+    Keys in the YAML file are expected to match the field names (without the
+    ``AIFORGE_`` prefix, e.g. ``model: gpt-4o``).  They are uppercased and
+    matched against the settings fields directly.
+    """
+
+    def __init__(
+        self,
+        settings_cls: Type[BaseSettings],
+        yaml_path: Path = _DEFAULT_YAML_PATH,
+    ) -> None:
+        super().__init__(settings_cls)
+        self._yaml_file = yaml_path
+        self._data = self._load()
+
+    def _load(self) -> dict[str, Any]:
+        """Read and normalise the YAML file, returning an empty dict if absent."""
+        if not self._yaml_file.exists():
+            return {}
+        with self._yaml_file.open() as fh:
+            raw = yaml.safe_load(fh) or {}
+        # Normalise keys: strip AIFORGE_ prefix if present, then uppercase.
+        normalised: dict[str, Any] = {}
+        for k, v in raw.items():
             key = k.upper()
-            if not key.startswith("AIFORGE_"):
-                key = f"AIFORGE_{key}"
-            flat[key] = v
-        return flat
-    return {}
+            if key.startswith("AIFORGE_"):
+                key = key[len("AIFORGE_"):]
+            normalised[key] = v
+        return normalised
+
+    def get_field_value(
+        self, field: Any, field_name: str
+    ) -> Tuple[Any, str, bool]:
+        # field_name is already the canonical name (without prefix).
+        value = self._data.get(field_name)
+        return value, field_name, value is not None
+
+    def field_is_complex(self, field: Any) -> bool:
+        return self.field_is_complex_cached(field)
+
+    def __call__(self) -> dict[str, Any]:
+        result: dict[str, Any] = {}
+        for field_name, field_info in self.settings_cls.model_fields.items():
+            value, _, found = self.get_field_value(field_info, field_name)
+            if found:
+                try:
+                    value = self.prepare_field_value(
+                        field_name, field_info, value, value  # type: ignore[arg-type]
+                    )
+                except Exception:  # noqa: BLE001
+                    pass
+                result[field_name] = value
+        return result
+
+
+# ---------------------------------------------------------------------------
+# Settings model
+# ---------------------------------------------------------------------------
 
 
 class AIForgeSettings(BaseSettings):
@@ -305,27 +359,42 @@ class AIForgeSettings(BaseSettings):
         return self
 
     # ------------------------------------------------------------------
+    # ------------------------------------------------------------------
+    # Custom settings sources
+    # ------------------------------------------------------------------
+
+    @classmethod
+    def settings_customise_sources(
+        cls,
+        settings_cls: Type[BaseSettings],
+        init_settings: PydanticBaseSettingsSource,
+        env_settings: PydanticBaseSettingsSource,
+        dotenv_settings: PydanticBaseSettingsSource,
+        file_secret_settings: PydanticBaseSettingsSource,
+    ) -> Tuple[PydanticBaseSettingsSource, ...]:
+        """Priority order (highest → lowest): init > env > .env > yaml > defaults."""
+        yaml_path = _YAML_PATH_OVERRIDE if _YAML_PATH_OVERRIDE is not None else _DEFAULT_YAML_PATH
+        return (
+            init_settings,
+            env_settings,
+            dotenv_settings,
+            YamlConfigSettingsSource(settings_cls, yaml_path=yaml_path),
+            file_secret_settings,
+        )
+
+    # ------------------------------------------------------------------
     # Class-level helpers
     # ------------------------------------------------------------------
 
     @classmethod
     def from_yaml(cls, path: str | Path, **overrides: Any) -> AIForgeSettings:
-        """Load settings from a YAML file with optional code-level overrides."""
-        yaml_data = _load_yaml_config(Path(path))
-        # Set env vars temporarily so Pydantic Settings picks them up
-        old_env: dict[str, str | None] = {}
-        for k, v in yaml_data.items():
-            old_env[k] = os.environ.get(k)
-            os.environ[k] = json.dumps(v) if isinstance(v, (dict, list)) else str(v)
+        """Load settings from a specific YAML file with optional code-level overrides."""
+        global _YAML_PATH_OVERRIDE  # noqa: PLW0603
+        _YAML_PATH_OVERRIDE = Path(path)
         try:
-            instance = cls(**overrides)
+            return cls(**overrides)
         finally:
-            for k, old in old_env.items():
-                if old is None:
-                    os.environ.pop(k, None)
-                else:
-                    os.environ[k] = old
-        return instance
+            _YAML_PATH_OVERRIDE = None
 
 
 @lru_cache(maxsize=1)
@@ -335,8 +404,7 @@ def get_settings() -> AIForgeSettings:
     The first call reads YAML + env vars. Module constructors that accept
     kwargs create a local patched copy via ``AIForgeSettings(**kwargs)``.
     """
-    yaml_path = Path("aiforge.yaml")
-    settings = AIForgeSettings.from_yaml(yaml_path) if yaml_path.exists() else AIForgeSettings()
+    settings = AIForgeSettings()
 
     # Apply custom pricing / context-window overrides from config
     from aiforge.core.pricing import (

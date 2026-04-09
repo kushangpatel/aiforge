@@ -246,10 +246,11 @@ class TestBaseModuleRouterIntegration:
         assert clf.settings.MODEL == "gpt-4o-mini"
 
     def test_explicit_model_overrides_quality(self) -> None:
-        """Explicit MODEL= takes priority over quality=."""
+        """Explicit MODEL= kwarg takes priority over quality= routing."""
         from aiforge.modules.classify import Classifier
 
         clf = Classifier(labels=["a", "b"], quality="low", MODEL="gpt-4o")
+        # MODEL= kwarg is in model_fields_set → router skipped
         assert clf.settings.MODEL == "gpt-4o"
 
     def test_router_disabled_ignores_quality(self) -> None:
@@ -275,11 +276,19 @@ class TestBaseModuleRouterIntegration:
         assert clf.settings.MODEL == "gpt-4o-mini"
 
     def test_no_quality_with_high_default(self) -> None:
-        """DEFAULT_QUALITY='high' routes even without explicit quality=."""
+        """DEFAULT_QUALITY='high' is used for routing only when no model is configured.
+
+        The project aiforge.yaml sets model: gpt-4o-mini explicitly, so with
+        DEFAULT_QUALITY='high' but no quality= kwarg, the router is skipped
+        (the explicit YAML model takes precedence).
+        """
+        from aiforge.infra.config import get_settings
         from aiforge.modules.classify import Classifier
 
+        # The singleton already has MODEL set from yaml (model_is_explicit=True)
         clf = Classifier(labels=["a", "b"], DEFAULT_QUALITY="high")
-        assert clf.settings.MODEL == "gpt-4o"
+        # Router skipped → use whatever model was in settings (from YAML)
+        assert clf.settings.MODEL == get_settings().MODEL
 
     def test_no_quality_router_disabled_keeps_original(self) -> None:
         """No quality= + MODEL_ROUTER_ENABLED=False → settings.MODEL unchanged."""

@@ -150,18 +150,37 @@ class BaseModule(ABC):
         from aiforge.infra.config import AIForgeSettings, get_settings
         from aiforge.infra.cost_tracker import CostTracker
 
-        explicit_model = "MODEL" in kwargs
-
         # Use the global singleton when no overrides are provided so that all
         # module instances share one consistent settings object.
         self.settings: AIForgeSettings = AIForgeSettings(**kwargs) if kwargs else get_settings()
 
-        # Fall back to configured DEFAULT_QUALITY when caller omits quality=.
-        if quality is None and self.settings.MODEL_ROUTER_ENABLED and not explicit_model:
+        # Track whether quality= and MODEL= were explicitly requested by the caller.
+        quality_is_explicit = quality is not None
+        model_kwarg_explicit = "MODEL" in kwargs  # caller passed MODEL= directly to module
+
+        # A model is considered configured if it was set via YAML, env var, .env
+        # file, or constructor kwarg — any source other than the built-in default.
+        # pydantic tracks this in model_fields_set.
+        model_is_configured = "MODEL" in self.settings.model_fields_set
+
+        # When the caller omits quality=, fall back to DEFAULT_QUALITY — but
+        # only if the model wasn't already explicitly configured (via YAML/env).
+        # An explicit model in aiforge.yaml means the user made a conscious
+        # choice; honour it rather than auto-routing to a different model.
+        if not quality_is_explicit and self.settings.MODEL_ROUTER_ENABLED and not model_is_configured:
             quality = self.settings.DEFAULT_QUALITY
 
-        # Model routing: quality= selects the cheapest model meeting the tier.
-        if quality is not None and not explicit_model and self.settings.MODEL_ROUTER_ENABLED:
+        # Model routing decision:
+        # - MODEL= kwarg passed to the module constructor always wins (skip router).
+        # - Explicit quality= overrides the YAML/env model, so route.
+        # - Implicit quality (from DEFAULT_QUALITY) only routes when no model is set.
+        should_route = (
+            quality is not None
+            and self.settings.MODEL_ROUTER_ENABLED
+            and not model_kwarg_explicit
+            and (quality_is_explicit or not model_is_configured)
+        )
+        if should_route:
             from aiforge.core.model_router import ModelRouter
 
             try:
