@@ -147,12 +147,19 @@ class BaseModule(ABC):
         # Lazy imports to avoid circular deps at class-definition time.
         import structlog
 
-        from aiforge.infra.config import AIForgeSettings, get_settings
+        from aiforge.infra.config import AIForgeSettings, apply_runtime_overrides, get_settings
         from aiforge.infra.cost_tracker import CostTracker
 
-        # Use the global singleton when no overrides are provided so that all
-        # module instances share one consistent settings object.
-        self.settings: AIForgeSettings = AIForgeSettings(**kwargs) if kwargs else get_settings()
+        # Start from global settings so YAML/.env overrides are always respected.
+        # When kwargs are provided, create a validated per-instance copy on top.
+        if kwargs:
+            base = get_settings()
+            merged = base.model_dump()
+            merged.update(kwargs)
+            self.settings = AIForgeSettings(**merged)
+            apply_runtime_overrides(self.settings)
+        else:
+            self.settings = get_settings()
 
         # Track whether quality= and MODEL= were explicitly requested by the caller.
         quality_is_explicit = quality is not None

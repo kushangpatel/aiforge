@@ -402,3 +402,19 @@ class TestCustomProviderEndToEnd:
         """BaseModule(provider='nonexistent') should raise during settings creation."""
         with pytest.raises(ValidationError):
             _StubModule(provider="nonexistent_provider_xyz")
+
+    def test_base_module_kwargs_apply_custom_pricing_overrides(self) -> None:
+        """Module kwargs path should still register CUSTOM_PRICING overrides."""
+        from aiforge.core.pricing import calculate_cost
+
+        model = "unit-test-custom-pricing-model"
+        assert calculate_cost(model, input_tokens=1_000_000, output_tokens=1_000_000) == 0.0
+
+        _StubModule(
+            MODEL="gpt-4o",
+            CUSTOM_PRICING={model: {"input": 1.25, "output": 2.5}},
+        )
+
+        assert calculate_cost(model, input_tokens=1_000_000, output_tokens=1_000_000) == pytest.approx(
+            3.75
+        )

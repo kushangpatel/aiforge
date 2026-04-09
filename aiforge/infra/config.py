@@ -406,7 +406,13 @@ def get_settings() -> AIForgeSettings:
     """
     settings = AIForgeSettings()
 
-    # Apply custom pricing / context-window overrides from config
+    apply_runtime_overrides(settings)
+
+    return settings
+
+
+def apply_runtime_overrides(settings: AIForgeSettings) -> None:
+    """Apply pricing/context runtime tables from a settings object."""
     from aiforge.core.pricing import (
         apply_context_window_overrides,
         apply_pricing_overrides,
@@ -416,5 +422,3 @@ def get_settings() -> AIForgeSettings:
         apply_pricing_overrides(settings.CUSTOM_PRICING)
     if settings.CUSTOM_CONTEXT_WINDOWS:
         apply_context_window_overrides(settings.CUSTOM_CONTEXT_WINDOWS)
-
-    return settings
