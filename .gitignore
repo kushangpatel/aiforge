@@ -75,3 +75,4 @@ build/
 tmp/
 temp/
 .benchmarks/site/
+.claude/settings.local.json
