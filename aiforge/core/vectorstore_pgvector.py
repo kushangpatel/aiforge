@@ -142,6 +142,40 @@ class PgVectorStore(VectorStoreAdapter):
         with self._conn.cursor() as cur:
             cur.execute(pgsql.SQL("DROP TABLE IF EXISTS {}").format(pgsql.Identifier(safe)))
 
+    def delete_by_source(self, source: str) -> int:
+        """Delete all chunks whose metadata['source'] == *source*. Returns count deleted."""
+        import json
+
+        from psycopg import sql as pgsql
+
+        table = self._collection_name
+        stmt = pgsql.SQL(
+            "DELETE FROM {table} WHERE metadata @> %s::jsonb RETURNING id"
+        ).format(table=pgsql.Identifier(table))
+
+        with self._conn.cursor() as cur:
+            cur.execute(stmt, (json.dumps({"source": source}),))
+            rows = cur.fetchall()
+        return len(rows)
+
+    def list_all_metadata(self) -> list[dict[str, Any]]:
+        """Return metadata for every document in this collection."""
+        import json
+
+        from psycopg import sql as pgsql
+
+        table = self._collection_name
+        stmt = pgsql.SQL("SELECT metadata FROM {table}").format(
+            table=pgsql.Identifier(table)
+        )
+        with self._conn.cursor() as cur:
+            cur.execute(stmt)
+            rows = cur.fetchall()
+        return [
+            json.loads(r[0]) if isinstance(r[0], str) else (r[0] or {})
+            for r in rows
+        ]
+
     def list_collections(self) -> list[str]:
         sql = """
             SELECT table_name FROM information_schema.tables
@@ -156,6 +190,11 @@ class PgVectorStore(VectorStoreAdapter):
         from psycopg import sql as pgsql
 
         safe = self._sanitise_name(name)
+        if safe not in self.list_collections():
+            return {
+                "name": name,
+                "chunks": 0,
+            }
         with self._conn.cursor() as cur:
             cur.execute(pgsql.SQL("SELECT COUNT(*) FROM {}").format(pgsql.Identifier(safe)))
             row = cur.fetchone()

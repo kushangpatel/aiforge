@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException
 from pydantic import BaseModel, Field
@@ -16,10 +16,11 @@ router = APIRouter(prefix="/qa", tags=["qa"])
 
 
 class IngestRequest(BaseModel):
-    source: str = Field(min_length=1, description="File path, directory, or git URL")
+    source: str | list[str] = Field(description="File path, directory, git URL, or file list")
     collection: str = "default"
     file_extensions: list[str] | None = None
     batch_size: int = Field(default=100, ge=1)
+    mode: Literal["full", "incremental"] = "full"
     webhook_url: str | None = None
 
 
@@ -33,6 +34,11 @@ class IngestResponseOut(BaseModel):
     input_tokens: int = 0
     model: str = ""
     latency_ms: float = 0.0
+    files_added: int = 0
+    files_updated: int = 0
+    files_unchanged: int = 0
+    files_deleted: int = 0
+    chunks_deleted: int = 0
 
 
 class AskRequest(BaseModel):
@@ -113,11 +119,18 @@ async def ingest(body: IngestRequest, background_tasks: BackgroundTasks) -> Any:
             mark_running(job.job_id)
             try:
                 qa = DocQA(collection=body.collection)
-                result = await qa.aingest(
-                    body.source,
-                    file_extensions=body.file_extensions,
-                    batch_size=body.batch_size,
-                )
+                if body.mode == "incremental":
+                    result = await qa.aingest_incremental(
+                        body.source,
+                        file_extensions=body.file_extensions,
+                        batch_size=body.batch_size,
+                    )
+                else:
+                    result = await qa.aingest(
+                        body.source,
+                        file_extensions=body.file_extensions,
+                        batch_size=body.batch_size,
+                    )
                 await complete_job(job.job_id, result.model_dump(), timeout=webhook_timeout)
             except Exception as exc:
                 await fail_job(job.job_id, str(exc), timeout=webhook_timeout)
@@ -132,11 +145,18 @@ async def ingest(body: IngestRequest, background_tasks: BackgroundTasks) -> Any:
 
     try:
         qa = DocQA(collection=body.collection)
-        result = await qa.aingest(
-            body.source,
-            file_extensions=body.file_extensions,
-            batch_size=body.batch_size,
-        )
+        if body.mode == "incremental":
+            result = await qa.aingest_incremental(
+                body.source,
+                file_extensions=body.file_extensions,
+                batch_size=body.batch_size,
+            )
+        else:
+            result = await qa.aingest(
+                body.source,
+                file_extensions=body.file_extensions,
+                batch_size=body.batch_size,
+            )
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:
@@ -151,6 +171,11 @@ async def ingest(body: IngestRequest, background_tasks: BackgroundTasks) -> Any:
         input_tokens=result.input_tokens,
         model=result.model,
         latency_ms=result.latency_ms,
+        files_added=result.files_added,
+        files_updated=result.files_updated,
+        files_unchanged=result.files_unchanged,
+        files_deleted=result.files_deleted,
+        chunks_deleted=result.chunks_deleted,
     )
 
 

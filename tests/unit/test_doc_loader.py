@@ -68,6 +68,72 @@ class TestDocLoaderFile:
         docs, stats = loader.load([str(f1), str(f2)])
         assert stats.files_processed == 2
 
+    def test_honors_root_gitignore_file_and_dir_patterns(self, tmp_path: Any) -> None:
+        (tmp_path / ".gitignore").write_text("*.log\nbuild/\n")
+        (tmp_path / "keep.py").write_text("print('ok')\n")
+        (tmp_path / "debug.log").write_text("secret\n")
+        (tmp_path / "build").mkdir()
+        (tmp_path / "build" / "generated.py").write_text("print('gen')\n")
+
+        loader = DocLoader()
+        docs, stats = loader.load(str(tmp_path))
+
+        assert stats.files_processed == 1
+        assert len(docs) == 1
+        assert docs[0].metadata["source"].endswith("keep.py")
+
+    def test_honors_gitignore_negation(self, tmp_path: Any) -> None:
+        (tmp_path / ".gitignore").write_text("*.py\n!keep.py\n")
+        (tmp_path / "keep.py").write_text("print('ok')\n")
+        (tmp_path / "drop.py").write_text("print('no')\n")
+
+        loader = DocLoader()
+        docs, stats = loader.load(str(tmp_path))
+
+        assert stats.files_processed == 1
+        assert len(docs) == 1
+        assert docs[0].metadata["source"].endswith("keep.py")
+
+    def test_gitignore_unanchored_slash_does_not_match_partial_segment(self, tmp_path: Any) -> None:
+        (tmp_path / ".gitignore").write_text("foo/bar\n")
+        (tmp_path / "x" / "foo").mkdir(parents=True)
+        (tmp_path / "x" / "foo" / "barista.txt").write_text("keep me\n")
+        (tmp_path / "x" / "foo" / "bar").mkdir()
+        (tmp_path / "x" / "foo" / "bar" / "drop.txt").write_text("drop me\n")
+
+        loader = DocLoader()
+        docs, stats = loader.load(str(tmp_path))
+
+        sources = [d.metadata["source"] for d in docs]
+        assert any(s.endswith("barista.txt") for s in sources)
+        assert not any(s.endswith("drop.txt") for s in sources)
+
+    def test_honors_nested_gitignore(self, tmp_path: Any) -> None:
+        (tmp_path / "pkg").mkdir()
+        (tmp_path / "pkg" / ".gitignore").write_text("*.tmp\n")
+        (tmp_path / "pkg" / "a.tmp").write_text("ignored\n")
+        (tmp_path / "pkg" / "keep.py").write_text("print('ok')\n")
+
+        loader = DocLoader()
+        docs, stats = loader.load(str(tmp_path))
+
+        assert stats.files_processed == 1
+        assert docs[0].metadata["source"].endswith("keep.py")
+
+    def test_file_list_honors_gitignore(self, tmp_path: Any) -> None:
+        (tmp_path / ".gitignore").write_text("*.secret\n")
+        keep = tmp_path / "keep.py"
+        secret = tmp_path / "token.secret"
+        keep.write_text("print('ok')\n")
+        secret.write_text("123\n")
+
+        loader = DocLoader()
+        docs, stats = loader.load([str(keep), str(secret)])
+
+        assert stats.files_processed == 1
+        assert len(docs) == 1
+        assert docs[0].metadata["source"].endswith("keep.py")
+
     def test_missing_file_raises(self) -> None:
         loader = DocLoader()
         with pytest.raises(FileNotFoundError):

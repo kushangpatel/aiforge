@@ -506,6 +506,7 @@ subcommands: `ingest` (load documents) and `ask` (query them).
 
 ```bash
 aiforge qa ingest ./docs/ --collection my-docs --extensions ".md,.txt"
+aiforge qa ingest ./docs/ --collection my-docs --mode incremental
 aiforge qa ingest https://github.com/user/repo --collection repo-docs
 ```
 
@@ -522,7 +523,10 @@ aiforge qa ingest https://github.com/user/repo --collection repo-docs
 | `--collection` | `-c` | `str` | `default` | Target collection name |
 | `--extensions` | `-e` | `str` | — | Comma-separated file extensions (e.g. `.py,.md`) |
 | `--batch-size` | | `int` | `100` | Embedding batch size |
+| `--mode` | | `str` | `full` | Ingest mode: `full` \| `incremental` |
 | `--format` | | `str` | `json` | Output format: `json` \| `yaml` |
+
+`--mode incremental` re-indexes only changed/new files and purges stale chunks for updated/deleted files.
 
 #### aiforge qa ask
 
@@ -876,6 +880,9 @@ aiforge moderate --text "Call me at 555-0123" --redact
 # Ingest documentation
 aiforge qa ingest ./docs/ --collection my-docs --extensions ".md,.txt"
 # ✓ Indexed 247 chunks from 12 files into 'my-docs'.
+
+# Incremental re-index after edits
+aiforge qa ingest ./docs/ --collection my-docs --mode incremental
 
 # Ask questions
 aiforge qa ask "How do I configure authentication?" --collection my-docs

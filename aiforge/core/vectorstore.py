@@ -49,6 +49,28 @@ class VectorStoreAdapter(ABC):
         """Delete a collection and all its data."""
 
     @abstractmethod
+    def delete_by_source(self, source: str) -> int:
+        """Delete all chunks whose ``metadata['source']`` equals *source*.
+
+        Used by :meth:`~aiforge.modules.qa.module.DocQA.ingest_incremental`
+        to purge stale chunks for a modified or deleted file before
+        reinserting the new version.
+
+        Returns:
+            Number of chunks deleted.
+        """
+
+    @abstractmethod
+    def list_all_metadata(self) -> list[dict[str, Any]]:
+        """Return the metadata dict for every document in the collection.
+
+        Used by incremental ingestion to enumerate already-indexed source
+        paths without requiring a query vector.  Implementations may return
+        a sampled or paginated subset for very large collections, but should
+        return at least one entry per unique source path.
+        """
+
+    @abstractmethod
     def list_collections(self) -> list[str]:
         """Return names of all existing collections."""
 
@@ -167,10 +189,34 @@ class ChromaVectorStore(VectorStoreAdapter):
         with self._write_lock:
             self._client.delete_collection(name)
 
+    def delete_by_source(self, source: str) -> int:
+        """Delete all chunks for *source* path. Returns count deleted."""
+        with self._write_lock:
+            results = self._collection.get(
+                where={"source": source},
+                include=[],  # ids only — no need to fetch text/embeddings
+            )
+            ids = results["ids"]
+            if ids:
+                self._collection.delete(ids=ids)
+            return len(ids)
+
+    def list_all_metadata(self) -> list[dict[str, Any]]:
+        """Return metadata for every document in this collection."""
+        results = self._collection.get(include=["metadatas"])
+        return results["metadatas"] or []
+
     def list_collections(self) -> list[str]:
         return [c.name for c in self._client.list_collections()]
 
     def collection_stats(self, name: str) -> dict[str, Any]:
+        if name not in self.list_collections():
+            return {
+                "name": name,
+                "chunks": 0,
+                "persist_dir": self._persist_dir,
+            }
+
         col = self._client.get_collection(name)
         count = col.count()
         return {

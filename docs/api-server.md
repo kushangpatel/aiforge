@@ -358,6 +358,7 @@ Supports **async execution** — pass `webhook_url` to receive a `202 Accepted` 
 | `collection` | `string` | `"default"` | Target collection name |
 | `file_extensions` | `string[] \| null` | `null` | Filter to specific extensions (e.g. `[".py", ".md"]`) |
 | `batch_size` | `integer` (≥ 1) | `100` | Embedding batch size |
+| `mode` | `"full" \| "incremental"` | `"full"` | Ingest strategy (`incremental` purges stale chunks for updated/deleted files) |
 | `webhook_url` | `string \| null` | `null` | Webhook URL for async mode (HTTPS required in production) |
 
 **Response `200` (synchronous):**
@@ -373,6 +374,11 @@ Supports **async execution** — pass `webhook_url` to receive a `202 Accepted` 
 | `input_tokens` | `integer` | Embedding tokens consumed |
 | `model` | `string` | Embedding model used |
 | `latency_ms` | `float` | End-to-end latency |
+| `files_added` | `integer` | Incremental mode: new files |
+| `files_updated` | `integer` | Incremental mode: updated files re-indexed |
+| `files_unchanged` | `integer` | Incremental mode: unchanged files skipped |
+| `files_deleted` | `integer` | Incremental mode: files removed from source scope |
+| `chunks_deleted` | `integer` | Incremental mode: stale/orphan chunks deleted (best-effort on Pinecone) |
 
 **Response `202` (async with webhook):**
 
@@ -392,7 +398,8 @@ curl -X POST http://localhost:8000/qa/ingest \
     "source": "./src/",
     "collection": "codebase",
     "file_extensions": [".py", ".md"],
-    "batch_size": 50
+    "batch_size": 50,
+    "mode": "incremental"
   }'
 ```
 
@@ -406,7 +413,12 @@ curl -X POST http://localhost:8000/qa/ingest \
   "cost_usd": 0.0089,
   "input_tokens": 44500,
   "model": "text-embedding-3-small",
-  "latency_ms": 8420.1
+  "latency_ms": 8420.1,
+  "files_added": 0,
+  "files_updated": 3,
+  "files_unchanged": 25,
+  "files_deleted": 1,
+  "chunks_deleted": 42
 }
 ```
 

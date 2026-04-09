@@ -75,8 +75,6 @@ class PineconeVectorStore(VectorStoreAdapter):
         filter: dict[str, Any] | None = None,
         include_embeddings: bool = False,
     ) -> list[dict[str, Any]]:
-        from pinecone import QueryResponse
-
         raw = self._index.query(
             vector=embedding,
             top_k=top_k,
@@ -85,25 +83,69 @@ class PineconeVectorStore(VectorStoreAdapter):
             include_metadata=True,
             include_values=include_embeddings,
         )
-        results: QueryResponse = raw  # type: ignore[assignment]
+        matches = raw.get("matches", []) if isinstance(raw, dict) else getattr(raw, "matches", [])
 
         hits: list[dict[str, Any]] = []
-        for match in results.matches:
-            meta = dict(match.metadata or {})
+        for match in matches:
+            meta_raw = match.get("metadata", {}) if isinstance(match, dict) else (match.metadata or {})
+            meta = dict(meta_raw)
             text = meta.pop("_text", "")
+            match_id = match.get("id") if isinstance(match, dict) else match.id
+            score = match.get("score", 0.0) if isinstance(match, dict) else match.score
             hit: dict[str, Any] = {
-                "id": match.id,
+                "id": match_id,
                 "text": text,
                 "metadata": meta,
-                "distance": 1.0 - match.score,  # similarity → distance
+                "distance": 1.0 - score,  # similarity -> distance
             }
-            if include_embeddings and match.values:
-                hit["embeddings"] = match["values"]
+            values = match.get("values") if isinstance(match, dict) else getattr(match, "values", None)
+            if include_embeddings and values is not None:
+                hit["embeddings"] = values
             hits.append(hit)
         return hits
 
     def delete_collection(self, name: str) -> None:
         self._index.delete(delete_all=True, namespace=name)
+
+    def delete_by_source(self, source: str) -> int:
+        """Delete all chunks whose metadata['source'] == *source*.
+
+        Uses Pinecone's native filter-based delete (serverless indexes) which
+        avoids needing to know vector dimensionality.  Returns 0 because
+        Pinecone's delete API does not report a count; callers should treat
+        the return value as informational only for Pinecone.
+        """
+        self._index.delete(
+            filter={"source": {"$eq": source}},
+            namespace=self._namespace,
+        )
+        # Pinecone delete does not return the number of deleted vectors.
+        return 0
+
+    def list_all_metadata(self) -> list[dict[str, Any]]:
+        """Return metadata for every vector in this namespace.
+
+        Uses ``list()`` to page all IDs, then ``fetch()`` in batches to
+        retrieve their metadata payloads.
+        """
+        all_metadata: list[dict[str, Any]] = []
+        batch_size = 1000  # Pinecone fetch limit per call
+
+        # list() returns an iterator of ID pages
+        for id_page in self._index.list(namespace=self._namespace):
+            ids = list(id_page)  # each page is already a list of str IDs
+            if not ids:
+                continue
+            for i in range(0, len(ids), batch_size):
+                chunk_ids = ids[i : i + batch_size]
+                fetch_result = self._index.fetch(
+                    ids=chunk_ids, namespace=self._namespace
+                )
+                for vec in fetch_result.vectors.values():
+                    meta = dict(vec.metadata or {})
+                    meta.pop("_text", None)  # strip internal text field
+                    all_metadata.append(meta)
+        return all_metadata
 
     def list_collections(self) -> list[str]:
         stats = self._index.describe_index_stats()

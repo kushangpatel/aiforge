@@ -96,27 +96,47 @@ class QdrantVectorStore(VectorStoreAdapter):
         filter: dict[str, Any] | None = None,
         include_embeddings: bool = False,
     ) -> list[dict[str, Any]]:
-        from qdrant_client.models import Filter as QdrantFilter
+        if hasattr(self._client, "query_points"):
+            from qdrant_client.models import Filter as QdrantFilter
 
-        qdrant_filter = QdrantFilter.model_validate(filter) if filter is not None else None
-        response = self._client.query_points(
-            collection_name=self._collection_name,
-            query=embedding,
-            limit=top_k,
-            query_filter=qdrant_filter,
-            with_payload=True,
-            with_vectors=include_embeddings,
-        )
+            qdrant_filter = QdrantFilter.model_validate(filter) if filter is not None else None
+            response = self._client.query_points(
+                collection_name=self._collection_name,
+                query=embedding,
+                limit=top_k,
+                query_filter=qdrant_filter,
+                with_payload=True,
+                with_vectors=include_embeddings,
+            )
+            points = getattr(response, "points", None)
+            if not isinstance(points, list):
+                points = self._client.search(
+                    collection_name=self._collection_name,
+                    query_vector=embedding,
+                    limit=top_k,
+                    query_filter=filter,
+                    with_payload=True,
+                    with_vectors=include_embeddings,
+                )
+        else:
+            points = self._client.search(
+                collection_name=self._collection_name,
+                query_vector=embedding,
+                limit=top_k,
+                query_filter=filter,
+                with_payload=True,
+                with_vectors=include_embeddings,
+            )
 
         hits: list[dict[str, Any]] = []
-        for point in response.points:
+        for point in points:
             payload = dict(point.payload or {})
             text = payload.pop("_text", "")
             hit: dict[str, Any] = {
                 "id": str(point.id),
                 "text": text,
                 "metadata": payload,
-                "distance": 1.0 - point.score,  # cosine similarity → distance
+                "distance": 1.0 - point.score,  # cosine similarity -> distance
             }
             if include_embeddings and point.vector:
                 hit["embeddings"] = point.vector
@@ -126,10 +146,67 @@ class QdrantVectorStore(VectorStoreAdapter):
     def delete_collection(self, name: str) -> None:
         self._client.delete_collection(collection_name=name)
 
+    def delete_by_source(self, source: str) -> int:
+        """Delete all chunks whose payload['source'] == *source*. Returns count deleted."""
+        from qdrant_client.models import FieldCondition, Filter, MatchValue
+
+        # Scroll through all matching points to get their IDs, then delete.
+        source_filter = Filter(
+            must=[FieldCondition(key="source", match=MatchValue(value=source))]
+        )
+        ids: list[str] = []
+        offset = None
+        while True:
+            result, next_offset = self._client.scroll(
+                collection_name=self._collection_name,
+                scroll_filter=source_filter,
+                offset=offset,
+                limit=1000,
+                with_payload=False,
+                with_vectors=False,
+            )
+            ids.extend(str(p.id) for p in result)
+            if next_offset is None:
+                break
+            offset = next_offset
+
+        if ids:
+            self._client.delete(
+                collection_name=self._collection_name,
+                points_selector=ids,
+            )
+        return len(ids)
+
+    def list_all_metadata(self) -> list[dict[str, Any]]:
+        """Return metadata (payload minus _text) for every point in this collection."""
+        all_metadata: list[dict[str, Any]] = []
+        offset = None
+        while True:
+            result, next_offset = self._client.scroll(
+                collection_name=self._collection_name,
+                offset=offset,
+                limit=1000,
+                with_payload=True,
+                with_vectors=False,
+            )
+            for point in result:
+                payload = dict(point.payload or {})
+                payload.pop("_text", None)  # strip internal text field
+                all_metadata.append(payload)
+            if next_offset is None:
+                break
+            offset = next_offset
+        return all_metadata
+
     def list_collections(self) -> list[str]:
         return [c.name for c in self._client.get_collections().collections]
 
     def collection_stats(self, name: str) -> dict[str, Any]:
+        if name not in self.list_collections():
+            return {
+                "name": name,
+                "chunks": 0,
+            }
         info = self._client.get_collection(collection_name=name)
         return {
             "name": name,

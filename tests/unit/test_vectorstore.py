@@ -73,3 +73,11 @@ class TestChromaVectorStore:
             )
         stats = temp_vector_store.collection_stats("test_collection")
         assert stats["chunks"] == 1
+
+    def test_collection_stats_missing_collection_returns_zero(
+        self, temp_vector_store: ChromaVectorStore
+    ) -> None:
+        """Missing collection should be treated as empty stats, not an exception."""
+        stats = temp_vector_store.collection_stats("does_not_exist")
+        assert stats["name"] == "does_not_exist"
+        assert stats["chunks"] == 0

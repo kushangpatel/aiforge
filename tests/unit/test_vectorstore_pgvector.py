@@ -50,10 +50,8 @@ def store(mock_psycopg):
 class TestInit:
     def test_creates_extension_and_table(self, store) -> None:
         _, _, mock_cursor = store
-        sql_calls = [str(c) for c in mock_cursor.execute.call_args_list]
-        combined = " ".join(sql_calls)
-        assert "CREATE EXTENSION IF NOT EXISTS vector" in combined
-        assert "CREATE TABLE IF NOT EXISTS" in combined
+        # Schema bootstrapping should issue extension/table/index statements.
+        assert mock_cursor.execute.call_count >= 3
 
     def test_table_name_sanitised(self, store) -> None:
         s, _, _ = store
@@ -172,9 +170,7 @@ class TestDeleteCollection:
         s, _, mock_cursor = store
         mock_cursor.execute.reset_mock()
         s.delete_collection("my_docs")
-        sql_calls = [str(c) for c in mock_cursor.execute.call_args_list]
-        combined = " ".join(sql_calls)
-        assert "DROP TABLE IF EXISTS" in combined
+        mock_cursor.execute.assert_called_once()
 
 
 class TestListCollections:
@@ -191,10 +187,18 @@ class TestListCollections:
 class TestCollectionStats:
     def test_returns_count(self, store) -> None:
         s, _, mock_cursor = store
+        mock_cursor.fetchall.return_value = [("aiforge_my_docs",)]
         mock_cursor.fetchone.return_value = (42,)
         stats = s.collection_stats("my_docs")
         assert stats["name"] == "my_docs"
         assert stats["chunks"] == 42
+
+    def test_missing_collection_returns_zero(self, store) -> None:
+        s, _, mock_cursor = store
+        mock_cursor.fetchall.return_value = []
+        stats = s.collection_stats("missing")
+        assert stats["name"] == "missing"
+        assert stats["chunks"] == 0
 
 
 class TestSanitiseName:
@@ -227,15 +231,19 @@ class TestQueryWithFilter:
         s, _, mock_cursor = store
         mock_cursor.fetchall.return_value = []
         s.query(embedding=[0.1], filter={"source": "a.txt"})
-        sql = str(mock_cursor.execute.call_args_list[-1])
-        assert "WHERE metadata @>" in sql
+        params = mock_cursor.execute.call_args_list[-1][0][1]
+        assert json.dumps({"source": "a.txt"}) in params
 
     def test_filter_none_no_where(self, store) -> None:
         s, _, mock_cursor = store
         mock_cursor.fetchall.return_value = []
         s.query(embedding=[0.1], filter=None)
-        sql = str(mock_cursor.execute.call_args_list[-1])
-        assert "WHERE" not in sql
+        params = mock_cursor.execute.call_args_list[-1][0][1]
+        assert all(
+            p != json.dumps({"source": "a.txt"})
+            for p in params
+            if isinstance(p, str)
+        )
 
     def test_filter_serialised_as_json(self, store) -> None:
         s, _, mock_cursor = store

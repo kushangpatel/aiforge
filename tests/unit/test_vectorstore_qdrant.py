@@ -197,12 +197,20 @@ class TestListCollections:
 class TestCollectionStats:
     def test_returns_count(self, store) -> None:
         s, mock_client, _ = store
+        mock_client.get_collections.return_value = _FakeGetCollectionsResponse(["test_col"])
         mock_client.get_collection.return_value = _FakeCollectionDetail(
             points_count=99,
         )
         stats = s.collection_stats("test_col")
         assert stats["name"] == "test_col"
         assert stats["chunks"] == 99
+
+    def test_missing_collection_returns_zero(self, store) -> None:
+        s, mock_client, _ = store
+        mock_client.get_collections.return_value = _FakeGetCollectionsResponse(["other"])
+        stats = s.collection_stats("missing")
+        assert stats["name"] == "missing"
+        assert stats["chunks"] == 0
 
 
 # ---------------------------------------------------------------------------

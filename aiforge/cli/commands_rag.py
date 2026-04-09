@@ -33,15 +33,27 @@ def ingest(
         help="Comma-separated file extensions to include (e.g. '.py,.md,.txt').",
     ),
     batch_size: int = typer.Option(100, "--batch-size", help="Embedding batch size."),
+    mode: str = typer.Option(
+        "full",
+        "--mode",
+        help="Ingest mode: full|incremental.",
+        case_sensitive=False,
+    ),
     fmt: str = typer.Option("json", "--format", help="Output format: json|yaml."),
 ) -> None:
     """Ingest documents into a collection for RAG queries."""
     ext_list = [e.strip() for e in extensions.split(",") if e.strip()] if extensions else None
+    mode_norm = mode.strip().lower()
+    if mode_norm not in {"full", "incremental"}:
+        raise typer.BadParameter("--mode must be either 'full' or 'incremental'")
 
     from aiforge import DocQA
 
     qa = DocQA(collection=collection)
-    resp = qa.ingest(source, file_extensions=ext_list, batch_size=batch_size)
+    if mode_norm == "incremental":
+        resp = qa.ingest_incremental(source, file_extensions=ext_list, batch_size=batch_size)
+    else:
+        resp = qa.ingest(source, file_extensions=ext_list, batch_size=batch_size)
 
     data = response_to_dict(resp)
     format_output(data, fmt)

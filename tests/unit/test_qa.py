@@ -592,6 +592,26 @@ class TestDocQAIngest:
         assert isinstance(result, IngestResponse)
         assert result.latency_ms > 0
 
+    def test_ingest_generates_unique_ids_for_same_prefix_chunks(self) -> None:
+        from langchain_core.documents import Document
+
+        store = MagicMock()
+        qa = _qa(store=store)
+        qa._call_embedding = MagicMock(return_value=[[0.1] * 384, [0.2] * 384])
+
+        prefix = "a" * 64
+        chunks = [
+            Document(page_content=prefix + "X", metadata={"source": "repo/file.py", "file_type": "py"}),
+            Document(page_content=prefix + "Y", metadata={"source": "repo/file.py", "file_type": "py"}),
+        ]
+
+        qa._embed_and_store(chunks, batch_size=10)
+
+        kwargs = store.add_documents.call_args.kwargs
+        ids = kwargs["ids"]
+        assert len(ids) == 2
+        assert len(set(ids)) == 2
+
 
 class TestDocQAIngestAsync:
     @pytest.mark.asyncio
@@ -885,6 +905,114 @@ class TestDocQAAskAsync:
             await qa.aask("test?")
 
 
+class TestDocQAIngestIncremental:
+    def test_ingest_incremental_directory_source(self, tmp_path: Any) -> None:
+        (tmp_path / "one.py").write_text("x = 1\n")
+
+        store = MagicMock()
+        store.list_all_metadata.return_value = []
+        store.delete_by_source.return_value = 0
+        qa = _qa(store=store)
+        qa._call_embedding = MagicMock(side_effect=lambda texts: [[0.1] * 384 for _ in texts])
+
+        result = qa.ingest_incremental(str(tmp_path))
+
+        assert result.files_added == 1
+        assert result.files_processed == 1
+        assert result.chunks_indexed >= 1
+
+    def test_ingest_incremental_single_file(self, tmp_path: Any) -> None:
+        f = tmp_path / "one.py"
+        f.write_text("x = 1\n")
+
+        store = MagicMock()
+        store.list_all_metadata.return_value = []
+        store.delete_by_source.return_value = 0
+        qa = _qa(store=store)
+        qa._call_embedding = MagicMock(side_effect=lambda texts: [[0.1] * 384 for _ in texts])
+
+        result = qa.ingest_incremental(str(f))
+
+        assert result.files_added == 1
+        assert result.files_processed == 1
+        assert result.chunks_indexed >= 1
+        assert isinstance(result, IngestResponse)
+
+    def test_ingest_incremental_file_list(self, tmp_path: Any) -> None:
+        a = tmp_path / "a.py"
+        b = tmp_path / "b.md"
+        a.write_text("print('a')\n")
+        b.write_text("# B\n")
+
+        store = MagicMock()
+        store.list_all_metadata.return_value = []
+        store.delete_by_source.return_value = 0
+        qa = _qa(store=store)
+        qa._call_embedding = MagicMock(side_effect=lambda texts: [[0.1] * 384 for _ in texts])
+
+        result = qa.ingest_incremental([str(a), str(b)])
+
+        assert result.files_added == 2
+        assert result.files_processed == 2
+        assert result.chunks_indexed >= 2
+
+    def test_ingest_incremental_git_source_scopes_deletes(self) -> None:
+        from langchain_core.documents import Document
+
+        from aiforge.core.doc_loader import IngestStats
+
+        git_url = "https://github.com/example/repo.git"
+        docs = [
+            Document(page_content="new a", metadata={"source": f"{git_url}/a.py", "file_type": "py"}),
+            Document(page_content="new b", metadata={"source": f"{git_url}/b.py", "file_type": "py"}),
+        ]
+        stats = IngestStats(files_processed=2, languages={"py": 2})
+
+        store = MagicMock()
+        store.list_all_metadata.return_value = [
+            {"source": f"{git_url}/a.py"},
+            {"source": f"{git_url}/old.py"},
+            {"source": "C:/other/repo/unrelated.py"},
+        ]
+        store.delete_by_source.return_value = 1
+
+        qa = _qa(store=store)
+        qa._call_embedding = MagicMock(side_effect=lambda texts: [[0.1] * 384 for _ in texts])
+
+        with patch("aiforge.core.doc_loader.DocLoader.load", return_value=(docs, stats)):
+            result = qa.ingest_incremental(git_url)
+
+        assert result.files_added == 1
+        assert result.files_updated == 1  # mtime unavailable -> conservative update
+        assert result.files_deleted == 1
+        deleted_sources = {c.args[0] for c in store.delete_by_source.call_args_list}
+        assert f"{git_url}/old.py" in deleted_sources
+        assert "C:/other/repo/unrelated.py" not in deleted_sources
+
+    def test_ingest_incremental_extension_filter_does_not_delete_other_extensions(
+        self, tmp_path: Any
+    ) -> None:
+        (tmp_path / "a.py").write_text("print('a')\n")
+        (tmp_path / "note.md").write_text("# note\n")
+
+        md_path = str(tmp_path / "note.md")
+        py_path = str(tmp_path / "a.py")
+
+        store = MagicMock()
+        store.list_all_metadata.return_value = [
+            {"source": md_path, "mtime": 1.0},
+            {"source": py_path, "mtime": 1.0},
+        ]
+        store.delete_by_source.return_value = 1
+        qa = _qa(store=store)
+        qa._call_embedding = MagicMock(side_effect=lambda texts: [[0.1] * 384 for _ in texts])
+
+        qa.ingest_incremental(str(tmp_path), file_extensions=[".py"])
+
+        deleted_sources = {c.args[0] for c in store.delete_by_source.call_args_list}
+        assert md_path not in deleted_sources
+
+
 # ===========================================================================
 # DocQA collection management
 # ===========================================================================
@@ -1026,6 +1154,43 @@ class TestRoutes:
         data = resp.json()
         assert data["chunks_indexed"] == 5
         assert data["collection"] == "test"
+
+    def test_ingest_endpoint_incremental_mode(self, client, tmp_path) -> None:
+        (tmp_path / "test.py").write_text("x = 1\n")
+        with patch("aiforge.modules.qa.module.DocQA") as MockQA:
+            mock_qa = MagicMock()
+            mock_qa.aingest_incremental = AsyncMock(
+                return_value=IngestResponse(
+                    chunks_indexed=3,
+                    files_processed=1,
+                    languages={"py": 1},
+                    skipped_files=[],
+                    collection="test",
+                    files_added=0,
+                    files_updated=1,
+                    files_unchanged=0,
+                    files_deleted=0,
+                    chunks_deleted=2,
+                )
+            )
+            mock_qa.aingest = AsyncMock()
+            MockQA.return_value = mock_qa
+
+            resp = client.post(
+                "/qa/ingest",
+                json={
+                    "source": str(tmp_path),
+                    "collection": "test",
+                    "mode": "incremental",
+                },
+            )
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["files_updated"] == 1
+        assert data["chunks_deleted"] == 2
+        mock_qa.aingest_incremental.assert_awaited_once()
+        mock_qa.aingest.assert_not_called()
 
     def test_ask_endpoint(self, client) -> None:
         with patch("aiforge.modules.qa.module.DocQA") as MockQA:

@@ -46,6 +46,12 @@ class _StubVectorStore(VectorStoreAdapter):
     def delete_collection(self, name):
         pass
 
+    def delete_by_source(self, source):
+        return 0
+
+    def list_all_metadata(self):
+        return []
+
     def list_collections(self):
         return []
 

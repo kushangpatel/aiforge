@@ -10,13 +10,25 @@ from aiforge.core.types import ModuleResponse
 
 
 class IngestResponse(ModuleResponse):
-    """Response from DocQA.ingest() / aingest()."""
+    """Response from DocQA.ingest() / aingest() / ingest_incremental()."""
 
     chunks_indexed: int = 0
     files_processed: int = 0
     languages: dict[str, int] = Field(default_factory=dict)
     skipped_files: list[str] = Field(default_factory=list)
     collection: str = ""
+
+    # Incremental ingestion stats (populated by ingest_incremental only)
+    files_added: int = 0
+    """New files that didn't exist in the index before."""
+    files_updated: int = 0
+    """Files whose mtime changed since last ingest (stale chunks purged + reindexed)."""
+    files_unchanged: int = 0
+    """Files whose mtime matched the index — skipped entirely."""
+    files_deleted: int = 0
+    """Files present in the index but no longer on disk (chunks purged)."""
+    chunks_deleted: int = 0
+    """Total stale/orphan chunks removed from the index."""
 
     def to_text(self) -> str:
         return (

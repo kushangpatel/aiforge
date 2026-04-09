@@ -144,10 +144,11 @@ def ingest(
 
 **Behavior:**
 1. `DocLoader` recursively discovers files, skipping ignored directories (`.git`, `node_modules`, `__pycache__`, etc.) and binary extensions (`.png`, `.zip`, `.exe`, etc.)
-2. `TextSplitter` chunks documents with language-aware splitting
-3. Chunks are embedded in batches of `batch_size` via the configured embedding provider
-4. Embeddings are stored in ChromaDB with deterministic UUIDs (based on source path + content prefix) for idempotent re-ingestion
-5. File metadata (`source`, `file_type`, `chunk_index`) is stored alongside each embedding
+2. If a root `.gitignore` exists in the ingested directory, matching files/directories are skipped automatically.
+3. `TextSplitter` chunks documents with language-aware splitting
+4. Chunks are embedded in batches of `batch_size` via the configured embedding provider
+5. Embeddings are stored in ChromaDB with deterministic UUIDs (based on source path + content prefix) for idempotent re-ingestion
+6. File metadata (`source`, `file_type`, `chunk_index`) is stored alongside each embedding
 
 ```python
 qa = DocQA(collection="my-project")
@@ -198,6 +199,51 @@ async def aingest(
 ```python
 stats = await qa.aingest("./large-codebase/", batch_size=200)
 ```
+
+---
+
+### `ingest_incremental(source, *, file_extensions=None, batch_size=100) -> IngestResponse`
+
+Incrementally re-index only changed/new files and purge stale chunks for modified/deleted files.
+
+```python
+def ingest_incremental(
+    self,
+    source: str | list[str],
+    *,
+    file_extensions: list[str] | None = None,
+    batch_size: int = 100,
+) -> IngestResponse
+```
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `source` | `str \| list[str]` | *(required)* | Directory, file, file list, or git URL. |
+| `file_extensions` | `list[str] \| None` | `None` | Extension whitelist. |
+| `batch_size` | `int` | `100` | Chunks per embedding batch. |
+
+**Returns:** [`IngestResponse`](#ingestresponse), including incremental counters:
+`files_added`, `files_updated`, `files_unchanged`, `files_deleted`, `chunks_deleted`.
+
+Notes:
+- For local files, `mtime` metadata is used to skip unchanged files.
+- For sources without stable local mtimes (for example git URLs), AIForge uses conservative behavior and may re-index files in scope.
+- Pinecone does not return exact delete counts, so `chunks_deleted` is best-effort on that backend.
+
+```python
+qa = DocQA(collection="my-project")
+
+# Recommended first run for long-lived repos
+first = qa.ingest_incremental("./src/")
+
+# Later: only changed files are re-embedded; stale chunks are purged
+delta = qa.ingest_incremental("./src/")
+print(delta.files_added, delta.files_updated, delta.files_deleted)
+```
+
+### `aingest_incremental(source, *, file_extensions=None, batch_size=100) -> IngestResponse`
+
+Async version of `ingest_incremental()`.
 
 ---
 
@@ -418,7 +464,7 @@ print(f"Total cost: ${batch.total_cost:.4f}")
 
 ### `IngestResponse`
 
-Returned by `ingest()` and `aingest()`.
+Returned by `ingest()`, `aingest()`, `ingest_incremental()`, and `aingest_incremental()`.
 
 ```python
 from aiforge import IngestResponse
@@ -437,6 +483,11 @@ from aiforge import IngestResponse
 | `model` | `str` | Embedding model name used. |
 | `trace_id` | `str` | Unique trace ID (16-char hex). |
 | `latency_ms` | `float` | End-to-end ingestion time in milliseconds. |
+| `files_added` | `int` | Incremental mode: new files not previously indexed. |
+| `files_updated` | `int` | Incremental mode: files whose previous chunks were replaced. |
+| `files_unchanged` | `int` | Incremental mode: files skipped because unchanged. |
+| `files_deleted` | `int` | Incremental mode: indexed files no longer present in source scope. |
+| `chunks_deleted` | `int` | Incremental mode: stale/orphan chunks removed before re-indexing. |
 
 **Methods:**
 
@@ -772,18 +823,19 @@ for step in answer.trace:
 
 ### Incremental Ingestion
 
-Re-ingest after code changes — deterministic IDs make it safe to re-ingest:
+Use incremental mode to avoid stale chunks when files are modified or deleted:
 
 ```python
 qa = DocQA(collection="my-project")
 
-# First ingest
-stats = qa.ingest("./src/")
-print(f"First: {stats.chunks_indexed} chunks")
+# First run (recommended): builds mtime metadata
+stats = qa.ingest_incremental("./src/")
+print(f"Indexed: {stats.chunks_indexed}")
 
-# After code changes, re-ingest — duplicates are overwritten
-stats = qa.ingest("./src/")
-print(f"Re-ingest: {stats.chunks_indexed} chunks")
+# After code changes
+stats = qa.ingest_incremental("./src/")
+print(f"Added={stats.files_added}, Updated={stats.files_updated}, Deleted={stats.files_deleted}")
+print(f"Purged stale chunks={stats.chunks_deleted}, New chunks={stats.chunks_indexed}")
 ```
 
 ### Collection Management
