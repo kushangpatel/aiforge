@@ -4,7 +4,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Version](https://img.shields.io/badge/version-0.1.0-orange.svg)](CHANGELOG.md)
 
-**AIForge** is a modular, provider-agnostic Python SDK that gives product teams production-ready AI capabilities with a single `pip install` and a config file. Each module — summarization, document Q&A, extraction, classification, semantic search, content generation, conversational agents, and content moderation — is self-contained, composable, and ships with a built-in Streamlit UI widget for instant prototyping.
+**AIForge** is a modular, provider-agnostic Python SDK that gives product teams production-ready AI capabilities with a single `pip install` and a config file. Each module — summarization, document Q&A, extraction, classification, semantic search, content generation, conversational agents, content moderation, translation, and vision — is self-contained, composable, and ships with a built-in Streamlit UI widget for instant prototyping.
 
 > **Enable any developer to add production-quality AI capabilities to their product in minutes, not weeks.**
 
@@ -14,7 +14,7 @@
 
 | Feature | Description |
 |---------|-------------|
-| **8 AI Modules** | Summarize, DocQA (RAG), Extract, Classify, Search, Generate, Chat, Moderate |
+| **10 AI Modules** | Summarize, DocQA (RAG), Extract, Classify, Search, Generate, Chat, Moderate, Translate, Vision |
 | **Provider-Agnostic** | Swap OpenAI → Anthropic → Ollama (local) by changing 1 config value |
 | **Production-Ready** | Retry, rate limiting, streaming, cost tracking out of the box |
 | **Composable Pipelines** | Chain modules into workflows (e.g., extract → classify → summarize) |
@@ -29,7 +29,7 @@
 
 | Technology | Role |
 |-----------|------|
-| **LangChain** | Core LLM abstraction for all 8 modules |
+| **LangChain** | Core LLM abstraction for all 10 modules |
 | **LangGraph** | Stateful multi-turn chat agent & RAG agentic loops |
 | **ChromaDB** | Default vector database for semantic search & RAG |
 | **Pinecone / Qdrant / pgvector** | Production-scale vector store alternatives (install as extras) |
@@ -372,7 +372,7 @@ aiforge playground
 # http://localhost:8501
 ```
 
-Tabs: Summarize | Q&A | Extract | Classify | Search | Generate | Chat | Moderate | Pipeline | Settings
+Tabs: Summarize | Q&A | Extract | Classify | Search | Generate | Chat | Moderate | Translate | Vision | Pipeline | Settings
 
 ---
 
@@ -440,7 +440,7 @@ aiforge/
 │   │   ├── anthropic.py              # Anthropic (Claude 3.5) + Voyage embeddings
 │   │   ├── ollama.py                  # Ollama (Llama 3, Mistral — local)
 │   │   └── azure.py                   # Azure OpenAI
-│   ├── modules/                       # 8 AI modules
+│   ├── modules/                       # 10 AI modules
 │   │   ├── summarize/                 # Text summarization
 │   │   ├── qa/                        # Document Q&A (RAG)
 │   │   ├── extract/                   # Structured data extraction
@@ -448,7 +448,9 @@ aiforge/
 │   │   ├── search/                    # Semantic search
 │   │   ├── generate/                  # Content generation
 │   │   ├── chat/                      # Conversational agent (LangGraph)
-│   │   └── moderate/                  # Content moderation & PII detection
+│   │   ├── moderate/                  # Content moderation & PII detection
+│   │   ├── translate/                 # Text translation
+│   │   └── vision/                    # Vision / image understanding
 │   ├── pipeline/                      # Pipeline composition engine
 │   ├── server/                        # FastAPI REST API
 │   ├── playground/                    # Streamlit UI
