@@ -17,12 +17,15 @@ if TYPE_CHECKING:
 
 # Registry: provider_name -> (llm_class_factory, embedding_class_factory)
 _REGISTRY: dict[str, tuple[Any, Any]] = {}
+_BUILTINS_LOADED: bool = False
 
 
 def _ensure_registered() -> None:
     """Lazily populate the registry on first use to avoid import-time side-effects."""
-    if _REGISTRY:
+    global _BUILTINS_LOADED
+    if _BUILTINS_LOADED:
         return
+    _BUILTINS_LOADED = True
 
     from aiforge.providers.openai import OpenAIEmbeddingProvider, OpenAIProvider
 
@@ -56,7 +59,7 @@ def _ensure_registered() -> None:
         pass
 
 
-def get_provider(settings: "AIForgeSettings") -> "LLMProvider":
+def get_provider(settings: AIForgeSettings) -> LLMProvider:
     """Return the LLMProvider instance for the configured provider."""
     _ensure_registered()
     name = settings.PROVIDER.lower()
@@ -67,13 +70,13 @@ def get_provider(settings: "AIForgeSettings") -> "LLMProvider":
         raise ConfigError(
             f"Provider {name!r} is not available. "
             f"Available: {available}. "
-            f"Install the matching extra, e.g. pip install \"aiforge[{name}]\""
+            f'Install the matching extra, e.g. pip install "aiforge[{name}]"'
         )
     llm_cls, _ = _REGISTRY[name]
     return llm_cls(settings)
 
 
-def get_embedding_provider(settings: "AIForgeSettings") -> "EmbeddingProvider":
+def get_embedding_provider(settings: AIForgeSettings) -> EmbeddingProvider:
     """Return the EmbeddingProvider instance for the configured provider."""
     _ensure_registered()
     name = settings.PROVIDER.lower()

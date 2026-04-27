@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 from aiforge.core.vectorstore import ChromaVectorStore
 
 
@@ -42,8 +40,6 @@ class TestChromaVectorStore:
 
     def test_delete_collection(self, tmp_path: object) -> None:
         """delete_collection removes it from the list."""
-        import tempfile
-        import os
 
         store_a = ChromaVectorStore(
             persist_dir=str(tmp_path) + "/del_test",  # type: ignore[operator]
@@ -58,9 +54,7 @@ class TestChromaVectorStore:
         assert "to_delete" not in store_a.list_collections()
         assert "keeper" in store_b.list_collections()
 
-    def test_query_empty_store_returns_nothing(
-        self, temp_vector_store: ChromaVectorStore
-    ) -> None:
+    def test_query_empty_store_returns_nothing(self, temp_vector_store: ChromaVectorStore) -> None:
         """Querying an empty collection returns an empty list."""
         results = temp_vector_store.query(
             embedding=[1.0, 0.0],
@@ -79,3 +73,11 @@ class TestChromaVectorStore:
             )
         stats = temp_vector_store.collection_stats("test_collection")
         assert stats["chunks"] == 1
+
+    def test_collection_stats_missing_collection_returns_zero(
+        self, temp_vector_store: ChromaVectorStore
+    ) -> None:
+        """Missing collection should be treated as empty stats, not an exception."""
+        stats = temp_vector_store.collection_stats("does_not_exist")
+        assert stats["name"] == "does_not_exist"
+        assert stats["chunks"] == 0

@@ -47,9 +47,15 @@ class TestBasicAccumulation:
 class TestByModuleAndModel:
     def test_by_module_aggregation(self) -> None:
         tracker = CostTracker()
-        tracker.record(module="summarize", model="gpt-4o", input_tokens=10, output_tokens=5, cost=0.01)
-        tracker.record(module="classify", model="gpt-4o", input_tokens=10, output_tokens=5, cost=0.02)
-        tracker.record(module="summarize", model="gpt-4o", input_tokens=10, output_tokens=5, cost=0.03)
+        tracker.record(
+            module="summarize", model="gpt-4o", input_tokens=10, output_tokens=5, cost=0.01
+        )
+        tracker.record(
+            module="classify", model="gpt-4o", input_tokens=10, output_tokens=5, cost=0.02
+        )
+        tracker.record(
+            module="summarize", model="gpt-4o", input_tokens=10, output_tokens=5, cost=0.03
+        )
 
         by_module = tracker.by_module
         assert pytest.approx(by_module["summarize"]) == 0.04
@@ -58,7 +64,9 @@ class TestByModuleAndModel:
     def test_by_model_aggregation(self) -> None:
         tracker = CostTracker()
         tracker.record(module="a", model="gpt-4o", input_tokens=10, output_tokens=5, cost=0.01)
-        tracker.record(module="b", model="gpt-4o-mini", input_tokens=10, output_tokens=5, cost=0.005)
+        tracker.record(
+            module="b", model="gpt-4o-mini", input_tokens=10, output_tokens=5, cost=0.005
+        )
         tracker.record(module="c", model="gpt-4o", input_tokens=10, output_tokens=5, cost=0.01)
 
         by_model = tracker.by_model

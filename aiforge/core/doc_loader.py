@@ -20,9 +20,9 @@ Unsupported file types are skipped with a warning; inspect
 from __future__ import annotations
 
 import logging
+from fnmatch import fnmatchcase
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
 
 from langchain_core.documents import Document
 
@@ -35,34 +35,94 @@ _logger = logging.getLogger(__name__)
 # Extensions handled as plain text (no special loader needed)
 _TEXT_EXTENSIONS = frozenset(
     {
-        ".py", ".js", ".ts", ".jsx", ".tsx",
-        ".go", ".java", ".rs", ".c", ".cpp", ".h", ".hpp",
-        ".rb", ".php", ".swift", ".kt", ".scala",
-        ".md", ".txt", ".rst", ".sh", ".bash", ".zsh",
-        ".json", ".yaml", ".yml", ".toml", ".ini", ".cfg",
-        ".csv", ".xml", ".html", ".htm",
-        ".sql", ".dockerfile",
+        ".py",
+        ".js",
+        ".ts",
+        ".jsx",
+        ".tsx",
+        ".go",
+        ".java",
+        ".rs",
+        ".c",
+        ".cpp",
+        ".h",
+        ".hpp",
+        ".rb",
+        ".php",
+        ".swift",
+        ".kt",
+        ".scala",
+        ".md",
+        ".txt",
+        ".rst",
+        ".sh",
+        ".bash",
+        ".zsh",
+        ".json",
+        ".yaml",
+        ".yml",
+        ".toml",
+        ".ini",
+        ".cfg",
+        ".csv",
+        ".xml",
+        ".html",
+        ".htm",
+        ".sql",
+        ".dockerfile",
     }
 )
 
 _IGNORE_EXTENSIONS = frozenset(
     {
-        ".pyc", ".pyo", ".class", ".o", ".so", ".dll", ".exe",
-        ".zip", ".tar", ".gz", ".bz2", ".xz",
-        ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".svg", ".ico",
-        ".mp3", ".mp4", ".avi", ".mov",
-        ".whl", ".egg-info",
+        ".pyc",
+        ".pyo",
+        ".class",
+        ".o",
+        ".so",
+        ".dll",
+        ".exe",
+        ".zip",
+        ".tar",
+        ".gz",
+        ".bz2",
+        ".xz",
+        ".png",
+        ".jpg",
+        ".jpeg",
+        ".gif",
+        ".bmp",
+        ".svg",
+        ".ico",
+        ".mp3",
+        ".mp4",
+        ".avi",
+        ".mov",
+        ".whl",
+        ".egg-info",
         ".lock",  # package lock files — usually large & uninteresting
     }
 )
 
 _IGNORE_DIR_NAMES = frozenset(
     {
-        ".git", ".svn", ".hg",
-        "__pycache__", ".mypy_cache", ".ruff_cache", ".pytest_cache",
-        "node_modules", ".next", ".nuxt",
-        "venv", ".venv", "env", ".env",
-        "dist", "build", ".build",
+        ".git",
+        ".svn",
+        ".hg",
+        "__pycache__",
+        ".mypy_cache",
+        ".ruff_cache",
+        ".pytest_cache",
+        "node_modules",
+        ".next",
+        ".nuxt",
+        "venv",
+        ".venv",
+        "env",
+        ".env",
+        "dist",
+        "build",
+        ".build",
         "aiforge_data",
     }
 )
@@ -95,9 +155,7 @@ class DocLoader:
             encoding:        Text encoding for plain-text files.
         """
         self._allowed_extensions: frozenset[str] | None = (
-            frozenset(e.lower() for e in file_extensions)
-            if file_extensions is not None
-            else None
+            frozenset(e.lower() for e in file_extensions) if file_extensions is not None else None
         )
         self._encoding = encoding
 
@@ -126,7 +184,8 @@ class DocLoader:
             if path.is_dir():
                 docs = self._load_directory(path, stats)
             elif path.is_file():
-                docs = self._load_single_file(path, stats)
+                # User explicitly chose this file — skip extension filter.
+                docs = self._load_single_file(path, stats, apply_extension_filter=False)
             else:
                 raise FileNotFoundError(f"Source not found: {source!r}")
 
@@ -143,22 +202,34 @@ class DocLoader:
             docs.extend(file_docs)
         return docs
 
-    def _load_file_list(
-        self, paths: list[str], stats: IngestStats
-    ) -> list[Document]:
+    def _load_file_list(self, paths: list[str], stats: IngestStats) -> list[Document]:
         docs: list[Document] = []
+        gitignore_cache: dict[Path, list[str]] = {}
         for p in paths:
-            file_docs = self._load_single_file(Path(p), stats)
+            path = Path(p)
+            if path.exists() and self._is_gitignored_from_ancestors(path, gitignore_cache):
+                continue
+            file_docs = self._load_single_file(path, stats)
             docs.extend(file_docs)
         return docs
 
-    def _load_single_file(self, path: Path, stats: IngestStats) -> list[Document]:
+    def _load_single_file(
+        self,
+        path: Path,
+        stats: IngestStats,
+        *,
+        apply_extension_filter: bool = True,
+    ) -> list[Document]:
         ext = path.suffix.lower()
 
         if ext in _IGNORE_EXTENSIONS:
             return []
 
-        if self._allowed_extensions is not None and ext not in self._allowed_extensions:
+        if (
+            apply_extension_filter
+            and self._allowed_extensions is not None
+            and ext not in self._allowed_extensions
+        ):
             stats.skipped_files.append(str(path))
             return []
 
@@ -180,14 +251,174 @@ class DocLoader:
         stats.languages[lang] = stats.languages.get(lang, 0) + 1
         return docs
 
-    def _iterate_files(self, directory: Path):
+    def _iterate_files(
+        self,
+        directory: Path,
+    ):
         """Yield all non-ignored files under *directory* recursively."""
+        gitignore_cache: dict[Path, list[str]] = {}
         for item in directory.rglob("*"):
+            if self._is_gitignored(item, directory, gitignore_cache):
+                continue
             # Skip ignored directories anywhere in the path
             if any(part in _IGNORE_DIR_NAMES for part in item.parts):
                 continue
             if item.is_file():
                 yield item
+
+    @staticmethod
+    def _read_gitignore_patterns(directory: Path) -> list[str]:
+        """Read .gitignore patterns from *directory* if present."""
+        gitignore = directory / ".gitignore"
+        if not gitignore.is_file():
+            return []
+
+        patterns: list[str] = []
+        try:
+            for raw_line in gitignore.read_text(encoding="utf-8", errors="replace").splitlines():
+                line = raw_line.strip()
+                if not line:
+                    continue
+                if line.startswith("#"):
+                    continue
+                # Escaped comments/exclamation are literal
+                if line.startswith("\\#") or line.startswith("\\!"):
+                    line = line[1:]
+                patterns.append(line)
+        except OSError:
+            return []
+        return patterns
+
+    def _is_gitignored_from_ancestors(
+        self,
+        path: Path,
+        cache: dict[Path, list[str]],
+    ) -> bool:
+        """Apply .gitignore files from path ancestors for explicit file-list inputs."""
+        if not path.exists():
+            return False
+
+        # Apply nearest ancestor .gitignore files in root->leaf order.
+        ancestors = list(path.parent.resolve().parents)
+        ancestors.insert(0, path.parent.resolve())
+        ancestors.reverse()
+        ignored = False
+        for base_dir in ancestors:
+            patterns = cache.get(base_dir)
+            if patterns is None:
+                patterns = self._read_gitignore_patterns(base_dir)
+                cache[base_dir] = patterns
+            if not patterns:
+                continue
+            ignored = self._apply_gitignore_rules(path, base_dir, patterns, ignored)
+        return ignored
+
+    def _is_gitignored(
+        self,
+        path: Path,
+        root: Path,
+        cache: dict[Path, list[str]],
+    ) -> bool:
+        """Return True when *path* matches applicable .gitignore rules under *root*."""
+        ignored = False
+        for base_dir in self._gitignore_dirs_for_path(path, root):
+            patterns = cache.get(base_dir)
+            if patterns is None:
+                patterns = self._read_gitignore_patterns(base_dir)
+                cache[base_dir] = patterns
+            if not patterns:
+                continue
+            ignored = self._apply_gitignore_rules(path, base_dir, patterns, ignored)
+        return ignored
+
+    @staticmethod
+    def _gitignore_dirs_for_path(path: Path, root: Path) -> list[Path]:
+        """Return directories (root..parent) whose .gitignore can affect *path*."""
+        try:
+            rel_parts = path.relative_to(root).parts
+        except ValueError:
+            return []
+        dirs = [root]
+        cur = root
+        # .gitignore in the file's own directory applies; for directories use parent.
+        upto = len(rel_parts) - 1
+        for i in range(max(0, upto)):
+            cur = cur / rel_parts[i]
+            dirs.append(cur)
+        return dirs
+
+    def _apply_gitignore_rules(
+        self,
+        path: Path,
+        base_dir: Path,
+        patterns: list[str],
+        ignored: bool,
+    ) -> bool:
+        """Apply one .gitignore file's rules to *path*, preserving prior state."""
+        try:
+            rel = path.relative_to(base_dir).as_posix()
+        except ValueError:
+            return ignored
+        is_dir = path.is_dir()
+
+        for rule in patterns:
+            negate = rule.startswith("!")
+            pat = rule[1:] if negate else rule
+            dir_only = pat.endswith("/")
+            if dir_only:
+                pat = pat[:-1]
+            anchored = pat.startswith("/")
+            if anchored:
+                pat = pat[1:]
+            if not pat:
+                continue
+
+            if DocLoader._match_gitignore_pattern(
+                rel=rel,
+                pattern=pat,
+                anchored=anchored,
+                dir_only=dir_only,
+                is_dir=is_dir,
+            ):
+                ignored = not negate
+
+        return ignored
+
+    @staticmethod
+    def _match_gitignore_pattern(
+        *,
+        rel: str,
+        pattern: str,
+        anchored: bool,
+        dir_only: bool,
+        is_dir: bool,
+    ) -> bool:
+        """Match a simplified gitignore rule against a relative POSIX path."""
+        parts = rel.split("/")
+
+        # No slash pattern => applies to path segments (basename style)
+        if "/" not in pattern:
+            segs = parts if is_dir else parts[:-1]
+            if not dir_only:
+                segs = parts
+            return any(fnmatchcase(seg, pattern) for seg in segs)
+
+        # Slash pattern => full-path style
+        if anchored:
+            if dir_only:
+                return rel == pattern or rel.startswith(pattern + "/")
+            return fnmatchcase(rel, pattern) or rel.startswith(pattern + "/")
+
+        # Unanchored slash pattern should match anywhere in the tree.
+        rel_parts = rel.split("/")
+        pat_parts = pattern.split("/")
+        if len(pat_parts) > len(rel_parts):
+            return False
+        for i in range(0, len(rel_parts) - len(pat_parts) + 1):
+            candidate = "/".join(rel_parts[i : i + len(pat_parts)])
+            if fnmatchcase(candidate, pattern):
+                return True
+        return False
 
     def _get_loader_fn(self, ext: str):
         """Return a callable ``(path) -> list[Document]`` for *ext*, or None."""
@@ -216,7 +447,7 @@ class DocLoader:
                 from langchain.document_loaders import PyPDFLoader  # type: ignore[no-redef]
             except ImportError:
                 raise ImportError(
-                    "PyPDF not installed. Run: pip install \"aiforge[docs]\" to add PDF support."
+                    'PyPDF not installed. Run: pip install "aiforge[docs]" to add PDF support.'
                 ) from None
         loader = PyPDFLoader(str(path))
         return loader.load()
@@ -226,7 +457,7 @@ class DocLoader:
             from langchain_community.document_loaders import Docx2txtLoader
         except ImportError:
             raise ImportError(
-                "python-docx not installed. Run: pip install \"aiforge[docs]\" for DOCX support."
+                'python-docx not installed. Run: pip install "aiforge[docs]" for DOCX support.'
             ) from None
         loader = Docx2txtLoader(str(path))
         return loader.load()
@@ -253,9 +484,7 @@ class DocLoader:
                 check=False,
             )
             if result.returncode != 0:
-                raise RuntimeError(
-                    f"git clone failed for {git_url!r}:\n{result.stderr}"
-                )
+                raise RuntimeError(f"git clone failed for {git_url!r}:\n{result.stderr}")
             docs = self._load_directory(Path(tmpdir), stats)
 
         # Rewrite metadata source paths so they reference the git URL rather

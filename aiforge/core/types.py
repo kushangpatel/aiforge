@@ -7,11 +7,13 @@ from __future__ import annotations
 
 import asyncio
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any, AsyncGenerator, Iterator
+from collections.abc import AsyncGenerator, Iterator
+from typing import TYPE_CHECKING, Any, cast
 
 from pydantic import BaseModel, Field
 
 if TYPE_CHECKING:
+    from aiforge.core.model_router import QualityTier
     from aiforge.infra.config import AIForgeSettings
     from aiforge.infra.cost_tracker import CostTracker
 
@@ -122,16 +124,85 @@ class BaseModule(ABC):
     are handled by ``_call_llm()`` and ``_call_embedding()`` provided here.
     """
 
-    def __init__(self, **kwargs: Any) -> None:  # noqa: ANN401
-        # Lazy imports to avoid circular deps at class-definition time.
-        from aiforge.infra.config import AIForgeSettings, get_settings
-        from aiforge.infra.cost_tracker import CostTracker
+    def __init__(
+        self, *, quality: str | None = None, provider: str | None = None, **kwargs: Any
+    ) -> None:  # noqa: ANN401
+        """Initialise the module.
 
+        Args:
+            provider: Optional provider name (e.g. ``"openai"``,
+                ``"internal_gateway"``).  Must be a built-in provider or
+                previously registered via ``register_provider()``.  When
+                omitted, falls back to ``settings.PROVIDER``.
+            quality: Optional quality tier (``"high"``, ``"medium"``,
+                ``"low"``).  When provided (and ``MODEL_ROUTER_ENABLED``
+                is true), the model router selects the cheapest model
+                meeting this tier for the configured provider.  Falls
+                back to ``DEFAULT_QUALITY`` if omitted.
+            **kwargs: Forwarded to ``AIForgeSettings`` as overrides.
+        """
+        # Map the friendly provider= kwarg to the settings field name.
+        if provider is not None:
+            kwargs["PROVIDER"] = provider
+        # Lazy imports to avoid circular deps at class-definition time.
         import structlog
 
-        # Use the global singleton when no overrides are provided so that all
-        # module instances share one consistent settings object.
-        self.settings: AIForgeSettings = AIForgeSettings(**kwargs) if kwargs else get_settings()
+        from aiforge.infra.config import AIForgeSettings, apply_runtime_overrides, get_settings
+        from aiforge.infra.cost_tracker import CostTracker
+
+        # Start from global settings so YAML/.env overrides are always respected.
+        # When kwargs are provided, create a validated per-instance copy on top.
+        if kwargs:
+            base = get_settings()
+            merged = base.model_dump()
+            merged.update(kwargs)
+            self.settings = AIForgeSettings(**merged)
+            apply_runtime_overrides(self.settings)
+        else:
+            self.settings = get_settings()
+
+        # Track whether quality= and MODEL= were explicitly requested by the caller.
+        quality_is_explicit = quality is not None
+        model_kwarg_explicit = "MODEL" in kwargs  # caller passed MODEL= directly to module
+
+        # A model is considered configured if it was set via YAML, env var, .env
+        # file, or constructor kwarg — any source other than the built-in default.
+        # pydantic tracks this in model_fields_set.
+        model_is_configured = "MODEL" in self.settings.model_fields_set
+
+        # When the caller omits quality=, fall back to DEFAULT_QUALITY — but
+        # only if the model wasn't already explicitly configured (via YAML/env).
+        # An explicit model in aiforge.yaml means the user made a conscious
+        # choice; honour it rather than auto-routing to a different model.
+        if not quality_is_explicit and self.settings.MODEL_ROUTER_ENABLED and not model_is_configured:
+            quality = self.settings.DEFAULT_QUALITY
+
+        # Model routing decision:
+        # - MODEL= kwarg passed to the module constructor always wins (skip router).
+        # - Explicit quality= overrides the YAML/env model, so route.
+        # - Implicit quality (from DEFAULT_QUALITY) only routes when no model is set.
+        should_route = (
+            quality is not None
+            and self.settings.MODEL_ROUTER_ENABLED
+            and not model_kwarg_explicit
+            and (quality_is_explicit or not model_is_configured)
+        )
+        if should_route:
+            from aiforge.core.model_router import ModelRouter
+
+            try:
+                selected = ModelRouter(
+                    custom_models=self.settings.CUSTOM_MODELS or None,
+                ).select(
+                    quality=cast("QualityTier", quality),
+                    provider=self.settings.PROVIDER,
+                    prefer_local=self.settings.PREFER_LOCAL,
+                )
+                # Avoid mutating the shared singleton — create a private copy.
+                self.settings = self.settings.model_copy(update={"MODEL": selected})
+            except ValueError:
+                pass  # No matching model — keep current settings.MODEL
+
         self.cost_tracker: CostTracker = CostTracker.get_session()
         self.logger = structlog.get_logger(module=self.__class__.__name__)
 
@@ -241,31 +312,106 @@ class BaseModule(ABC):
     # Internal helpers used by module implementations
     # ------------------------------------------------------------------
 
+    _cache: Any = None  # class-level singleton — set via set_cache()
+
+    @classmethod
+    def set_cache(cls, cache: Any) -> None:
+        """Set the shared request cache for all modules."""
+        cls._cache = cache
+
+    def _get_cache(self) -> Any:
+        """Return the active cache (auto-initialise from settings if needed)."""
+        if not self.settings.CACHE_ENABLED:
+            return None
+        if BaseModule._cache is not None:
+            return BaseModule._cache
+        from aiforge.infra.cache import MemoryBackend, RequestCache
+
+        backend_name = self.settings.CACHE_BACKEND
+        if backend_name == "redis":
+            from aiforge.infra.cache import RedisBackend
+
+            backend = RedisBackend(url=self.settings.CACHE_REDIS_URL)
+        else:
+            backend = MemoryBackend(max_entries=self.settings.CACHE_MAX_ENTRIES)
+
+        BaseModule._cache = RequestCache(
+            backend=backend,
+            ttl_seconds=self.settings.CACHE_TTL,
+            enabled=True,
+        )
+        return BaseModule._cache
+
     def _call_llm(
         self,
-        messages: list[dict[str, str]],
+        messages: list[dict[str, Any]],
         **kwargs: Any,
     ) -> CompletionResult:
-        """Synchronous LLM call with retry + rate-limiting + cost tracking."""
+        """Synchronous LLM call with cache + retry + rate-limiting + cost tracking."""
         from aiforge.infra.rate_limiter import RateLimiter
+
+        use_cache = kwargs.pop("use_cache", True)
+        cache = self._get_cache()
+        cache_key: str | None = None
+
+        if cache and cache.enabled and use_cache:
+            cache_key = cache.build_key(
+                model=self.settings.MODEL,
+                messages=messages,
+                temperature=kwargs.get("temperature", self.settings.TEMPERATURE),
+                max_tokens=kwargs.get("max_tokens", self.settings.MAX_TOKENS),
+                module=self.__class__.__name__.lower(),
+                provider=self.settings.PROVIDER,
+            )
+            cached = cache.get(cache_key)
+            if cached is not None:
+                return CompletionResult(**cached)
 
         RateLimiter.get_instance(
             rpm=self.settings.RATE_LIMIT_RPM,
             tpm=self.settings.RATE_LIMIT_TPM,
-        ).acquire(tokens=0)  # acquire 1 request slot; TPM acquired after we know token count
+        ).acquire(tokens=0)  # acquire 1 request slot; TPM accounted post-hoc
         result = self.provider.complete(messages, **kwargs)
+
+        # Post-hoc TPM accounting — now we know the actual token count
+        RateLimiter.get_instance(
+            rpm=self.settings.RATE_LIMIT_RPM,
+            tpm=self.settings.RATE_LIMIT_TPM,
+        ).record_tokens(result.input_tokens + result.output_tokens)
+
         self._record_cost(result)
+
+        if cache and cache_key is not None:
+            cache.put(cache_key, result.model_dump())
+
         return result
 
     async def _acall_llm(
         self,
-        messages: list[dict[str, str]],
+        messages: list[dict[str, Any]],
         **kwargs: Any,
     ) -> CompletionResult:
-        """Async LLM call with retry + rate-limiting + cost tracking."""
+        """Async LLM call with cache + retry + rate-limiting + cost tracking."""
         import asyncio
 
         from aiforge.infra.rate_limiter import RateLimiter
+
+        use_cache = kwargs.pop("use_cache", True)
+        cache = self._get_cache()
+        cache_key: str | None = None
+
+        if cache and cache.enabled and use_cache:
+            cache_key = cache.build_key(
+                model=self.settings.MODEL,
+                messages=messages,
+                temperature=kwargs.get("temperature", self.settings.TEMPERATURE),
+                max_tokens=kwargs.get("max_tokens", self.settings.MAX_TOKENS),
+                module=self.__class__.__name__.lower(),
+                provider=self.settings.PROVIDER,
+            )
+            cached = cache.get(cache_key)
+            if cached is not None:
+                return CompletionResult(**cached)
 
         limiter = RateLimiter.get_instance(
             rpm=self.settings.RATE_LIMIT_RPM,
@@ -274,7 +420,19 @@ class BaseModule(ABC):
         # Run blocking acquire in a thread pool to avoid blocking the event loop
         await asyncio.get_event_loop().run_in_executor(None, limiter.acquire, 0)
         result = await self.provider.complete_async(messages, **kwargs)
+
+        # Post-hoc TPM accounting
+        await asyncio.get_event_loop().run_in_executor(
+            None,
+            limiter.record_tokens,
+            result.input_tokens + result.output_tokens,
+        )
+
         self._record_cost(result)
+
+        if cache and cache_key is not None:
+            cache.put(cache_key, result.model_dump())
+
         return result
 
     def _call_embedding(self, texts: list[str]) -> list[list[float]]:

@@ -1,0 +1,572 @@
+"""
+Generator module — template-based and freeform content generation with guardrails.
+
+Usage::
+
+    from aiforge import Generator
+
+    # Template-based generation
+    g = Generator(
+        template="Write a {tone} product description for {product}.",
+        guardrails=["no_pii", "no_pricing"],
+    )
+    result = g.generate(tone="professional", product="AIForge")
+    print(result.text)
+
+    # Freeform generation
+    g = Generator(guardrails=["no_pii"])
+    result = g.generate(prompt="Write a follow-up email for a customer complaint.")
+    print(result.text)
+
+    # Custom guardrails
+    from aiforge.modules.generate import register_guardrail, GuardrailResult
+
+    @register_guardrail("max_sentences")
+    def _check(text: str) -> GuardrailResult:
+        count = text.count(".") + text.count("!") + text.count("?")
+        return GuardrailResult(passed=count <= 5, message=f"{count} sentences")
+"""
+
+from __future__ import annotations
+
+import re
+import threading
+import time
+from collections.abc import Callable
+from typing import Any
+
+from aiforge.core.prompt_override import resolve_prompt
+from aiforge.core.types import BaseModule
+from aiforge.modules.generate.prompts import (
+    GENERATE_RETRY,
+    GENERATE_SYSTEM,
+    PROFESSIONAL_TONE_CHECK,
+    REWRITE_SYSTEM,
+    REWRITE_USER,
+)
+from aiforge.modules.generate.schemas import GenerateResponse, GuardrailResult
+
+# ---------------------------------------------------------------------------
+# Maximum number of guardrail retry attempts
+# ---------------------------------------------------------------------------
+
+_MAX_RETRIES: int = 2
+
+# ---------------------------------------------------------------------------
+# Currency patterns for no_pricing guardrail
+# ---------------------------------------------------------------------------
+
+_PRICE_PATTERNS: list[re.Pattern[str]] = [
+    re.compile(r"\$\d+"),
+    re.compile(r"€\d+"),
+    re.compile(r"£\d+"),
+    re.compile(r"\d+\s*(?:USD|EUR|GBP)", re.IGNORECASE),
+]
+
+# ---------------------------------------------------------------------------
+# Custom guardrail registry (module-level singleton)
+# ---------------------------------------------------------------------------
+
+_GUARDRAIL_LOCK = threading.Lock()
+_CUSTOM_GUARDRAILS: dict[str, Callable[[str], GuardrailResult]] = {}
+
+
+def register_guardrail(
+    name: str,
+) -> Callable[[Callable[[str], GuardrailResult]], Callable[[str], GuardrailResult]]:
+    """Decorator to register a custom guardrail function.
+
+    The decorated function receives the generated text and must return a
+    :class:`GuardrailResult`.  It is invoked by name during the guardrail
+    check loop.
+
+    Example::
+
+        @register_guardrail("max_words")
+        def _check_words(text: str) -> GuardrailResult:
+            ok = len(text.split()) <= 200
+            return GuardrailResult(passed=ok, message="Too many words" if not ok else "")
+    """
+
+    def decorator(fn: Callable[[str], GuardrailResult]) -> Callable[[str], GuardrailResult]:
+        with _GUARDRAIL_LOCK:
+            _CUSTOM_GUARDRAILS[name] = fn
+        return fn
+
+    return decorator
+
+
+def get_custom_guardrails() -> dict[str, Callable[[str], GuardrailResult]]:
+    """Return a *read-only view* of the custom guardrail registry."""
+    return dict(_CUSTOM_GUARDRAILS)
+
+
+# Module-level cached Moderator for PII checks (avoids re-creating per call)
+_pii_moderator: Any | None = None
+
+
+def _get_pii_moderator() -> Any:
+    global _pii_moderator
+    if _pii_moderator is None:
+        from aiforge.modules.moderate.module import Moderator
+
+        _pii_moderator = Moderator(checks=["pii"])
+    return _pii_moderator
+
+
+# ---------------------------------------------------------------------------
+# Generator class
+# ---------------------------------------------------------------------------
+
+
+class Generator(BaseModule):
+    """Content generator with template rendering and guardrail enforcement.
+
+    Args:
+        template:    A template string with ``{variable}`` placeholders.
+                     Mutually exclusive with *prompt* at call time.
+        guardrails:  List of guardrail names to enforce on generated output.
+                     Built-in: ``no_pii``, ``no_competitor_mentions``,
+                     ``no_pricing``, ``professional_tone``.
+                     Custom guardrails via :func:`register_guardrail`.
+        max_tokens:  Maximum tokens for the LLM generation call.
+        temperature: Sampling temperature (0.0–2.0).
+        competitors: List of competitor names for ``no_competitor_mentions``.
+        **kwargs:    Forwarded to :class:`~aiforge.core.types.BaseModule`.
+    """
+
+    def __init__(
+        self,
+        template: str | None = None,
+        guardrails: list[str] | None = None,
+        max_tokens: int = 1024,
+        temperature: float = 0.7,
+        competitors: list[str] | None = None,
+        system_prompt: str | None = None,
+        **kwargs: Any,
+    ) -> None:
+        super().__init__(**kwargs)
+        self.template = template
+        self.guardrails: list[str] = guardrails or []
+        if max_tokens < 1:
+            raise ValueError("max_tokens must be >= 1")
+        if not 0.0 <= temperature <= 2.0:
+            raise ValueError("temperature must be between 0.0 and 2.0")
+        self.max_tokens = max_tokens
+        self.temperature = temperature
+        self.competitors: list[str] = competitors or []
+        self._system_prompt_override: str | None = system_prompt
+
+    # ------------------------------------------------------------------
+    # Public API
+    # ------------------------------------------------------------------
+
+    def generate(
+        self, prompt: str | None = None, *, system_prompt: str | None = None, **variables: Any
+    ) -> GenerateResponse:
+        """Generate content synchronously.
+
+        Either *self.template* (with ``**variables``) **or** *prompt* must
+        be provided — not both, and not neither.
+        """
+        t0 = time.monotonic()
+        final_prompt = self._resolve_prompt(prompt, variables)
+        resolved_system = resolve_prompt(
+            call_override=system_prompt,
+            instance_override=self._system_prompt_override,
+            config_override=self.settings.CUSTOM_PROMPTS.get("generate", {}).get("system"),
+            default=GENERATE_SYSTEM,
+        )
+        return self._generate_loop(final_prompt, t0, resolved_system)
+
+    async def agenerate(
+        self, prompt: str | None = None, *, system_prompt: str | None = None, **variables: Any
+    ) -> GenerateResponse:
+        """Async version of :meth:`generate`."""
+        t0 = time.monotonic()
+        final_prompt = self._resolve_prompt(prompt, variables)
+        resolved_system = resolve_prompt(
+            call_override=system_prompt,
+            instance_override=self._system_prompt_override,
+            config_override=self.settings.CUSTOM_PROMPTS.get("generate", {}).get("system"),
+            default=GENERATE_SYSTEM,
+        )
+        return await self._agenerate_loop(final_prompt, t0, resolved_system)
+
+    # Pipeline interface -----------------------------------------------
+
+    def run(self, text: str, **kwargs: Any) -> GenerateResponse:
+        """Pipeline entry point (sync).
+
+        *text* is treated as a freeform prompt.
+        """
+        sp = kwargs.pop("system_prompt", None)
+        return self.generate(prompt=text, system_prompt=sp, **kwargs)
+
+    async def arun(self, text: str, **kwargs: Any) -> GenerateResponse:
+        """Pipeline entry point (async)."""
+        sp = kwargs.pop("system_prompt", None)
+        return await self.agenerate(prompt=text, system_prompt=sp, **kwargs)
+
+    # ------------------------------------------------------------------
+    # Rewrite API
+    # ------------------------------------------------------------------
+
+    def rewrite(
+        self,
+        text: str,
+        *,
+        instructions: str | None = None,
+        tone: str | None = None,
+        reading_level: str | None = None,
+        system_prompt: str | None = None,
+    ) -> GenerateResponse:
+        """Rewrite *text* synchronously according to the given directives.
+
+        Args:
+            text:          The original text to rewrite.
+            instructions:  Free-form rewriting instructions (e.g. "make it shorter").
+            tone:          Target tone (e.g. "formal", "casual", "friendly").
+            reading_level: Target reading level (e.g. "5th grade", "college").
+            system_prompt: Override the system prompt for this call.
+        """
+        if not text or not text.strip():
+            raise ValueError("text must not be empty or whitespace-only")
+        t0 = time.monotonic()
+        user_prompt = self._build_rewrite_prompt(text, instructions, tone, reading_level)
+        resolved_system = resolve_prompt(
+            call_override=system_prompt,
+            instance_override=self._system_prompt_override,
+            config_override=self.settings.CUSTOM_PROMPTS.get("generate", {}).get("rewrite_system"),
+            default=REWRITE_SYSTEM,
+        )
+        return self._generate_loop(user_prompt, t0, resolved_system)
+
+    async def arewrite(
+        self,
+        text: str,
+        *,
+        instructions: str | None = None,
+        tone: str | None = None,
+        reading_level: str | None = None,
+        system_prompt: str | None = None,
+    ) -> GenerateResponse:
+        """Async version of :meth:`rewrite`."""
+        if not text or not text.strip():
+            raise ValueError("text must not be empty or whitespace-only")
+        t0 = time.monotonic()
+        user_prompt = self._build_rewrite_prompt(text, instructions, tone, reading_level)
+        resolved_system = resolve_prompt(
+            call_override=system_prompt,
+            instance_override=self._system_prompt_override,
+            config_override=self.settings.CUSTOM_PROMPTS.get("generate", {}).get("rewrite_system"),
+            default=REWRITE_SYSTEM,
+        )
+        return await self._agenerate_loop(user_prompt, t0, resolved_system)
+
+    @staticmethod
+    def _build_rewrite_prompt(
+        text: str,
+        instructions: str | None,
+        tone: str | None,
+        reading_level: str | None,
+    ) -> str:
+        """Construct the user prompt for a rewrite call."""
+        parts: list[str] = []
+        if instructions:
+            parts.append(f"Instructions: {instructions}")
+        if tone:
+            parts.append(f"Target tone: {tone}")
+        if reading_level:
+            parts.append(f"Target reading level: {reading_level}")
+        if not parts:
+            parts.append("Instructions: Improve clarity and readability")
+        instructions_block = "\n".join(parts) + "\n"
+        return REWRITE_USER.format(instructions_block=instructions_block, text=text)
+
+    # ------------------------------------------------------------------
+    # Prompt resolution
+    # ------------------------------------------------------------------
+
+    def _resolve_prompt(self, prompt: str | None, variables: dict[str, Any]) -> str:
+        """Build the final user prompt from template + variables or freeform *prompt*."""
+        if self.template and prompt:
+            raise ValueError("Provide either template variables or prompt — not both")
+        if self.template:
+            return self._render_template(self.template, variables)
+        if prompt:
+            return prompt
+        raise ValueError("Either template or prompt is required")
+
+    @staticmethod
+    def _render_template(template: str, variables: dict[str, Any]) -> str:
+        """Substitute ``{key}`` placeholders in *template*.
+
+        List values are joined with ``", "``.
+        """
+        rendered = template
+        for key, value in variables.items():
+            if isinstance(value, list):
+                value = ", ".join(str(v) for v in value)
+            rendered = rendered.replace(f"{{{key}}}", str(value))
+        return rendered
+
+    # ------------------------------------------------------------------
+    # Generate-and-guard loop
+    # ------------------------------------------------------------------
+
+    def _generate_loop(self, final_prompt: str, t0: float, system: str) -> GenerateResponse:
+        """Synchronous generate → check guardrails → retry loop."""
+        total_in = total_out = 0
+        total_cost = 0.0
+        model = ""
+        generated_text = ""
+        guardrail_flags: list[str] = []
+
+        current_prompt = final_prompt
+        for attempt in range(_MAX_RETRIES + 1):
+            llm = self._call_llm(
+                [
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": current_prompt},
+                ],
+                max_tokens=self.max_tokens,
+                temperature=self.temperature,
+            )
+            from aiforge.core.pricing import calculate_cost
+
+            total_in += llm.input_tokens
+            total_out += llm.output_tokens
+            total_cost += calculate_cost(llm.model, llm.input_tokens, llm.output_tokens)
+            model = llm.model
+            generated_text = llm.text.strip()
+
+            violations, g_in, g_out, g_cost = self._check_guardrails(generated_text)
+            total_in += g_in
+            total_out += g_out
+            total_cost += g_cost
+            if not violations:
+                return GenerateResponse(
+                    text=generated_text,
+                    guardrail_flags=[],
+                    retry_count=attempt,
+                    cost=total_cost,
+                    input_tokens=total_in,
+                    output_tokens=total_out,
+                    model=model,
+                    latency_ms=(time.monotonic() - t0) * 1000,
+                )
+
+            guardrail_flags = violations
+            if attempt < _MAX_RETRIES:
+                current_prompt = self._build_retry_prompt(
+                    final_prompt,
+                    generated_text,
+                    violations,
+                )
+
+        # All retries exhausted — return last result with remaining flags
+        return GenerateResponse(
+            text=generated_text,
+            guardrail_flags=guardrail_flags,
+            retry_count=_MAX_RETRIES,
+            cost=total_cost,
+            input_tokens=total_in,
+            output_tokens=total_out,
+            model=model,
+            latency_ms=(time.monotonic() - t0) * 1000,
+        )
+
+    async def _agenerate_loop(self, final_prompt: str, t0: float, system: str) -> GenerateResponse:
+        """Async generate → check guardrails → retry loop."""
+        total_in = total_out = 0
+        total_cost = 0.0
+        model = ""
+        generated_text = ""
+        guardrail_flags: list[str] = []
+
+        current_prompt = final_prompt
+        for attempt in range(_MAX_RETRIES + 1):
+            llm = await self._acall_llm(
+                [
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": current_prompt},
+                ],
+                max_tokens=self.max_tokens,
+                temperature=self.temperature,
+            )
+            from aiforge.core.pricing import calculate_cost
+
+            total_in += llm.input_tokens
+            total_out += llm.output_tokens
+            total_cost += calculate_cost(llm.model, llm.input_tokens, llm.output_tokens)
+            model = llm.model
+            generated_text = llm.text.strip()
+
+            violations, g_in, g_out, g_cost = await self._acheck_guardrails(generated_text)
+            total_in += g_in
+            total_out += g_out
+            total_cost += g_cost
+            if not violations:
+                return GenerateResponse(
+                    text=generated_text,
+                    guardrail_flags=[],
+                    retry_count=attempt,
+                    cost=total_cost,
+                    input_tokens=total_in,
+                    output_tokens=total_out,
+                    model=model,
+                    latency_ms=(time.monotonic() - t0) * 1000,
+                )
+
+            guardrail_flags = violations
+            if attempt < _MAX_RETRIES:
+                current_prompt = self._build_retry_prompt(
+                    final_prompt,
+                    generated_text,
+                    violations,
+                )
+
+        return GenerateResponse(
+            text=generated_text,
+            guardrail_flags=guardrail_flags,
+            retry_count=_MAX_RETRIES,
+            cost=total_cost,
+            input_tokens=total_in,
+            output_tokens=total_out,
+            model=model,
+            latency_ms=(time.monotonic() - t0) * 1000,
+        )
+
+    # ------------------------------------------------------------------
+    # Guardrail checks
+    # ------------------------------------------------------------------
+
+    def _check_guardrails(self, text: str) -> tuple[list[str], int, int, float]:
+        """Check all configured guardrails synchronously.
+
+        Returns ``(violations, input_tokens, output_tokens, cost)``.
+        """
+        violations: list[str] = []
+        g_in = g_out = 0
+        g_cost = 0.0
+        for name in self.guardrails:
+            if name == "no_pii":
+                if self._check_no_pii(text):
+                    violations.append("no_pii")
+            elif name == "no_competitor_mentions":
+                if self._check_competitor_mentions(text):
+                    violations.append("no_competitor_mentions")
+            elif name == "no_pricing":
+                if self._check_pricing(text):
+                    violations.append("no_pricing")
+            elif name == "professional_tone":
+                is_ok, t_in, t_out, t_cost = self._check_professional_tone(text, sync=True)
+                g_in += t_in
+                g_out += t_out
+                g_cost += t_cost
+                if not is_ok:
+                    violations.append("professional_tone")
+            elif name in _CUSTOM_GUARDRAILS:
+                result = _CUSTOM_GUARDRAILS[name](text)
+                if not result.passed:
+                    violations.append(name)
+            else:
+                raise ValueError(f"Unknown guardrail: {name!r}")
+        return violations, g_in, g_out, g_cost
+
+    async def _acheck_guardrails(self, text: str) -> tuple[list[str], int, int, float]:
+        """Async version of :meth:`_check_guardrails`."""
+        violations: list[str] = []
+        g_in = g_out = 0
+        g_cost = 0.0
+        for name in self.guardrails:
+            if name == "no_pii":
+                if self._check_no_pii(text):
+                    violations.append("no_pii")
+            elif name == "no_competitor_mentions":
+                if self._check_competitor_mentions(text):
+                    violations.append("no_competitor_mentions")
+            elif name == "no_pricing":
+                if self._check_pricing(text):
+                    violations.append("no_pricing")
+            elif name == "professional_tone":
+                is_ok, t_in, t_out, t_cost = await self._acheck_professional_tone(text)
+                g_in += t_in
+                g_out += t_out
+                g_cost += t_cost
+                if not is_ok:
+                    violations.append("professional_tone")
+            elif name in _CUSTOM_GUARDRAILS:
+                result = _CUSTOM_GUARDRAILS[name](text)
+                if not result.passed:
+                    violations.append(name)
+            else:
+                raise ValueError(f"Unknown guardrail: {name!r}")
+        return violations, g_in, g_out, g_cost
+
+    # ------------------------------------------------------------------
+    # Individual guardrail implementations
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _check_no_pii(text: str) -> bool:
+        """Return *True* if PII is detected (i.e. guardrail violated)."""
+        return _get_pii_moderator().check(text).flagged
+
+    def _check_competitor_mentions(self, text: str) -> bool:
+        """Regex check for competitor names.  Returns *True* on match."""
+        if not self.competitors:
+            return False
+        pattern = "|".join(re.escape(c) for c in self.competitors)
+        return bool(re.search(pattern, text, re.IGNORECASE))
+
+    @staticmethod
+    def _check_pricing(text: str) -> bool:
+        """Return *True* if currency / pricing patterns are found."""
+        return any(p.search(text) for p in _PRICE_PATTERNS)
+
+    def _check_professional_tone(
+        self, text: str, *, sync: bool = True
+    ) -> tuple[bool, int, int, float]:
+        """LLM-based tone check.  Returns ``(is_professional, in_tokens, out_tokens, cost)``."""
+        user_content = PROFESSIONAL_TONE_CHECK.format(text=text)
+        llm = self._call_llm(
+            [{"role": "user", "content": user_content}],
+            temperature=0.0,
+            max_tokens=8,
+        )
+        from aiforge.core.pricing import calculate_cost
+
+        cost = calculate_cost(llm.model, llm.input_tokens, llm.output_tokens)
+        return "YES" in llm.text.upper(), llm.input_tokens, llm.output_tokens, cost
+
+    async def _acheck_professional_tone(self, text: str) -> tuple[bool, int, int, float]:
+        """Async professional-tone check.  Returns ``(is_professional, in_tokens, out_tokens, cost)``."""
+        user_content = PROFESSIONAL_TONE_CHECK.format(text=text)
+        llm = await self._acall_llm(
+            [{"role": "user", "content": user_content}],
+            temperature=0.0,
+            max_tokens=8,
+        )
+        from aiforge.core.pricing import calculate_cost
+
+        cost = calculate_cost(llm.model, llm.input_tokens, llm.output_tokens)
+        return "YES" in llm.text.upper(), llm.input_tokens, llm.output_tokens, cost
+
+    # ------------------------------------------------------------------
+    # Retry prompt builder
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _build_retry_prompt(
+        original_prompt: str,
+        generated_text: str,
+        violations: list[str],
+    ) -> str:
+        """Construct the retry message with violation feedback."""
+        return GENERATE_RETRY.format(
+            violations=", ".join(violations),
+            previous_text=generated_text,
+            original_prompt=original_prompt,
+        )

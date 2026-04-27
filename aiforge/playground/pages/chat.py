@@ -1,5 +1,13 @@
-"""Chat page."""
+"""ChatAgent playground page."""
+
 import streamlit as st
 
 st.title("💬 Chat")
-st.info("ChatAgent module coming soon. Implement `aiforge.modules.chat` first.")
+st.caption("Multi-turn conversational agent with memory and tool use")
+
+try:
+    from aiforge.modules.chat.widget import render
+
+    render()
+except ImportError as exc:
+    st.error(f"Module unavailable: {exc}")

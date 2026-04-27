@@ -1,10 +1,11 @@
 """
-Token-bucket rate limiter — thread-safe singleton per process.
+Fixed-window rate limiter — thread-safe singleton per process.
 
 Limits both:
   * RPM — requests per minute
   * TPM — tokens per minute
 
+Each bucket refills to full capacity every 60 seconds (fixed window).
 When a limit is hit the caller **blocks** (queues) rather than failing,
 matching the behaviour described in NFR-014.
 
@@ -25,7 +26,7 @@ import structlog
 _logger = structlog.get_logger(__name__)
 
 # Module-level singleton
-_instance: "RateLimiter | None" = None
+_instance: RateLimiter | None = None
 _instance_lock = threading.Lock()
 
 
@@ -41,6 +42,18 @@ class _TokenBucket:
 
     def consume(self, n: int = 1) -> None:
         """Consume *n* tokens, blocking until tokens are available."""
+        if n <= 0:
+            return
+        # Clamp to capacity to prevent infinite blocking when a single
+        # request exceeds the bucket size (e.g. 200K tokens vs 150K TPM).
+        if n > self._capacity:
+            _logger.warning(
+                "Rate limit: request exceeds bucket capacity, clamping",
+                bucket=self._label,
+                requested=n,
+                capacity=self._capacity,
+            )
+            n = self._capacity
         while True:
             with self._lock:
                 self._replenish()
@@ -75,11 +88,10 @@ class _TokenBucket:
 class RateLimiter:
     """Process-level rate limiter shared across all threads and module instances.
 
-    Wraps two token buckets: one for request count (RPM) and one for
+    Wraps two fixed-window buckets: one for request count (RPM) and one for
     token count (TPM).
     """
 
-    _instances: ClassVar[dict[str, "RateLimiter"]] = {}
     _class_lock: ClassVar[threading.Lock] = threading.Lock()
 
     def __init__(self, rpm: int = 500, tpm: int = 150_000) -> None:
@@ -91,7 +103,7 @@ class RateLimiter:
     # ------------------------------------------------------------------
 
     @classmethod
-    def get_instance(cls, rpm: int = 500, tpm: int = 150_000) -> "RateLimiter":
+    def get_instance(cls, rpm: int = 500, tpm: int = 150_000) -> RateLimiter:
         """Return (or create) the process-level rate limiter singleton."""
         global _instance
         if _instance is None:
@@ -117,6 +129,15 @@ class RateLimiter:
         Blocks until both quota buckets have capacity.
         """
         self._rpm_bucket.consume(1)
+        if tokens > 0:
+            self._tpm_bucket.consume(tokens)
+
+    def record_tokens(self, tokens: int) -> None:
+        """Post-hoc TPM accounting — consume tokens after the actual count is known.
+
+        Call this *after* a provider response to enforce TPM limits on
+        subsequent requests.
+        """
         if tokens > 0:
             self._tpm_bucket.consume(tokens)
 

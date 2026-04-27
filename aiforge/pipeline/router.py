@@ -35,9 +35,9 @@ class Router:
 
     def __init__(
         self,
-        branches: dict[str, "BaseModule | None"],
+        branches: dict[str, BaseModule | None],
         *,
-        default: "BaseModule | None" = ...,  # type: ignore[assignment]
+        default: BaseModule | None = ...,  # type: ignore[assignment]
     ) -> None:
         """
         Args:
@@ -54,7 +54,7 @@ class Router:
         label: str,
         text: str,
         **kwargs: Any,
-    ) -> tuple["ModuleResponse | None", bool]:
+    ) -> tuple[ModuleResponse | None, bool]:
         """Resolve *label* to a branch and execute it.
 
         Returns:
@@ -86,7 +86,7 @@ class Router:
         label: str,
         text: str,
         **kwargs: Any,
-    ) -> tuple["ModuleResponse | None", bool]:
+    ) -> tuple[ModuleResponse | None, bool]:
         """Async version of :meth:`resolve` — calls ``module.arun()`` instead."""
         module = self._branches.get(label)
         if module is None and label not in self._branches:

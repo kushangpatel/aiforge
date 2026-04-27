@@ -29,13 +29,12 @@ if TYPE_CHECKING:
 class AnthropicProvider(LLMProvider):
     """LLM provider backed by Anthropic Claude."""
 
-    def __init__(self, settings: "AIForgeSettings") -> None:
+    def __init__(self, settings: AIForgeSettings) -> None:
         try:
             from langchain_anthropic import ChatAnthropic
         except ImportError as exc:
             raise ImportError(
-                "langchain-anthropic not installed. "
-                "Run: pip install \"aiforge[anthropicai]\""
+                'langchain-anthropic not installed. Run: pip install "aiforge[anthropicai]"'
             ) from exc
 
         self._settings = settings
@@ -67,9 +66,7 @@ class AnthropicProvider(LLMProvider):
             input_tokens=usage.get("input_tokens", 0),
             output_tokens=usage.get("output_tokens", 0),
             model=self._model_name,
-            finish_reason=getattr(response, "response_metadata", {}).get(
-                "stop_reason", "stop"
-            ),
+            finish_reason=getattr(response, "response_metadata", {}).get("stop_reason", "stop"),
             latency_ms=latency_ms,
         )
 
@@ -91,9 +88,7 @@ class AnthropicProvider(LLMProvider):
             input_tokens=usage.get("input_tokens", 0),
             output_tokens=usage.get("output_tokens", 0),
             model=self._model_name,
-            finish_reason=getattr(response, "response_metadata", {}).get(
-                "stop_reason", "stop"
-            ),
+            finish_reason=getattr(response, "response_metadata", {}).get("stop_reason", "stop"),
             latency_ms=latency_ms,
         )
 
@@ -108,13 +103,12 @@ class AnthropicProvider(LLMProvider):
 class AnthropicEmbeddingProvider(EmbeddingProvider):
     """Embedding provider backed by Voyage AI (recommended for Anthropic)."""
 
-    def __init__(self, settings: "AIForgeSettings") -> None:
+    def __init__(self, settings: AIForgeSettings) -> None:
         try:
             from langchain_voyageai import VoyageAIEmbeddings
         except ImportError as exc:
             raise ImportError(
-                "langchain-voyageai not installed. "
-                "Run: pip install \"aiforge[anthropicai]\""
+                'langchain-voyageai not installed. Run: pip install "aiforge[anthropicai]"'
             ) from exc
 
         self._model_name = settings.EMBEDDING_MODEL

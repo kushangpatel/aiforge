@@ -7,6 +7,7 @@
 # Core Dependencies (always required)
 # ============================================================
 langchain-core>=0.3.0
+langchain_community>=0.4.1
 langchain-text-splitters>=0.3.0
 langgraph>=0.2.0
 chromadb>=0.5.0
@@ -45,7 +46,7 @@ langchain-openai>=0.2.0
 # ============================================================
 # Playground UI (uncomment to enable Streamlit playground)
 # ============================================================
-# streamlit>=1.40.0
+streamlit>=1.40.0
 
 # ============================================================
 # Observability (uncomment to enable tracing)
@@ -70,3 +71,21 @@ langchain-openai>=0.2.0
 # mypy>=1.10.0
 # ruff>=0.5.0
 # httpx>=0.27.0                          # For FastAPI TestClient
+
+# ============================================================
+# Documentation
+# ============================================================
+mkdocs-material>=1.6.1
+
+# ============================================================
+# Vector Database Drivers (uncomment based on your choice of vector store)
+# ============================================================
+psycopg>=3.3.3
+pinecone>=8.1.1
+qdrant_client>=1.17.1
+
+# ============================================================
+# Optional: Add any additional dependencies for specific features or providers as needed.
+# ============================================================
+pyright>=1.1.408                    # For static type checking (optional but recommended)
+ruff>=0.15.9                        # For linting (optional but recommended)

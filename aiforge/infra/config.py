@@ -11,14 +11,13 @@ Layered priority (low → high):
 
 from __future__ import annotations
 
-import os
 from functools import lru_cache
 from pathlib import Path
-from typing import Any
+from typing import Any, Tuple, Type
 
 import yaml
 from pydantic import field_validator, model_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, PydanticBaseSettingsSource, SettingsConfigDict
 
 # ---------------------------------------------------------------------------
 # Supported combinations (provider → allowed embedding models)
@@ -48,21 +47,77 @@ _PROVIDER_EMBEDDING_MAP: dict[str, list[str]] = {
     ],
 }
 
+# ---------------------------------------------------------------------------
+# YAML settings source
+# ---------------------------------------------------------------------------
 
-def _load_yaml_config(yaml_path: Path) -> dict[str, Any]:
-    """Load YAML config file, returning empty dict if not present."""
-    if yaml_path.exists():
-        with yaml_path.open() as fh:
-            data = yaml.safe_load(fh) or {}
-        # Flatten top-level keys to AIFORGE_* env-var style
-        flat: dict[str, Any] = {}
-        for k, v in data.items():
+#: Path checked automatically on every settings load.
+_DEFAULT_YAML_PATH = Path("aiforge.yaml")
+
+#: Temporarily overridden by AIForgeSettings.from_yaml() for one instantiation.
+_YAML_PATH_OVERRIDE: Path | None = None
+
+
+class YamlConfigSettingsSource(PydanticBaseSettingsSource):
+    """Pydantic-settings v2 source that loads from an ``aiforge.yaml`` file.
+
+    Keys in the YAML file are expected to match the field names (without the
+    ``AIFORGE_`` prefix, e.g. ``model: gpt-4o``).  They are uppercased and
+    matched against the settings fields directly.
+    """
+
+    def __init__(
+        self,
+        settings_cls: Type[BaseSettings],
+        yaml_path: Path = _DEFAULT_YAML_PATH,
+    ) -> None:
+        super().__init__(settings_cls)
+        self._yaml_file = yaml_path
+        self._data = self._load()
+
+    def _load(self) -> dict[str, Any]:
+        """Read and normalise the YAML file, returning an empty dict if absent."""
+        if not self._yaml_file.exists():
+            return {}
+        with self._yaml_file.open() as fh:
+            raw = yaml.safe_load(fh) or {}
+        # Normalise keys: strip AIFORGE_ prefix if present, then uppercase.
+        normalised: dict[str, Any] = {}
+        for k, v in raw.items():
             key = k.upper()
-            if not key.startswith("AIFORGE_"):
-                key = f"AIFORGE_{key}"
-            flat[key] = v
-        return flat
-    return {}
+            if key.startswith("AIFORGE_"):
+                key = key[len("AIFORGE_"):]
+            normalised[key] = v
+        return normalised
+
+    def get_field_value(
+        self, field: Any, field_name: str
+    ) -> Tuple[Any, str, bool]:
+        # field_name is already the canonical name (without prefix).
+        value = self._data.get(field_name)
+        return value, field_name, value is not None
+
+    def field_is_complex(self, field: Any) -> bool:
+        return self.field_is_complex_cached(field)
+
+    def __call__(self) -> dict[str, Any]:
+        result: dict[str, Any] = {}
+        for field_name, field_info in self.settings_cls.model_fields.items():
+            value, _, found = self.get_field_value(field_info, field_name)
+            if found:
+                try:
+                    value = self.prepare_field_value(
+                        field_name, field_info, value, value  # type: ignore[arg-type]
+                    )
+                except Exception:  # noqa: BLE001
+                    pass
+                result[field_name] = value
+        return result
+
+
+# ---------------------------------------------------------------------------
+# Settings model
+# ---------------------------------------------------------------------------
 
 
 class AIForgeSettings(BaseSettings):
@@ -108,7 +163,24 @@ class AIForgeSettings(BaseSettings):
     # ------------------------------------------------------------------
     # Vector store
     # ------------------------------------------------------------------
+    VECTOR_STORE: str = "chroma"  # "chroma" | "pgvector" | registered name
     CHROMA_PERSIST_DIR: str = "./aiforge_data"
+
+    # pgvector
+    PGVECTOR_DSN: str | None = None  # e.g. postgresql://user:pass@host:5432/db
+    PGVECTOR_COLLECTION: str = "default"
+
+    # Pinecone
+    PINECONE_API_KEY: str | None = None
+    PINECONE_INDEX: str | None = None
+    PINECONE_ENVIRONMENT: str | None = (
+        None  # Deprecated — unused by factory (v3 SDK resolves endpoint automatically)
+    )
+
+    # Qdrant
+    QDRANT_URL: str | None = None
+    QDRANT_API_KEY: str | None = None
+    QDRANT_COLLECTION: str | None = None
 
     # ------------------------------------------------------------------
     # Rate limiting
@@ -121,6 +193,27 @@ class AIForgeSettings(BaseSettings):
     # ------------------------------------------------------------------
     COST_TRACKING_ENABLED: bool = True
     COST_WARN_THRESHOLD: float = 1.0  # USD per single call
+
+    # ------------------------------------------------------------------
+    # Request cache
+    # ------------------------------------------------------------------
+    CACHE_ENABLED: bool = True
+    CACHE_TTL: int = 3600  # seconds
+    CACHE_BACKEND: str = "memory"  # "memory" | "redis"
+    CACHE_MAX_ENTRIES: int = 1000
+    CACHE_REDIS_URL: str = "redis://localhost:6379/0"
+
+    # ------------------------------------------------------------------
+    # Webhooks
+    # ------------------------------------------------------------------
+    WEBHOOK_ENABLED: bool = True
+    WEBHOOK_TIMEOUT: float = 10.0  # seconds
+    WEBHOOK_ALLOW_INSECURE: bool = False  # allow http:// URLs (dev only)
+
+    # ------------------------------------------------------------------
+    # CORS
+    # ------------------------------------------------------------------
+    CORS_ORIGINS: str = "*"  # Comma-separated origins, or "*" for open access
 
     # ------------------------------------------------------------------
     # Tracing / observability
@@ -150,15 +243,77 @@ class AIForgeSettings(BaseSettings):
     PLAYGROUND_PORT: int = 8501
 
     # ------------------------------------------------------------------
+    # Custom prompt overrides (from aiforge.yaml custom_prompts: section)
+    # ------------------------------------------------------------------
+    CUSTOM_PROMPTS: dict[str, dict[str, str]] = {}
+
+    # ------------------------------------------------------------------
+    # Model router
+    # ------------------------------------------------------------------
+    MODEL_ROUTER_ENABLED: bool = True
+    DEFAULT_QUALITY: str = "medium"  # "high" | "medium" | "low"
+    PREFER_LOCAL: bool = False
+    CUSTOM_MODELS: list[dict[str, Any]] = []
+
+    # ------------------------------------------------------------------
+    # Custom pricing overrides
+    # ------------------------------------------------------------------
+    CUSTOM_PRICING: dict[str, dict[str, float]] = {}
+    CUSTOM_CONTEXT_WINDOWS: dict[str, int] = {}
+
+    # ------------------------------------------------------------------
+    # MCP (Model Context Protocol)
+    # ------------------------------------------------------------------
+    MCP_SERVERS: list[dict[str, Any]] = []
+
+    # ------------------------------------------------------------------
     # Validators
     # ------------------------------------------------------------------
 
     @field_validator("PROVIDER")
     @classmethod
     def validate_provider(cls, v: str) -> str:
-        allowed = {"openai", "anthropic", "ollama", "azure"}
+        # Built-in providers are always accepted.
+        builtin = {"openai", "anthropic", "ollama", "azure"}
+        if v in builtin:
+            return v
+        # For custom providers, check the runtime registry.
+        # Import lazily to avoid circular deps (config ← providers).
+        try:
+            from aiforge.providers import _REGISTRY, _ensure_registered
+
+            _ensure_registered()
+            if v in _REGISTRY:
+                return v
+        except ImportError:
+            pass
+        raise ValueError(
+            f"AIFORGE_PROVIDER must be a built-in ({sorted(builtin)}) "
+            f"or registered via register_provider(). Got {v!r}"
+        )
+
+    @field_validator("VECTOR_STORE")
+    @classmethod
+    def validate_vector_store(cls, v: str) -> str:
+        v = v.strip().lower()
+        if not v:
+            raise ValueError("AIFORGE_VECTOR_STORE must not be empty")
+        return v
+
+    @field_validator("CACHE_BACKEND")
+    @classmethod
+    def validate_cache_backend(cls, v: str) -> str:
+        allowed = {"memory", "redis"}
         if v not in allowed:
-            raise ValueError(f"AIFORGE_PROVIDER must be one of {allowed}, got {v!r}")
+            raise ValueError(f"AIFORGE_CACHE_BACKEND must be one of {sorted(allowed)}, got {v!r}")
+        return v
+
+    @field_validator("DEFAULT_QUALITY")
+    @classmethod
+    def validate_default_quality(cls, v: str) -> str:
+        allowed = {"high", "medium", "low"}
+        if v not in allowed:
+            raise ValueError(f"AIFORGE_DEFAULT_QUALITY must be one of {allowed}, got {v!r}")
         return v
 
     @field_validator("TEMPERATURE")
@@ -169,7 +324,7 @@ class AIForgeSettings(BaseSettings):
         return v
 
     @model_validator(mode="after")
-    def validate_provider_embedding_combo(self) -> "AIForgeSettings":
+    def validate_provider_embedding_combo(self) -> AIForgeSettings:
         """Ensure the embedding model is compatible with the chosen provider."""
         allowed = _PROVIDER_EMBEDDING_MAP.get(self.PROVIDER, [])
         if allowed and self.EMBEDDING_MODEL not in allowed:
@@ -184,7 +339,7 @@ class AIForgeSettings(BaseSettings):
         return self
 
     @model_validator(mode="after")
-    def validate_api_keys_present(self) -> "AIForgeSettings":
+    def validate_api_keys_present(self) -> AIForgeSettings:
         """Warn (not error) if a required API key looks missing."""
         key_map = {
             "openai": ("OPENAI_API_KEY", self.OPENAI_API_KEY),
@@ -204,27 +359,42 @@ class AIForgeSettings(BaseSettings):
         return self
 
     # ------------------------------------------------------------------
+    # ------------------------------------------------------------------
+    # Custom settings sources
+    # ------------------------------------------------------------------
+
+    @classmethod
+    def settings_customise_sources(
+        cls,
+        settings_cls: Type[BaseSettings],
+        init_settings: PydanticBaseSettingsSource,
+        env_settings: PydanticBaseSettingsSource,
+        dotenv_settings: PydanticBaseSettingsSource,
+        file_secret_settings: PydanticBaseSettingsSource,
+    ) -> Tuple[PydanticBaseSettingsSource, ...]:
+        """Priority order (highest → lowest): init > env > .env > yaml > defaults."""
+        yaml_path = _YAML_PATH_OVERRIDE if _YAML_PATH_OVERRIDE is not None else _DEFAULT_YAML_PATH
+        return (
+            init_settings,
+            env_settings,
+            dotenv_settings,
+            YamlConfigSettingsSource(settings_cls, yaml_path=yaml_path),
+            file_secret_settings,
+        )
+
+    # ------------------------------------------------------------------
     # Class-level helpers
     # ------------------------------------------------------------------
 
     @classmethod
-    def from_yaml(cls, path: str | Path, **overrides: Any) -> "AIForgeSettings":
-        """Load settings from a YAML file with optional code-level overrides."""
-        yaml_data = _load_yaml_config(Path(path))
-        # Set env vars temporarily so Pydantic Settings picks them up
-        old_env: dict[str, str | None] = {}
-        for k, v in yaml_data.items():
-            old_env[k] = os.environ.get(k)
-            os.environ[k] = str(v)
+    def from_yaml(cls, path: str | Path, **overrides: Any) -> AIForgeSettings:
+        """Load settings from a specific YAML file with optional code-level overrides."""
+        global _YAML_PATH_OVERRIDE  # noqa: PLW0603
+        _YAML_PATH_OVERRIDE = Path(path)
         try:
-            instance = cls(**overrides)
+            return cls(**overrides)
         finally:
-            for k, old in old_env.items():
-                if old is None:
-                    os.environ.pop(k, None)
-                else:
-                    os.environ[k] = old
-        return instance
+            _YAML_PATH_OVERRIDE = None
 
 
 @lru_cache(maxsize=1)
@@ -234,7 +404,21 @@ def get_settings() -> AIForgeSettings:
     The first call reads YAML + env vars. Module constructors that accept
     kwargs create a local patched copy via ``AIForgeSettings(**kwargs)``.
     """
-    yaml_path = Path("aiforge.yaml")
-    if yaml_path.exists():
-        return AIForgeSettings.from_yaml(yaml_path)
-    return AIForgeSettings()
+    settings = AIForgeSettings()
+
+    apply_runtime_overrides(settings)
+
+    return settings
+
+
+def apply_runtime_overrides(settings: AIForgeSettings) -> None:
+    """Apply pricing/context runtime tables from a settings object."""
+    from aiforge.core.pricing import (
+        apply_context_window_overrides,
+        apply_pricing_overrides,
+    )
+
+    if settings.CUSTOM_PRICING:
+        apply_pricing_overrides(settings.CUSTOM_PRICING)
+    if settings.CUSTOM_CONTEXT_WINDOWS:
+        apply_context_window_overrides(settings.CUSTOM_CONTEXT_WINDOWS)

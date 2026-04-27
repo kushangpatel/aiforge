@@ -17,7 +17,7 @@ from collections.abc import AsyncGenerator
 from typing import TYPE_CHECKING, Any
 
 from aiforge.core.provider import EmbeddingProvider, LLMProvider
-from aiforge.core.types import CompletionResult, ConfigError, ProviderError
+from aiforge.core.types import CompletionResult, ConfigError
 from aiforge.infra.retry import retry_embedding_call, retry_llm_call
 from aiforge.providers._utils import to_lc_messages as _to_lc_messages
 from aiforge.providers.openai import _wrap_openai_error
@@ -29,7 +29,7 @@ if TYPE_CHECKING:
 class AzureProvider(LLMProvider):
     """LLM provider backed by Azure OpenAI."""
 
-    def __init__(self, settings: "AIForgeSettings") -> None:
+    def __init__(self, settings: AIForgeSettings) -> None:
         try:
             from langchain_openai import AzureChatOpenAI
         except ImportError as exc:
@@ -40,9 +40,7 @@ class AzureProvider(LLMProvider):
         if not settings.AZURE_OPENAI_ENDPOINT:
             from aiforge.core.types import ConfigError
 
-            raise ConfigError(
-                "AIFORGE_AZURE_OPENAI_ENDPOINT must be set when provider=azure"
-            )
+            raise ConfigError("AIFORGE_AZURE_OPENAI_ENDPOINT must be set when provider=azure")
 
         self._model_name = settings.AZURE_OPENAI_DEPLOYMENT or settings.MODEL
         self._llm = AzureChatOpenAI(
@@ -51,7 +49,7 @@ class AzureProvider(LLMProvider):
             api_key=settings.AZURE_OPENAI_API_KEY,  # type: ignore[arg-type]
             api_version=settings.AZURE_OPENAI_API_VERSION,
             temperature=settings.TEMPERATURE,
-            max_tokens=settings.MAX_TOKENS,
+            max_tokens=settings.MAX_TOKENS,  # type: ignore[call-arg]
         )
 
     @property
@@ -74,9 +72,7 @@ class AzureProvider(LLMProvider):
             input_tokens=usage.get("input_tokens", 0),
             output_tokens=usage.get("output_tokens", 0),
             model=self._model_name,
-            finish_reason=getattr(response, "response_metadata", {}).get(
-                "finish_reason", "stop"
-            ),
+            finish_reason=getattr(response, "response_metadata", {}).get("finish_reason", "stop"),
             latency_ms=latency_ms,
         )
 
@@ -98,9 +94,7 @@ class AzureProvider(LLMProvider):
             input_tokens=usage.get("input_tokens", 0),
             output_tokens=usage.get("output_tokens", 0),
             model=self._model_name,
-            finish_reason=getattr(response, "response_metadata", {}).get(
-                "finish_reason", "stop"
-            ),
+            finish_reason=getattr(response, "response_metadata", {}).get("finish_reason", "stop"),
             latency_ms=latency_ms,
         )
 
@@ -115,7 +109,7 @@ class AzureProvider(LLMProvider):
 class AzureEmbeddingProvider(EmbeddingProvider):
     """Embedding provider backed by Azure OpenAI Embeddings."""
 
-    def __init__(self, settings: "AIForgeSettings") -> None:
+    def __init__(self, settings: AIForgeSettings) -> None:
         try:
             from langchain_openai import AzureOpenAIEmbeddings
         except ImportError as exc:
@@ -124,9 +118,7 @@ class AzureEmbeddingProvider(EmbeddingProvider):
             ) from exc
 
         if not settings.AZURE_OPENAI_ENDPOINT:
-            raise ConfigError(
-                "AIFORGE_AZURE_OPENAI_ENDPOINT must be set when provider=azure"
-            )
+            raise ConfigError("AIFORGE_AZURE_OPENAI_ENDPOINT must be set when provider=azure")
 
         self._model_name = settings.EMBEDDING_MODEL
         self._embeddings = AzureOpenAIEmbeddings(

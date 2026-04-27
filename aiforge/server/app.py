@@ -8,8 +8,8 @@ Start with:
 
 from __future__ import annotations
 
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from typing import Any, AsyncGenerator
 
 import structlog
 from fastapi import FastAPI, Request
@@ -46,11 +46,14 @@ def create_app() -> FastAPI:
         extract,
         generate,
         health,
+        jobs,
         moderate,
         pipeline,
         qa,
         search,
         summarize,
+        translate,
+        vision,
     )
 
     settings = get_settings()
@@ -62,11 +65,13 @@ def create_app() -> FastAPI:
         lifespan=_lifespan,
     )
 
-    # CORS — open by default for dev; tighten in production via env vars
+    # CORS — open by default for dev; tighten in production via AIFORGE_CORS_ORIGINS
+    cors_origins = [o.strip() for o in settings.CORS_ORIGINS.split(",") if o.strip()]
+    allow_credentials = "*" not in cors_origins
     application.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
-        allow_credentials=True,
+        allow_origins=cors_origins,
+        allow_credentials=allow_credentials,
         allow_methods=["*"],
         allow_headers=["*"],
     )
@@ -83,7 +88,10 @@ def create_app() -> FastAPI:
     application.include_router(generate.router)
     application.include_router(chat.router)
     application.include_router(moderate.router)
+    application.include_router(translate.router)
+    application.include_router(vision.router)
     application.include_router(pipeline.router)
+    application.include_router(jobs.router)
 
     @application.exception_handler(Exception)
     async def _global_exception_handler(request: Request, exc: Exception) -> JSONResponse:

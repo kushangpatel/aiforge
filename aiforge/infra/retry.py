@@ -12,14 +12,15 @@ Usage:
 from __future__ import annotations
 
 import logging
-from typing import Any, Callable, TypeVar
+from collections.abc import Callable
+from typing import Any, TypeVar
 
 from tenacity import (
     before_sleep_log,
     retry,
     retry_if_exception_type,
     stop_after_attempt,
-    wait_exponential,
+    wait_exponential_jitter,
 )
 
 from aiforge.core.types import APIConnectionError, APITimeoutError, RateLimitError
@@ -43,7 +44,7 @@ def retry_llm_call(
     """
     return retry(  # type: ignore[return-value]
         stop=stop_after_attempt(max_attempts),
-        wait=wait_exponential(multiplier=1, min=min_wait, max=max_wait),
+        wait=wait_exponential_jitter(initial=min_wait, max=max_wait, jitter=2),
         retry=retry_if_exception_type(_LLM_RETRYABLE),
         before_sleep=before_sleep_log(_logger, logging.WARNING),
         reraise=True,
@@ -58,7 +59,7 @@ def retry_embedding_call(
     """Decorator factory — wraps an embedding call with retry logic."""
     return retry(  # type: ignore[return-value]
         stop=stop_after_attempt(max_attempts),
-        wait=wait_exponential(multiplier=1, min=min_wait, max=max_wait),
+        wait=wait_exponential_jitter(initial=min_wait, max=max_wait, jitter=2),
         retry=retry_if_exception_type(_LLM_RETRYABLE),
         before_sleep=before_sleep_log(_logger, logging.WARNING),
         reraise=True,

@@ -1,5 +1,13 @@
-"""Semantic Search page."""
+"""Semantic Search playground page."""
+
 import streamlit as st
 
 st.title("🔍 Semantic Search")
-st.info("SemanticSearch module coming soon. Implement `aiforge.modules.search` first.")
+st.caption("Embed, index, and semantically query any text corpus")
+
+try:
+    from aiforge.modules.search.widget import render
+
+    render()
+except ImportError as exc:
+    st.error(f"Module unavailable: {exc}")

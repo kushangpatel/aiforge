@@ -17,34 +17,14 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# ---------------------------------------------------------------------------
-# Sidebar navigation
-# ---------------------------------------------------------------------------
-
-PAGES = {
-    "🏠 Home": None,
-    "📝 Summarize": "pages/summarize.py",
-    "❓ DocQA": "pages/qa.py",
-    "🔍 Semantic Search": "pages/search.py",
-    "🏷️ Classify": "pages/classify.py",
-    "🧩 Extract": "pages/extract.py",
-    "✍️ Generate": "pages/generate.py",
-    "💬 Chat": "pages/chat.py",
-    "🛡️ Moderate": "pages/moderate.py",
-    "⚙️ Settings": "pages/settings.py",
-}
-
-with st.sidebar:
-    st.title("⚡ AIForge")
-    st.caption("Plug-and-play AI toolkit")
-    st.divider()
-    selected = st.radio("Navigate", list(PAGES.keys()), label_visibility="collapsed")
 
 # ---------------------------------------------------------------------------
-# Home page
+# Home page (rendered via st.navigation)
 # ---------------------------------------------------------------------------
 
-if selected == "🏠 Home" or PAGES.get(selected) is None:
+
+def _home_page() -> None:
+    """Render the home / landing page."""
     st.title("⚡ AIForge Playground")
     st.write(
         "Welcome to the AIForge interactive playground. "
@@ -70,5 +50,41 @@ if selected == "🏠 Home" or PAGES.get(selected) is None:
     st.divider()
     st.info(
         "**Available modules:** Summarize · DocQA · Semantic Search · "
-        "Classify · Extract · Generate · Chat · Moderate"
+        "Classify · Extract · Generate · Chat · Moderate · Translate · "
+        "Vision · Pipeline"
     )
+
+
+# ---------------------------------------------------------------------------
+# Sidebar navigation (st.navigation replaces the auto-generated MPA sidebar)
+# ---------------------------------------------------------------------------
+
+with st.sidebar:
+    st.title("⚡ AIForge")
+    st.caption("Plug-and-play AI toolkit")
+
+pg = st.navigation(
+    {
+        "": [
+            st.Page(_home_page, title="Home", icon="🏠", default=True),
+        ],
+        "Modules": [
+            st.Page("pages/summarize.py", title="Summarize", icon="📝"),
+            st.Page("pages/qa.py", title="DocQA", icon="❓"),
+            st.Page("pages/search.py", title="Semantic Search", icon="🔍"),
+            st.Page("pages/classify.py", title="Classify", icon="🏷️"),
+            st.Page("pages/extract.py", title="Extract", icon="🧩"),
+            st.Page("pages/generate.py", title="Generate", icon="✍️"),
+            st.Page("pages/chat.py", title="Chat", icon="💬"),
+            st.Page("pages/moderate.py", title="Moderate", icon="🛡️"),
+            st.Page("pages/translate.py", title="Translate", icon="🌐"),
+            st.Page("pages/vision.py", title="Vision", icon="👁️"),
+            st.Page("pages/pipeline.py", title="Pipeline", icon="🔗"),
+        ],
+        "System": [
+            st.Page("pages/settings.py", title="Settings", icon="⚙️"),
+        ],
+    }
+)
+
+pg.run()

@@ -1,0 +1,86 @@
+site_name: AIForge
+site_description: Plug-and-play AI toolkit for product teams
+site_url: ""
+repo_url: ""
+
+theme:
+  name: material
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: amber
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: amber
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+  icon:
+    repo: fontawesome/brands/github
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.tabbed:
+      alternate_style: true
+  - toc:
+      permalink: true
+  - tables
+  - attr_list
+
+nav:
+  - Home: index.md
+  - Getting Started:
+      - Quickstart: quickstart.md
+      - Configuration: configuration.md
+      - Providers: providers.md
+  - Modules:
+      - Summarizer: modules/summarize.md
+      - Classifier: modules/classify.md
+      - Extractor: modules/extract.md
+      - Generator: modules/generate.md
+      - Moderator: modules/moderate.md
+      - Translator: modules/translate.md
+      - Vision: modules/vision.md
+      - DocQA (RAG): modules/qa.md
+      - Semantic Search: modules/search.md
+      - Chat Agent: modules/chat.md
+  - Infrastructure:
+      - Pipelines: pipelines.md
+      - Cost Tracking: cost-tracking.md
+      - API Server: api-server.md
+      - API Authentication: api-auth.md
+      - Playground: playground.md
+      - MCP Integration: mcp.md
+  - Architecture: architecture.md
+  - CLI Reference: cli.md
+
+plugins:
+  - search
+
+not_in_nav: |
+  HOSTING.md
+
+exclude_docs: |
+  HOSTING.md

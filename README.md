@@ -18,6 +18,7 @@
 | **Provider-Agnostic** | Swap OpenAI → Anthropic → Ollama (local) by changing 1 config value |
 | **Production-Ready** | Retry, rate limiting, streaming, cost tracking out of the box |
 | **Composable Pipelines** | Chain modules into workflows (e.g., extract → classify → summarize) |
+| **Plugin System** | Extend with custom modules, providers, and vector stores via a unified registry |
 | **Built-in Observability** | OpenTelemetry + LangSmith tracing, structured logging, cost tracking |
 | **UI Playground** | Streamlit-powered interactive demo per module — launch with 1 command |
 | **REST API** | Optional FastAPI server exposing all modules as HTTP endpoints |
@@ -31,6 +32,7 @@
 | **LangChain** | Core LLM abstraction for all 8 modules |
 | **LangGraph** | Stateful multi-turn chat agent & RAG agentic loops |
 | **ChromaDB** | Default vector database for semantic search & RAG |
+| **Pinecone / Qdrant / pgvector** | Production-scale vector store alternatives (install as extras) |
 | **FastAPI** | REST API server |
 | **Streamlit** | Interactive UI playground |
 | **Pydantic v2** | Configuration, schemas, input/output validation |
@@ -111,10 +113,27 @@ pip install -e ".[all]"
 # Install specific extras
 pip install -e ".[anthropic]"          # Anthropic + Voyage AI embeddings
 pip install -e ".[local]"              # Ollama (local models)
+pip install -e ".[pinecone]"           # Pinecone vector store
+pip install -e ".[qdrant]"             # Qdrant vector store
+pip install -e ".[pgvector]"           # PostgreSQL + pgvector
 pip install -e ".[server]"             # FastAPI server + Streamlit playground
 pip install -e ".[observability]"      # OpenTelemetry + LangSmith
 pip install -e ".[docs]"              # PDF, DOCX, HTML document loaders
 pip install -e ".[all]"               # Everything
+```
+
+---
+
+## Lint and Type checking
+
+```bash
+# Lint checker
+ruff check .
+# Output the lint findings to a file
+ruff check . > ruff_output.txt
+
+# Type checker
+pyright .
 ```
 
 ---
@@ -285,7 +304,12 @@ AIForge uses a layered configuration system:
 | `AIFORGE_ANTHROPIC_API_KEY` | Yes (if Anthropic) | — | Anthropic API key |
 | `AIFORGE_VOYAGE_API_KEY` | Yes (if Anthropic) | — | Voyage AI key for Anthropic embeddings |
 | `AIFORGE_OLLAMA_BASE_URL` | No | `http://localhost:11434` | Ollama server URL |
+| `AIFORGE_VECTOR_STORE` | No | `chroma` | Vector backend (`chroma`, `pgvector`, `pinecone`, `qdrant`) |
 | `AIFORGE_CHROMA_PERSIST_DIR` | No | `./aiforge_data` | ChromaDB data directory |
+| `AIFORGE_PGVECTOR_DSN` | Yes (if pgvector) | — | PostgreSQL connection string |
+| `AIFORGE_PINECONE_API_KEY` | Yes (if Pinecone) | — | Pinecone API key |
+| `AIFORGE_PINECONE_INDEX` | Yes (if Pinecone) | — | Pinecone index name |
+| `AIFORGE_QDRANT_URL` | Yes (if Qdrant) | — | Qdrant server URL |
 | `AIFORGE_TRACING_ENABLED` | No | `false` | Enable LangSmith/OTel tracing |
 | `AIFORGE_COST_TRACKING_ENABLED` | No | `true` | Enable cost tracking |
 | `AIFORGE_API_KEY` | No | — | Bearer token auth for REST API |
@@ -391,10 +415,15 @@ aiforge/
 ├── aiforge/                           # SDK source code
 │   ├── __init__.py                    # Public API exports
 │   ├── __version__.py                 # Version string
+│   ├── registry.py                    # Plugin registry (modules, providers, vector stores)
 │   ├── core/                          # Provider-agnostic abstractions
 │   │   ├── types.py                   # BaseModule, CompletionResult, error hierarchy
 │   │   ├── provider.py               # LLMProvider, EmbeddingProvider ABCs
 │   │   ├── vectorstore.py            # VectorStoreAdapter + ChromaDB default
+│   │   ├── vectorstore_pinecone.py    # PineconeVectorStore adapter
+│   │   ├── vectorstore_qdrant.py      # QdrantVectorStore adapter
+│   │   ├── vectorstore_pgvector.py    # PgVectorStore adapter (PostgreSQL + pgvector)
+│   │   ├── vectorstore_factory.py     # Config-driven vector store factory
 │   │   ├── doc_loader.py             # Document loading (files, directories, git)
 │   │   ├── text_splitter.py          # Language-aware chunking
 │   │   └── pricing.py                # Token pricing tables
@@ -520,29 +549,71 @@ make docker          # Build Docker image
 
 ## Extending AIForge
 
+AIForge ships with a **plugin system** powered by a unified registry. Register custom modules, providers, and vector stores — then use them interchangeably with built-ins.
+
 ### Custom Module
 
 ```python
 from aiforge.core.types import BaseModule, ModuleResponse
+from aiforge.registry import register_module
 
 class SentimentAnalyzer(BaseModule):
-    def run(self, text: str) -> ModuleResponse:
+    def run(self, text: str, **kwargs) -> ModuleResponse:
         result = self._call_llm(f"Classify sentiment: {text}")
-        return SentimentResponse(sentiment=result.text.strip(), cost=result.cost)
+        return ModuleResponse(text=result.text.strip(), cost=result.cost)
+
+    async def arun(self, text: str, **kwargs) -> ModuleResponse:
+        result = await self._acall_llm(f"Classify sentiment: {text}")
+        return ModuleResponse(text=result.text.strip(), cost=result.cost)
+
+register_module("sentiment", SentimentAnalyzer)
 ```
 
 ### Custom Provider
 
 ```python
-from aiforge.core.provider import LLMProvider
-from aiforge.providers import register_provider
+from aiforge.core.provider import LLMProvider, EmbeddingProvider
+from aiforge.registry import register_provider
 
 class MyProvider(LLMProvider):
-    def complete(self, messages, **kwargs):
-        ...
+    def complete(self, messages, **kwargs): ...
+    async def complete_async(self, messages, **kwargs): ...
+    async def stream(self, messages, **kwargs): ...
 
-register_provider("my_provider", MyProvider)
+class MyEmbeddingProvider(EmbeddingProvider):
+    def embed(self, texts): ...
+    def embed_query(self, text): ...
+
+register_provider("my_provider", MyProvider, MyEmbeddingProvider)
 ```
+
+### Custom Vector Store
+
+```python
+from aiforge.core.vectorstore import VectorStoreAdapter
+from aiforge.registry import register_vectorstore
+
+class WeaviateStore(VectorStoreAdapter):
+    def add_documents(self, texts, embeddings, metadatas, ids): ...
+    def query(self, embedding, top_k, filter, include_embeddings): ...
+    def delete_collection(self, name): ...
+    def list_collections(self): ...
+    def collection_stats(self, name): ...
+
+register_vectorstore("weaviate", WeaviateStore)
+```
+
+### Registry Discovery
+
+```python
+from aiforge.registry import list_modules, list_providers, list_vectorstores
+
+print(list_modules())       # ['chat', 'classify', ..., 'summarize']
+print(list_providers())     # ['anthropic', 'azure', 'ollama', 'openai']
+print(list_vectorstores())  # ['chroma', 'pgvector', 'pinecone', 'qdrant']
+```
+
+See [Plugin System docs](docs/configuration.md#plugin-system) for full details.
 
 ---
 

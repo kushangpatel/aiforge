@@ -11,22 +11,43 @@ Get AIForge running in under 5 minutes.
 pip install aiforge
 
 # Specific providers
-pip install aiforge[anthropic]
-pip install aiforge[local]             # Ollama
-pip install aiforge[azure]
+pip install "aiforge[anthropicai]"      # Anthropic + Voyage AI embeddings
+pip install "aiforge[local]"            # Ollama
 
 # Everything
-pip install aiforge[all]
+pip install "aiforge[all]"
 
-# API server + UI
-pip install aiforge[server]            # includes FastAPI + Streamlit
+# Vector store backends
+pip install "aiforge[pinecone]"         # Pinecone
+pip install "aiforge[qdrant]"           # Qdrant
+pip install "aiforge[pgvector]"         # PostgreSQL + pgvector
+
+# API server + Playground UI
+pip install "aiforge[server]"           # FastAPI + Uvicorn
+pip install "aiforge[playground]"       # Streamlit UI
 ```
+
+### Plugin System
+
+AIForge auto-registers all 8 built-in modules and vector stores on import. You can extend it with custom plugins:
+
+```python
+from aiforge.registry import register_module, list_modules
+
+# Register a custom module
+register_module("sentiment", SentimentAnalyzer)
+
+# See all available modules
+print(list_modules())  # ['chat', 'classify', ..., 'sentiment', 'summarize']
+```
+
+See the [Plugin System](configuration.md#plugin-system) section for full details on custom modules, providers, and vector stores.
 
 ## 2. Scaffold Config
 
 ```bash
 aiforge init
-# Creates aiforge.yaml + .env.example + .gitignore
+# Creates aiforge.yaml + .env
 ```
 
 ## 3. Set API Key
@@ -76,10 +97,10 @@ Each module is self-contained and can be used independently:
 
 ```python
 # Install only what you need
-pip install aiforge[openai]        # Core + OpenAI provider
-pip install aiforge[anthropic]     # Core + Anthropic provider
-pip install aiforge[local]         # Core + Ollama provider
-pip install aiforge[all]           # Everything
+pip install aiforge                        # Core + OpenAI provider
+pip install "aiforge[anthropicai]"         # Core + Anthropic + Voyage AI
+pip install "aiforge[local]"               # Core + Ollama provider
+pip install "aiforge[all]"                 # Everything
 
 # Use only what you need
 from aiforge import Summarizer     # Just summarization
@@ -220,6 +241,12 @@ print(result["summarize"].summary)
 aiforge serve --host 0.0.0.0 --port 8000
 ```
 
+> **SDK or API?** If your code is Python, import the SDK directly for zero
+> overhead and full type safety.  Use the HTTP API when non-Python services need
+> access or you want a shared deployment.  See the
+> [SDK vs HTTP API](api-server.md#sdk-vs-http-api--when-to-use-which) guide for
+> details.
+
 ## Launch Playground UI
 
 ```bash
@@ -231,6 +258,7 @@ aiforge playground
 
 ## Next Steps
 
+- [CLI](cli.md) — Command-line interface reference
 - [Configuration](configuration.md) — YAML, env vars, and code-level config
 - [Providers](providers.md) — Swap between OpenAI, Anthropic, Ollama, Azure
 - [Pipelines](pipelines.md) — Chain modules together

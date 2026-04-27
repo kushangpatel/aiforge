@@ -26,27 +26,29 @@ import structlog
 #   Typical long base64 tokens — must start with a letter/digit and be ≥40 chars
 #   with no hyphens (UUIDs/IDs have hyphens; real secrets usually don't)
 _SECRET_PATTERN = re.compile(
-    r"(sk-[A-Za-z0-9\-_]{20,}"      # OpenAI / Cohere style
-    r"|ant-[A-Za-z0-9\-_]{20,}"     # Anthropic style
-    r"|pa-[A-Za-z0-9\-_]{20,}"      # Voyage AI style
+    r"(sk-[A-Za-z0-9\-_]{20,}"  # OpenAI / Cohere style
+    r"|ant-[A-Za-z0-9\-_]{20,}"  # Anthropic style
+    r"|pa-[A-Za-z0-9\-_]{20,}"  # Voyage AI style
     r"|[A-Za-z0-9+/]{40,}={0,2})",  # Long base64 without hyphens (≥40 chars)
     re.ASCII,
 )
 
-_SENSITIVE_KEYS = frozenset({
-    "api_key",
-    "apikey",
-    "secret",
-    "token",
-    "password",
-    "passwd",
-    "authorization",
-    "openai_api_key",
-    "anthropic_api_key",
-    "voyage_api_key",
-    "langsmith_api_key",
-    "azure_openai_api_key",
-})
+_SENSITIVE_KEYS = frozenset(
+    {
+        "api_key",
+        "apikey",
+        "secret",
+        "token",
+        "password",
+        "passwd",
+        "authorization",
+        "openai_api_key",
+        "anthropic_api_key",
+        "voyage_api_key",
+        "langsmith_api_key",
+        "azure_openai_api_key",
+    }
+)
 
 
 def _strip_secrets(

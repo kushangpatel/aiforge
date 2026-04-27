@@ -33,9 +33,7 @@ class PipelineResult(BaseModel):
         base = handler(self)
         # Re-serialize steps using each subclass's own model_dump so extra fields
         # (e.g. .summary, .label) are preserved in JSON output.
-        base["steps"] = {
-            name: resp.model_dump() for name, resp in self.steps.items()
-        }
+        base["steps"] = {name: resp.model_dump() for name, resp in self.steps.items()}
         return base
 
     @property

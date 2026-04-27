@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import threading
 import time
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -64,6 +64,39 @@ class TestRateLimiter:
             t.join(timeout=5)
 
         assert not errors, f"Thread errors: {errors}"
+
+    def test_consume_zero_tokens_is_noop(self) -> None:
+        """Consuming 0 tokens should return immediately without blocking."""
+        limiter = RateLimiter(rpm=100, tpm=100)
+        start = time.monotonic()
+        limiter._tpm_bucket.consume(0)
+        elapsed = time.monotonic() - start
+        assert elapsed < 0.1
+
+    def test_consume_over_capacity_clamps_and_succeeds(self) -> None:
+        """Requesting more tokens than capacity should clamp, not deadlock."""
+        limiter = RateLimiter(rpm=100, tpm=10)
+        start = time.monotonic()
+        # Request 1000 tokens when capacity is 10 — should clamp to 10
+        limiter._tpm_bucket.consume(1000)
+        elapsed = time.monotonic() - start
+        # Must complete without deadlock (< 2s to allow for a window reset)
+        assert elapsed < 2.0
+        assert limiter._tpm_bucket._tokens == 0
+
+    def test_record_tokens_consumes_tpm(self) -> None:
+        """record_tokens should decrement the TPM bucket."""
+        limiter = RateLimiter(rpm=100, tpm=1000)
+        initial = limiter._tpm_bucket._tokens
+        limiter.record_tokens(200)
+        assert limiter._tpm_bucket._tokens == initial - 200
+
+    def test_record_tokens_zero_is_noop(self) -> None:
+        """record_tokens(0) should not change the bucket."""
+        limiter = RateLimiter(rpm=100, tpm=1000)
+        initial = limiter._tpm_bucket._tokens
+        limiter.record_tokens(0)
+        assert limiter._tpm_bucket._tokens == initial
 
 
 class TestRetryDecorators:

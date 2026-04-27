@@ -115,13 +115,19 @@ MODEL_CONTEXT_WINDOWS: dict[str, int] = {
 
 _DEFAULT_CONTEXT_WINDOW = 8_192
 
-# Runtime override table (populated from config at startup)
+# Runtime override tables (populated from config at startup)
 _pricing_overrides: dict[str, dict[str, float]] = {}
+_context_window_overrides: dict[str, int] = {}
 
 
 def apply_pricing_overrides(overrides: dict[str, Any]) -> None:
-    """Merge runtime overrides into the pricing table (from aiforge.yaml)."""
+    """Merge runtime pricing overrides (from ``custom_pricing`` in config)."""
     _pricing_overrides.update(overrides)
+
+
+def apply_context_window_overrides(overrides: dict[str, int]) -> None:
+    """Merge runtime context-window overrides (from ``custom_context_windows`` in config)."""
+    _context_window_overrides.update(overrides)
 
 
 def get_model_pricing(model: str) -> dict[str, float] | None:
@@ -157,10 +163,11 @@ def calculate_cost(
 
 
 def get_context_window(model: str) -> int:
-    """Return the context window (max tokens) for *model*."""
-    if model in MODEL_CONTEXT_WINDOWS:
-        return MODEL_CONTEXT_WINDOWS[model]
-    base = model.rsplit("-", 1)[0] if "-" in model else model
-    if base in MODEL_CONTEXT_WINDOWS:
-        return MODEL_CONTEXT_WINDOWS[base]
+    """Return the context window (max tokens) for *model*, checking overrides first."""
+    for table in (_context_window_overrides, MODEL_CONTEXT_WINDOWS):
+        if model in table:
+            return table[model]
+        base = model.rsplit("-", 1)[0] if "-" in model else model
+        if base in table:
+            return table[base]
     return _DEFAULT_CONTEXT_WINDOW

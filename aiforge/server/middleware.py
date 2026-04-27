@@ -9,9 +9,11 @@ Provides:
 
 from __future__ import annotations
 
+import secrets
 import time
 import uuid
-from typing import TYPE_CHECKING, Callable
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any
 
 import structlog
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -23,15 +25,26 @@ if TYPE_CHECKING:
 
 _logger = structlog.get_logger(__name__)
 
+# Paths that never require authentication
+_PUBLIC_PATHS: frozenset[str] = frozenset(
+    {
+        "/health",
+        "/health/ready",
+        "/docs",
+        "/openapi.json",
+        "/redoc",
+    }
+)
+
 
 class AuthMiddleware(BaseHTTPMiddleware):
     """Bearer-token authentication middleware.
 
-    Skips auth for the ``/health`` route so load-balancer probes always pass.
+    Skips auth for public paths (health probes, docs) so load-balancer probes always pass.
     Only active when ``AIFORGE_API_KEY`` is configured.
     """
 
-    def __init__(self, app: "Any", api_key: str | None = None) -> None:  # noqa: ANN401
+    def __init__(self, app: Any, api_key: str | None = None) -> None:  # noqa: ANN401
         super().__init__(app)
         self._api_key = api_key
 
@@ -40,19 +53,31 @@ class AuthMiddleware(BaseHTTPMiddleware):
         if not self._api_key:
             return await call_next(request)
 
-        # Health check is always public
-        if request.url.path in ("/health", "/", "/docs", "/openapi.json", "/redoc"):
+        # Public paths are always open
+        if request.url.path in _PUBLIC_PATHS:
             return await call_next(request)
 
         auth_header = request.headers.get("Authorization", "")
         if not auth_header.startswith("Bearer "):
+            _logger.warning(
+                "Auth failure: missing or invalid header",
+                path=request.url.path,
+                method=request.method,
+                client=request.client.host if request.client else None,
+            )
             return JSONResponse(
                 status_code=401,
                 content={"detail": "Missing or invalid Authorization header"},
             )
-        token = auth_header.removeprefix("Bearer ").strip()
-        if token != self._api_key:
-            return JSONResponse(status_code=403, content={"detail": "Forbidden"})
+        token = auth_header[len("Bearer ") :]
+        if not secrets.compare_digest(token, self._api_key):
+            _logger.warning(
+                "Auth failure: invalid API key",
+                path=request.url.path,
+                method=request.method,
+                client=request.client.host if request.client else None,
+            )
+            return JSONResponse(status_code=401, content={"detail": "Invalid API key"})
 
         return await call_next(request)
 

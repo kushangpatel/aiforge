@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import warnings
 from pathlib import Path
-from unittest.mock import patch
 
 import pytest
 import yaml
+from pydantic import ValidationError
 
 from aiforge.infra.config import AIForgeSettings
 
@@ -28,16 +28,16 @@ class TestDefaults:
 
 class TestValidation:
     def test_invalid_provider_raises(self) -> None:
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             AIForgeSettings(PROVIDER="unsupported_provider")
 
     def test_temperature_out_of_range_raises(self) -> None:
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             AIForgeSettings(TEMPERATURE=3.0, OPENAI_API_KEY="sk-test")
 
     def test_embedding_mismatch_raises(self) -> None:
         """voyage-3 is an Anthropic-ecosystem embedding, not valid for openai provider."""
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             AIForgeSettings(
                 PROVIDER="openai",
                 EMBEDDING_MODEL="voyage-3",
@@ -97,3 +97,56 @@ class TestMissingKeyWarning:
     def test_missing_api_key_emits_warning(self) -> None:
         with pytest.warns(UserWarning, match="AIFORGE_OPENAI_API_KEY"):
             AIForgeSettings(PROVIDER="openai", OPENAI_API_KEY=None)
+
+
+class TestModelFieldsSet:
+    """Regression: model_fields_set must reflect when MODEL came from config vs. default.
+
+    The model router in BaseModule uses ``"MODEL" in settings.model_fields_set``
+    to decide whether to auto-select a model.  If the user configured a model
+    (via YAML, env var, or constructor), the router must not override it.
+    """
+
+    def test_yaml_model_appears_in_fields_set(self, tmp_path: Path) -> None:
+        """MODEL from YAML must appear in model_fields_set."""
+        config = {"model": "gpt-4o", "openai_api_key": "sk-test"}
+        yaml_file = tmp_path / "aiforge.yaml"
+        yaml_file.write_text(yaml.dump(config))
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            settings = AIForgeSettings.from_yaml(yaml_file)
+
+        assert "MODEL" in settings.model_fields_set
+
+    def test_env_var_model_appears_in_fields_set(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """MODEL from AIFORGE_MODEL env var must appear in model_fields_set."""
+        monkeypatch.setenv("AIFORGE_MODEL", "gpt-4o-mini")
+        monkeypatch.setenv("AIFORGE_OPENAI_API_KEY", "sk-test")
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            settings = AIForgeSettings()
+
+        assert "MODEL" in settings.model_fields_set
+
+    def test_default_model_not_in_fields_set(self, tmp_path: Path) -> None:
+        """When model is not set anywhere, MODEL must NOT be in model_fields_set."""
+        config = {"openai_api_key": "sk-test"}
+        yaml_file = tmp_path / "aiforge.yaml"
+        yaml_file.write_text(yaml.dump(config))
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            settings = AIForgeSettings.from_yaml(yaml_file)
+
+        assert "MODEL" not in settings.model_fields_set
+
+    def test_constructor_kwarg_model_in_fields_set(self) -> None:
+        """MODEL passed as constructor kwarg must appear in model_fields_set."""
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            settings = AIForgeSettings(MODEL="gpt-4o", OPENAI_API_KEY="sk-test")
+        assert "MODEL" in settings.model_fields_set
