@@ -91,7 +91,7 @@ class Pipeline:
                         "a response with a .label attribute (e.g. ClassifyResponse)."
                     )
 
-                label = str(previous_response.label)  # type: ignore[attr-defined]
+                label = str(previous_response.label)
                 response, was_halted = step.resolve(label, current_input)
 
                 if was_halted and self._halt_on_flag:
@@ -108,7 +108,7 @@ class Pipeline:
                         current_input = current_input  # keep previous
             else:
                 # Standard module step
-                module: BaseModule = step  # type: ignore[assignment]
+                module: BaseModule = step
                 response = module.run(current_input, **(context or {}))
                 results[name] = response
                 previous_response = response
@@ -149,7 +149,7 @@ class Pipeline:
                         f"Router step {name!r} requires previous step to have .label"
                     )
 
-                label = str(previous_response.label)  # type: ignore[attr-defined]
+                label = str(previous_response.label)
                 response, was_halted = await step.resolve_async(label, current_input)
 
                 if was_halted and self._halt_on_flag:
@@ -163,7 +163,7 @@ class Pipeline:
                     with contextlib.suppress(NotImplementedError):
                         current_input = response.to_text()
             else:
-                module: BaseModule = step  # type: ignore[assignment]
+                module: BaseModule = step
                 response = await module.arun(current_input, **(context or {}))
                 results[name] = response
                 previous_response = response

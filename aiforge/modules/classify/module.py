@@ -33,7 +33,7 @@ from __future__ import annotations
 
 import json
 import time
-from typing import Any
+from typing import Any, Literal
 
 from aiforge.core.prompt_override import resolve_prompt
 from aiforge.core.types import BaseModule
@@ -62,6 +62,16 @@ _LABELS_MAX = 100
 # ---------------------------------------------------------------------------
 # Module-level helpers
 # ---------------------------------------------------------------------------
+
+
+_Sentiment = Literal["positive", "negative", "neutral", "mixed"]
+_SENTIMENTS: tuple[_Sentiment, ...] = ("positive", "negative", "neutral", "mixed")
+
+
+def _to_sentiment(value: Any) -> _Sentiment:
+    """Normalise an LLM-provided sentiment label, defaulting to ``neutral``."""
+    label = str(value if value is not None else "neutral").lower()
+    return label if label in _SENTIMENTS else "neutral"
 
 
 def _extract_json(raw: str) -> str:
@@ -313,9 +323,7 @@ class Classifier(BaseModule):
             self.logger.warning("classify.sentiment_json_parse_failed", raw_head=llm_text[:200])
             return SentimentResponse()
 
-        overall = str(data.get("overall", "neutral")).lower()
-        if overall not in ("positive", "negative", "neutral", "mixed"):
-            overall = "neutral"
+        overall = _to_sentiment(data.get("overall"))
 
         try:
             score = max(-1.0, min(1.0, float(data.get("score", 0.0))))
@@ -332,9 +340,7 @@ class Classifier(BaseModule):
 
         aspect_results: list[AspectSentiment] = []
         for a in data.get("aspects", []):
-            a_sent = str(a.get("sentiment", "neutral")).lower()
-            if a_sent not in ("positive", "negative", "neutral", "mixed"):
-                a_sent = "neutral"
+            a_sent = _to_sentiment(a.get("sentiment"))
             try:
                 a_score = max(-1.0, min(1.0, float(a.get("score", 0.0))))
             except (ValueError, TypeError):
@@ -425,7 +431,7 @@ class Classifier(BaseModule):
             return matched
 
         if self.multi_label:
-            raw_entries: list[dict] = data.get("labels", [])
+            raw_entries: list[dict[str, Any]] = data.get("labels", [])
             scores: list[LabelScore] = []
             for entry in raw_entries:
                 lbl = str(entry.get("label", ""))

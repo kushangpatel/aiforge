@@ -41,7 +41,8 @@ def _build_args_model(tool_name: str, input_schema: dict[str, Any]) -> type:
         field_defs[prop_name] = (py_type, Field(default, description=description))
 
     model_name = f"MCP_{tool_name}_Args"
-    return create_model(model_name, **field_defs)  # type: ignore[call-overload]
+    model: type = create_model(model_name, **field_defs)
+    return model
 
 
 class MCPClientManager:
@@ -124,17 +125,17 @@ class MCPClientManager:
         from mcp.client.stdio import stdio_client
 
         if cfg.transport == "stdio":
-            server_params = StdioServerParameters(  # type: ignore[call-arg]
+            server_params = StdioServerParameters(
                 command=cfg.command,  # type: ignore[arg-type]
                 args=cfg.args,
                 env=cfg.env or None,
             )
             stdio_transport = await self._exit_stack.enter_async_context(
-                stdio_client(server_params)  # type: ignore[arg-type]
+                stdio_client(server_params)
             )
             read_stream, write_stream = stdio_transport
             session = await self._exit_stack.enter_async_context(
-                ClientSession(read_stream, write_stream)  # type: ignore[arg-type]
+                ClientSession(read_stream, write_stream)
             )
             await session.initialize()
             return session
@@ -147,7 +148,7 @@ class MCPClientManager:
             )
             read_stream, write_stream = sse_transport
             session = await self._exit_stack.enter_async_context(
-                ClientSession(read_stream, write_stream)  # type: ignore[arg-type]
+                ClientSession(read_stream, write_stream)
             )
             await session.initialize()
             return session

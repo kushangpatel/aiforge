@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from rich.console import Console
 from rich.table import Table
@@ -61,8 +61,8 @@ def format_output(
 def response_to_dict(resp: Any) -> dict[str, Any]:
     """Convert a ModuleResponse (Pydantic) to a JSON-serialisable dict."""
     if hasattr(resp, "model_dump"):
-        return resp.model_dump()
-    return dict(resp)  # type: ignore[arg-type]
+        return cast(dict[str, Any], resp.model_dump())
+    return dict(resp)
 
 
 def print_metrics(resp: Any) -> None:

@@ -9,6 +9,7 @@ Custom providers can be registered at runtime::
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -16,7 +17,13 @@ if TYPE_CHECKING:
     from aiforge.infra.config import AIForgeSettings
 
 # Registry: provider_name -> (llm_class_factory, embedding_class_factory)
-_REGISTRY: dict[str, tuple[Any, Any]] = {}
+_REGISTRY: dict[
+    str,
+    tuple[
+        Callable[[AIForgeSettings], LLMProvider],
+        Callable[[AIForgeSettings], EmbeddingProvider],
+    ],
+] = {}
 _BUILTINS_LOADED: bool = False
 
 

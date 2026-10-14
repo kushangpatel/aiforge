@@ -6,11 +6,14 @@ created automatically on first use if it does not already exist.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import structlog
 
 from aiforge.core.vectorstore import VectorStoreAdapter
+
+if TYPE_CHECKING:
+    from qdrant_client.models import ExtendedPointId
 
 logger = structlog.get_logger(__name__)
 
@@ -96,37 +99,20 @@ class QdrantVectorStore(VectorStoreAdapter):
         filter: dict[str, Any] | None = None,
         include_embeddings: bool = False,
     ) -> list[dict[str, Any]]:
-        if hasattr(self._client, "query_points"):
-            from qdrant_client.models import Filter as QdrantFilter
+        from qdrant_client.models import Filter as QdrantFilter
 
-            qdrant_filter = QdrantFilter.model_validate(filter) if filter is not None else None
-            response = self._client.query_points(
-                collection_name=self._collection_name,
-                query=embedding,
-                limit=top_k,
-                query_filter=qdrant_filter,
-                with_payload=True,
-                with_vectors=include_embeddings,
-            )
-            points = getattr(response, "points", None)
-            if not isinstance(points, list):
-                points = self._client.search(
-                    collection_name=self._collection_name,
-                    query_vector=embedding,
-                    limit=top_k,
-                    query_filter=filter,
-                    with_payload=True,
-                    with_vectors=include_embeddings,
-                )
-        else:
-            points = self._client.search(
-                collection_name=self._collection_name,
-                query_vector=embedding,
-                limit=top_k,
-                query_filter=filter,
-                with_payload=True,
-                with_vectors=include_embeddings,
-            )
+        # ``QdrantClient.search`` was removed in qdrant-client 1.16; ``query_points``
+        # (available since 1.10) is the supported replacement.
+        qdrant_filter = QdrantFilter.model_validate(filter) if filter is not None else None
+        response = self._client.query_points(
+            collection_name=self._collection_name,
+            query=embedding,
+            limit=top_k,
+            query_filter=qdrant_filter,
+            with_payload=True,
+            with_vectors=include_embeddings,
+        )
+        points = response.points
 
         hits: list[dict[str, Any]] = []
         for point in points:
@@ -154,7 +140,7 @@ class QdrantVectorStore(VectorStoreAdapter):
         source_filter = Filter(
             must=[FieldCondition(key="source", match=MatchValue(value=source))]
         )
-        ids: list[str] = []
+        ids: list[ExtendedPointId] = []
         offset = None
         while True:
             result, next_offset = self._client.scroll(

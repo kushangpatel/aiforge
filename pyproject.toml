@@ -50,7 +50,7 @@ anthropicai = [
 local = ["langchain-ollama>=0.2.0"]
 agentic = ["langgraph>=0.2.0"]
 pinecone = ["pinecone>=5.1.0"]
-qdrant = ["qdrant-client>=1.7.0"]
+qdrant = ["qdrant-client>=1.10.0"]
 pgvector = ["psycopg[binary]>=3.1.0"]
 server = ["fastapi>=0.115.0", "uvicorn>=0.32.0"]
 playground = ["streamlit>=1.40.0"]
@@ -89,7 +89,7 @@ all = [
     "pypdf>=4.0.0",
     "python-docx>=1.0.0",
     "pinecone>=5.1.0",
-    "qdrant-client>=1.7.0",
+    "qdrant-client>=1.10.0",
     "psycopg[binary]>=3.1.0",
     "pytest>=8.0.0",
     "pytest-asyncio>=0.23.0",

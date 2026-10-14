@@ -95,7 +95,7 @@ def classify(
     examples = None
     if examples_file:
         examples_raw = json.loads(examples_file.read_text(encoding="utf-8"))
-        from aiforge.modules.classify.module import ClassifyExample
+        from aiforge.modules.classify.schemas import ClassifyExample
 
         examples = [ClassifyExample(**e) for e in examples_raw]
 

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import contextlib
 from collections import OrderedDict
+from collections.abc import AsyncIterator
 from typing import Any
 
 from fastapi import APIRouter, HTTPException
@@ -94,7 +95,7 @@ async def chat(req: ChatRequest) -> ChatResponseOut | StreamingResponse:
 
         if req.stream:
 
-            async def _stream():
+            async def _stream() -> AsyncIterator[str]:
                 async for chunk in agent.chat_stream(req.message):
                     yield chunk
 

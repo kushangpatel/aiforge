@@ -68,15 +68,15 @@ async def run_moderate(body: ModerateRequest) -> Any:
     m = Moderator(checks=body.checks, pii_types=body.pii_types)
 
     if body.action == "redact":
-        result = await m.aredact(body.text)
+        redacted = await m.aredact(body.text)
         return ModerateResponse(
-            flagged=bool(result.redactions),
-            flags=[_FlagOut(**f.model_dump()) for f in result.redactions],
-            redacted_text=result.text,
-            cost_usd=result.cost,
-            input_tokens=result.input_tokens,
-            output_tokens=result.output_tokens,
-            latency_ms=result.latency_ms,
+            flagged=bool(redacted.redactions),
+            flags=[_FlagOut(**f.model_dump()) for f in redacted.redactions],
+            redacted_text=redacted.text,
+            cost_usd=redacted.cost,
+            input_tokens=redacted.input_tokens,
+            output_tokens=redacted.output_tokens,
+            latency_ms=redacted.latency_ms,
         )
 
     result = await m.acheck(body.text)

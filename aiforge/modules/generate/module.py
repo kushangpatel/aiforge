@@ -512,7 +512,7 @@ class Generator(BaseModule):
     @staticmethod
     def _check_no_pii(text: str) -> bool:
         """Return *True* if PII is detected (i.e. guardrail violated)."""
-        return _get_pii_moderator().check(text).flagged
+        return bool(_get_pii_moderator().check(text).flagged)
 
     def _check_competitor_mentions(self, text: str) -> bool:
         """Regex check for competitor names.  Returns *True* on match."""

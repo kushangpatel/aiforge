@@ -31,12 +31,12 @@ from __future__ import annotations
 import contextlib
 import time
 import uuid
-from collections.abc import AsyncGenerator, Iterator
+from collections.abc import AsyncGenerator, Callable, Iterator
 from typing import Any
 
 from aiforge.core.pricing import calculate_cost
 from aiforge.core.prompt_override import resolve_prompt
-from aiforge.core.types import BaseModule
+from aiforge.core.types import BaseModule, CompletionResult
 from aiforge.modules.chat.prompts import (
     DEFAULT_SYSTEM_PROMPT,
     SUMMARIZE_MEMORY_PROMPT,
@@ -404,7 +404,7 @@ class ChatAgent(BaseModule):
     # Internal helpers
     # ------------------------------------------------------------------
 
-    def _make_llm_fn(self):
+    def _make_llm_fn(self) -> Callable[[list[dict[str, str]]], CompletionResult]:
         """Return a closure wrapping ``_call_llm`` for the LangGraph nodes.
 
         Both sync (``chat``) and async (``achat``, ``chat_stream``) paths
@@ -413,7 +413,7 @@ class ChatAgent(BaseModule):
         pool, so the event loop is not blocked.
         """
 
-        def _fn(messages: list[dict[str, str]]) -> Any:
+        def _fn(messages: list[dict[str, str]]) -> CompletionResult:
             return self._call_llm(messages)
 
         return _fn
@@ -439,7 +439,7 @@ class ChatAgent(BaseModule):
         messages = final.get("messages", [])
         for msg in reversed(messages):
             if isinstance(msg, dict) and msg.get("role") == "assistant":
-                return msg["content"]
+                return str(msg["content"])
         return ""
 
     def _build_response(

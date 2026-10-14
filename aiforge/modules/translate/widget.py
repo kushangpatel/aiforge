@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any, cast
+
 import streamlit as st
 
 
@@ -49,7 +51,7 @@ def render() -> None:
             t = Translator(
                 target_language=target_language,
                 source_language=source_language,
-                formality=formality,
+                formality=cast(Any, formality),  # selectbox options match the Literal
                 domain=domain if domain.strip() else None,
             )
             result = t.translate(text)

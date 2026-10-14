@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field
 
 if TYPE_CHECKING:
     from aiforge.core.model_router import QualityTier
+    from aiforge.core.provider import EmbeddingProvider, LLMProvider
     from aiforge.infra.cost_tracker import CostTracker
 
 # ---------------------------------------------------------------------------
@@ -208,15 +209,15 @@ class BaseModule(ABC):
         # Provider is resolved lazily on first use so that modules that don't
         # make LLM calls (e.g. pure vector-store search) start without hitting
         # the provider initialisation overhead.
-        self._provider: Any | None = None
-        self._embedding_provider: Any | None = None
+        self._provider: LLMProvider | None = None
+        self._embedding_provider: EmbeddingProvider | None = None
 
     # ------------------------------------------------------------------
     # Provider access (lazy)
     # ------------------------------------------------------------------
 
     @property
-    def provider(self) -> Any:
+    def provider(self) -> LLMProvider:
         if self._provider is None:
             from aiforge.providers import get_provider
 
@@ -224,7 +225,7 @@ class BaseModule(ABC):
         return self._provider
 
     @property
-    def embedding_provider(self) -> Any:
+    def embedding_provider(self) -> EmbeddingProvider:
         if self._embedding_provider is None:
             from aiforge.providers import get_embedding_provider
 
@@ -256,7 +257,7 @@ class BaseModule(ABC):
         raise NotImplementedError(f"{self.__class__.__name__} does not support async streaming.")
         # Unreachable — but required to make Python treat this as an async generator.
         # See: https://peps.python.org/pep-0525/
-        yield  # type: ignore[misc]  # pragma: no cover
+        yield  # pragma: no cover
 
     def run_batch(
         self,
@@ -324,9 +325,10 @@ class BaseModule(ABC):
             return None
         if BaseModule._cache is not None:
             return BaseModule._cache
-        from aiforge.infra.cache import MemoryBackend, RequestCache
+        from aiforge.infra.cache import CacheBackend, MemoryBackend, RequestCache
 
         backend_name = self.settings.CACHE_BACKEND
+        backend: CacheBackend
         if backend_name == "redis":
             from aiforge.infra.cache import RedisBackend
 

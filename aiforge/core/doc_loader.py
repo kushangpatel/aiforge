@@ -20,6 +20,7 @@ Unsupported file types are skipped with a warning; inspect
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
 from fnmatch import fnmatchcase
 from pathlib import Path
@@ -254,7 +255,7 @@ class DocLoader:
     def _iterate_files(
         self,
         directory: Path,
-    ):
+    ) -> Iterator[Path]:
         """Yield all non-ignored files under *directory* recursively."""
         gitignore_cache: dict[Path, list[str]] = {}
         for item in directory.rglob("*"):
@@ -420,7 +421,7 @@ class DocLoader:
                 return True
         return False
 
-    def _get_loader_fn(self, ext: str):
+    def _get_loader_fn(self, ext: str) -> Callable[[Path], list[Document]] | None:
         """Return a callable ``(path) -> list[Document]`` for *ext*, or None."""
         if ext in _TEXT_EXTENSIONS:
             return self._load_text

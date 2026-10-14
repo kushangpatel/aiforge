@@ -16,6 +16,7 @@ response and dispatches to the appropriate module branch::
 
 from __future__ import annotations
 
+from types import EllipsisType
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -37,7 +38,7 @@ class Router:
         self,
         branches: dict[str, BaseModule | None],
         *,
-        default: BaseModule | None = ...,  # type: ignore[assignment]
+        default: BaseModule | EllipsisType | None = ...,
     ) -> None:
         """
         Args:
@@ -46,8 +47,10 @@ class Router:
                       and the label doesn’t match, raises ``KeyError``.
         """
         self._branches = branches
-        self._has_default = default is not ...
-        self._default = default if self._has_default else None
+        self._has_default = not isinstance(default, EllipsisType)
+        self._default: BaseModule | None = (
+            None if isinstance(default, EllipsisType) else default
+        )
 
     def resolve(
         self,

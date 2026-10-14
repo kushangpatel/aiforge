@@ -28,11 +28,12 @@ import contextlib
 import hashlib
 import time
 import uuid
+from collections.abc import Callable
 from typing import Any
 
 from aiforge.core.pricing import calculate_cost
 from aiforge.core.prompt_override import resolve_prompt
-from aiforge.core.types import AIForgeError, BaseModule
+from aiforge.core.types import AIForgeError, BaseModule, CompletionResult
 from aiforge.core.vectorstore import VectorStoreAdapter
 from aiforge.modules.qa.schemas import IngestResponse, QAResponse
 
@@ -483,7 +484,9 @@ class DocQA(BaseModule):
             settings=self.settings,
         )
 
-    def _make_llm_fn(self, *, system_prompt: str | None = None):
+    def _make_llm_fn(
+        self, *, system_prompt: str | None = None
+    ) -> Callable[[str], CompletionResult]:
         """Return a ``(prompt: str) → CompletionResult`` closure."""
         resolved = resolve_prompt(
             call_override=system_prompt,
@@ -492,7 +495,7 @@ class DocQA(BaseModule):
             default="",
         )
 
-        def _llm(prompt: str):
+        def _llm(prompt: str) -> CompletionResult:
             messages: list[dict[str, str]] = []
             if resolved:
                 messages.append({"role": "system", "content": resolved})
@@ -501,7 +504,7 @@ class DocQA(BaseModule):
 
         return _llm
 
-    def _make_retrieve_fn(self):
+    def _make_retrieve_fn(self) -> Callable[..., list[dict[str, Any]]]:
         """Return a ``(query, top_k, filter) → list[dict]`` closure."""
 
         def _retrieve(

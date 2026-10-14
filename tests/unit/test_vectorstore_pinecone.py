@@ -200,3 +200,39 @@ class TestTextKeyCollision:
         warnings = [e for e in cap if e.get("log_level") == "warning"]
         assert len(warnings) == 1
         assert warnings[0]["key"] == "_text"
+
+
+class TestListAllMetadata:
+    @staticmethod
+    def _fetch_result(ids):
+        result = MagicMock()
+        vectors = {}
+        for i in ids:
+            vec = MagicMock()
+            vec.metadata = {"source": f"{i}.txt", "_text": "hidden"}
+            vectors[i] = vec
+        result.vectors = vectors
+        return result
+
+    def test_plain_id_pages(self, store) -> None:
+        s, mock_index = store
+        mock_index.list.return_value = iter([["a", "b"]])
+        mock_index.fetch.side_effect = lambda ids, namespace: self._fetch_result(ids)
+
+        metadata = s.list_all_metadata()
+
+        mock_index.fetch.assert_called_once_with(ids=["a", "b"], namespace="test-ns")
+        assert metadata == [{"source": "a.txt"}, {"source": "b.txt"}]
+
+    def test_list_response_pages(self, store) -> None:
+        """Newer pinecone SDKs yield ListResponse pages whose ``vectors`` hold ListItem(id=...)."""
+        s, mock_index = store
+        page = MagicMock()
+        page.vectors = [MagicMock(id="a"), MagicMock(id="b")]
+        mock_index.list.return_value = iter([page])
+        mock_index.fetch.side_effect = lambda ids, namespace: self._fetch_result(ids)
+
+        metadata = s.list_all_metadata()
+
+        mock_index.fetch.assert_called_once_with(ids=["a", "b"], namespace="test-ns")
+        assert len(metadata) == 2

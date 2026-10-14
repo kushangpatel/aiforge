@@ -98,9 +98,6 @@ class YamlConfigSettingsSource(PydanticBaseSettingsSource):
         value = self._data.get(field_name)
         return value, field_name, value is not None
 
-    def field_is_complex(self, field: Any) -> bool:
-        return self.field_is_complex_cached(field)
-
     def __call__(self) -> dict[str, Any]:
         result: dict[str, Any] = {}
         for field_name, field_info in self.settings_cls.model_fields.items():
@@ -108,7 +105,7 @@ class YamlConfigSettingsSource(PydanticBaseSettingsSource):
             if found:
                 with contextlib.suppress(Exception):
                     value = self.prepare_field_value(
-                        field_name, field_info, value, value  # type: ignore[arg-type]
+                        field_name, field_info, value, value
                     )
                 result[field_name] = value
         return result

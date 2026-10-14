@@ -40,7 +40,7 @@ class AnthropicProvider(LLMProvider):
 
         self._settings = settings
         self._model_name = settings.MODEL
-        self._llm = ChatAnthropic(
+        self._llm = ChatAnthropic(  # type: ignore[call-arg]
             model=settings.MODEL,
             temperature=settings.TEMPERATURE if supports_sampling_params(settings.MODEL) else None,
             max_tokens=settings.MAX_TOKENS or 4096,
@@ -119,8 +119,8 @@ class AnthropicEmbeddingProvider(EmbeddingProvider):
             ) from exc
 
         self._model_name = settings.EMBEDDING_MODEL
-        self._embeddings = VoyageAIEmbeddings(
-            voyage_api_key=settings.VOYAGE_API_KEY,  # type: ignore[arg-type]
+        self._embeddings = VoyageAIEmbeddings(  # type: ignore[call-arg]
+            voyage_api_key=settings.VOYAGE_API_KEY,
             model=settings.EMBEDDING_MODEL,
         )
 

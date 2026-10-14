@@ -131,9 +131,12 @@ class PineconeVectorStore(VectorStoreAdapter):
         all_metadata: list[dict[str, Any]] = []
         batch_size = 1000  # Pinecone fetch limit per call
 
-        # list() returns an iterator of ID pages
+        # list() returns an iterator of ID pages: plain lists of str IDs in older
+        # SDKs, ListResponse pages whose ``vectors`` hold ListItem(id=...) in newer ones.
         for id_page in self._index.list(namespace=self._namespace):
-            ids = list(id_page)  # each page is already a list of str IDs
+            items: Any = getattr(id_page, "vectors", id_page)
+            ids = [item if isinstance(item, str) else item.id for item in items]
+            ids = [i for i in ids if i]
             if not ids:
                 continue
             for i in range(0, len(ids), batch_size):

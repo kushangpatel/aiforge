@@ -64,10 +64,10 @@ def _setup_langsmith(settings: AIForgeSettings) -> None:
 def _setup_otel(settings: AIForgeSettings) -> None:
     """Configure OpenTelemetry tracing."""
     try:
-        from opentelemetry import trace  # type: ignore[import-untyped]
-        from opentelemetry.sdk.trace import TracerProvider  # type: ignore[import-untyped]
+        from opentelemetry import trace
+        from opentelemetry.sdk.trace import TracerProvider
         from opentelemetry.sdk.trace.export import (
-            BatchSpanProcessor,  # type: ignore[import-untyped]
+            BatchSpanProcessor,
         )
     except ImportError:
         _logger.warning(
@@ -80,7 +80,7 @@ def _setup_otel(settings: AIForgeSettings) -> None:
 
     if settings.OTEL_EXPORTER_ENDPOINT:
         try:
-            from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import (  # type: ignore[import-untyped]
+            from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import (
                 OTLPSpanExporter,
             )
 
@@ -107,7 +107,7 @@ def new_trace_id() -> str:
 def get_tracer(name: str = "aiforge") -> Any:  # noqa: ANN401
     """Return the OpenTelemetry tracer (or a no-op if OTel not configured)."""
     try:
-        from opentelemetry import trace  # type: ignore[import-untyped]
+        from opentelemetry import trace
 
         return trace.get_tracer(name)
     except ImportError:

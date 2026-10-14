@@ -184,28 +184,28 @@ try:
 
     register_vectorstore("chroma", ChromaVectorStore)
 except Exception:  # chromadb may not be installed
-    ChromaVectorStore = None  # type: ignore[assignment]
+    ChromaVectorStore = None  # type: ignore[assignment,misc]
 
 try:
     from aiforge.core.vectorstore_pinecone import PineconeVectorStore  # noqa: E402
 
     register_vectorstore("pinecone", PineconeVectorStore)
 except Exception:  # pinecone may not be installed
-    PineconeVectorStore = None  # type: ignore[assignment]
+    PineconeVectorStore = None  # type: ignore[assignment,misc]
 
 try:
     from aiforge.core.vectorstore_qdrant import QdrantVectorStore  # noqa: E402
 
     register_vectorstore("qdrant", QdrantVectorStore)
 except Exception:  # qdrant-client may not be installed
-    QdrantVectorStore = None  # type: ignore[assignment]
+    QdrantVectorStore = None  # type: ignore[assignment,misc]
 
 try:
     from aiforge.core.vectorstore_pgvector import PgVectorStore  # noqa: E402
 
     register_vectorstore("pgvector", PgVectorStore)
 except Exception:  # psycopg may not be installed
-    PgVectorStore = None  # type: ignore[assignment]
+    PgVectorStore = None  # type: ignore[assignment,misc]
 
 __all__ = [
     "__version__",
