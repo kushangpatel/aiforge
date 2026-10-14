@@ -57,10 +57,11 @@ ChatAgent(
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `system_prompt` | `str \| None` | `None` | Custom system prompt. If `None`, uses the built-in default: *"You are a helpful AI assistant. Answer questions clearly and concisely."* Resolved via prompt precedence (see [Prompt Resolution](#prompt-resolution)). |
-| `tools` | `list[Any] \| None` | `None` | List of LangChain-compatible tools. Each tool must have `.name`, `.description`, and `.invoke()` attributes. When provided, tool-use instructions are automatically appended to the system prompt. |
+| `tools` | `list[Any] \| None` | `None` | List of LangChain-compatible tools. Each tool must have `.name`, `.description`, and `.invoke()` attributes. Built-in providers receive them through their native tool-calling API; for custom providers, tool-use instructions are appended to the system prompt instead. |
 | `memory` | `str` | `"buffer"` | Memory management strategy. One of `"buffer"`, `"summary"`, or `"none"`. See [Memory Modes](#memory-modes). Raises `ValueError` if invalid. |
 | `memory_k` | `int` | `20` | Number of messages to retain in the conversation buffer. Must be ≥ 1. Raises `ValueError` otherwise. |
 | `max_tool_iterations` | `int` | `5` | Maximum number of tool-use loops per turn before the agent stops. Must be ≥ 1. Safety cap to prevent runaway tool calls. |
+| `native_tools` | `bool \| None` | `None` | Use the provider's native tool-calling API. `None` picks it automatically when the provider supports it (all built-in providers do); `False` forces the prompted JSON protocol. |
 | `quality` | `str \| None` | `None` | Quality tier for model routing: `"high"`, `"medium"`, or `"low"`. When set (and `MODEL_ROUTER_ENABLED=True`), the model router selects the cheapest model meeting this tier. Falls back to `DEFAULT_QUALITY` if omitted. |
 | `provider` | `str \| None` | `None` | LLM provider name (`"openai"`, `"anthropic"`, `"internal_gateway"`, etc.). Falls back to `settings.PROVIDER` if omitted. |
 | `**kwargs` | | | Any `AIForgeSettings` field as a keyword override, e.g. `MODEL="gpt-4o"`, `TEMPERATURE=0.5`. |
@@ -475,9 +476,9 @@ agent = ChatAgent(
 
 ### How Tool Use Works
 
-1. The LLM receives the user message along with descriptions of available tools
-2. If the LLM decides a tool is needed, it emits a JSON tool call: `{"tool": "weather", "input": {"city": "NYC"}}`
-3. The agent executes the tool and feeds the result back to the LLM
+1. The LLM receives the user message along with the available tools
+2. If the LLM decides a tool is needed, it requests a call through the provider's native tool-calling API (custom providers without one emit `{"tool": "weather", "input": {"city": "NYC"}}` JSON instead)
+3. The agent executes the tool and feeds the result back to the LLM as a tool result tied to that call
 4. The LLM can call more tools or produce a final response
 5. This loop continues until the LLM responds directly or `max_tool_iterations` is reached
 

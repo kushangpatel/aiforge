@@ -14,7 +14,7 @@ logger = structlog.get_logger(__name__)
 
 
 def _build_args_model(tool_name: str, input_schema: dict[str, Any]) -> type:
-    """Dynamically build a Pydantic model from an MCP tool's JSON Schema ``inputSchema``."""
+    """Dynamically build a Pydantic model from an MCP tool's JSON Schema ``input_schema``."""
     from pydantic import create_model
 
     properties = input_schema.get("properties", {})
@@ -140,11 +140,29 @@ class MCPClientManager:
             await session.initialize()
             return session
 
+        elif cfg.transport == "streamable_http":
+            from mcp.client.streamable_http import streamable_http_client
+
+            # The SDK's own factory: MCP's recommended timeouts plus our headers.
+            from mcp.shared._httpx_utils import create_mcp_http_client
+
+            http_client = await self._exit_stack.enter_async_context(
+                create_mcp_http_client(headers=cfg.headers or None)
+            )
+            read_stream, write_stream = await self._exit_stack.enter_async_context(
+                streamable_http_client(cfg.url, http_client=http_client)  # type: ignore[arg-type]
+            )
+            session = await self._exit_stack.enter_async_context(
+                ClientSession(read_stream, write_stream)
+            )
+            await session.initialize()
+            return session
+
         elif cfg.transport == "sse":
             from mcp.client.sse import sse_client
 
             sse_transport = await self._exit_stack.enter_async_context(
-                sse_client(cfg.url)  # type: ignore[arg-type]
+                sse_client(cfg.url, headers=cfg.headers or None)  # type: ignore[arg-type]
             )
             read_stream, write_stream = sse_transport
             session = await self._exit_stack.enter_async_context(
@@ -207,8 +225,8 @@ class MCPClientManager:
             namespaced_name = f"{cfg.name}_{mcp_tool.name}"
             description = mcp_tool.description or f"MCP tool from {cfg.name}"
 
-            # Build args schema from MCP tool's inputSchema
-            input_schema = mcp_tool.inputSchema or {}
+            # Build args schema from the MCP tool's input_schema
+            input_schema = mcp_tool.input_schema or {}
             args_model = (
                 _build_args_model(namespaced_name, input_schema)
                 if input_schema.get("properties")

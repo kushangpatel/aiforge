@@ -55,8 +55,10 @@ mcp_servers:
       GITHUB_TOKEN: "ghp_..."
 
   - name: custom-api
-    transport: sse
-    url: "http://localhost:3000/mcp"
+    transport: streamable_http      # or "http"
+    url: "https://mcp.example.com/mcp"
+    headers:
+      Authorization: "Bearer ..."   # prefer .env for secrets
     timeout: 60.0
 ```
 
@@ -107,10 +109,14 @@ Where `mcp-servers.yaml` contains a list of server configs.
 
 ## Transport Modes
 
-| Mode    | How it works                    | When to use                       |
-| ------- | ------------------------------- | --------------------------------- |
-| `stdio` | Spawns a subprocess, pipes JSON | Most MCP servers (npm packages)   |
-| `sse`   | HTTP Server-Sent Events stream  | Remote / shared / custom servers  |
+| Mode              | How it works                                  | When to use                          |
+| ----------------- | --------------------------------------------- | ------------------------------------ |
+| `stdio`           | Spawns a subprocess, pipes JSON               | Local MCP servers (npm/PyPI packages) |
+| `streamable_http` | HTTP POST per message, optional SSE responses | Remote / shared / hosted servers     |
+| `sse`             | Legacy HTTP+SSE transport (deprecated)        | Only servers that predate Streamable HTTP |
+
+`http` is accepted as an alias for `streamable_http`. Configuring `sse`
+emits a `DeprecationWarning`; the MCP spec replaced it with Streamable HTTP.
 
 ## Tool Namespacing
 
@@ -147,10 +153,11 @@ async with ChatAgent(mcp_servers=[...]) as agent:
 | Field       | Type              | Default  | Description                            |
 | ----------- | ----------------- | -------- | -------------------------------------- |
 | `name`      | `str`             | required | Display name / tool prefix             |
-| `transport` | `"stdio"\|"sse"`  | `"stdio"`| Transport protocol                     |
+| `transport` | `"stdio"\|"streamable_http"\|"sse"` | `"stdio"`| Transport protocol ( `"http"` = `"streamable_http"`) |
 | `command`   | `str`             | —        | Executable for stdio (e.g. `npx`)      |
 | `args`      | `list[str]`       | `[]`     | CLI arguments for stdio command         |
-| `url`       | `str`             | —        | SSE endpoint URL                        |
+| `url`       | `str`             | —        | Endpoint URL for the HTTP transports    |
+| `headers`   | `dict[str, str]`  | `{}`     | Extra HTTP headers (e.g. auth) for the HTTP transports |
 | `env`       | `dict[str, str]`  | `{}`     | Env vars for the stdio subprocess       |
 | `timeout`   | `float`           | `30.0`   | Per-tool-call timeout (seconds)         |
 | `enabled`   | `bool`            | `true`   | Toggle server on/off                    |
