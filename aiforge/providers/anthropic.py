@@ -7,27 +7,21 @@ Requires:
 
 from __future__ import annotations
 
-import time
-from collections.abc import AsyncGenerator
 from typing import TYPE_CHECKING, Any
 
-from aiforge.core.provider import EmbeddingProvider, LLMProvider
-from aiforge.core.types import (
-    APIConnectionError,
-    APITimeoutError,
-    CompletionResult,
-    ProviderError,
-    RateLimitError,
-)
-from aiforge.infra.retry import retry_embedding_call, retry_llm_call
-from aiforge.providers._utils import drop_unsupported_sampling, supports_sampling_params
-from aiforge.providers._utils import to_lc_messages as _to_lc_messages
+from aiforge.core.messages import CACHE_BREAKPOINT
+from aiforge.core.messages import text as text_block
+from aiforge.core.provider import EmbeddingProvider
+from aiforge.core.types import ProviderError
+from aiforge.infra.retry import retry_embedding_call
+from aiforge.providers._langchain import LangChainLLMProvider, wrap_error_by_class_name
+from aiforge.providers._utils import supports_sampling_params
 
 if TYPE_CHECKING:
     from aiforge.infra.config import AIForgeSettings
 
 
-class AnthropicProvider(LLMProvider):
+class AnthropicProvider(LangChainLLMProvider):
     """LLM provider backed by Anthropic Claude."""
 
     def __init__(self, settings: AIForgeSettings) -> None:
@@ -47,64 +41,37 @@ class AnthropicProvider(LLMProvider):
             api_key=settings.ANTHROPIC_API_KEY,  # type: ignore[arg-type]
         )
 
-    @property
-    def model_name(self) -> str:
-        return self._model_name
+    def _request_kwargs(self, kwargs: dict[str, Any]) -> dict[str, Any]:
+        call_kwargs = super()._request_kwargs(kwargs)
+        # PROMPT_CACHE="auto": a top-level breakpoint that follows the end of
+        # every request, which suits growing multi-turn conversations.
+        if self._settings.PROMPT_CACHE == "auto" and "cache_control" not in call_kwargs:
+            call_kwargs["cache_control"] = dict(CACHE_BREAKPOINT)
+        return call_kwargs
 
-    @retry_llm_call()
-    def complete(self, messages: list[dict[str, str]], **kwargs: Any) -> CompletionResult:
-        lc_messages = _to_lc_messages(messages)
-        start = time.monotonic()
-        try:
-            response = self._llm.invoke(
-                lc_messages, **drop_unsupported_sampling(self._model_name, kwargs)
-            )
-        except Exception as exc:
-            raise _wrap_anthropic_error(exc) from exc
+    def _prepare_messages(self, messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Put a cache breakpoint on the last system message (``PROMPT_CACHE="system"``).
 
-        latency_ms = (time.monotonic() - start) * 1000
-        usage = getattr(response, "usage_metadata", None) or {}
-        return CompletionResult(
-            text=str(response.content),
-            input_tokens=usage.get("input_tokens", 0),
-            output_tokens=usage.get("output_tokens", 0),
-            model=self._model_name,
-            finish_reason=getattr(response, "response_metadata", {}).get("stop_reason", "stop"),
-            latency_ms=latency_ms,
+        Tools and system prompt form the stable prefix of most AIForge calls,
+        so caching them is cheap insurance: prefixes below the model's minimum
+        cacheable length are simply not cached and cost nothing extra.
+        """
+        if self._settings.PROMPT_CACHE != "system":
+            return messages
+        idx = next(
+            (i for i in range(len(messages) - 1, -1, -1) if messages[i].get("role") == "system"),
+            None,
         )
-
-    @retry_llm_call()
-    async def complete_async(
-        self, messages: list[dict[str, str]], **kwargs: Any
-    ) -> CompletionResult:
-        lc_messages = _to_lc_messages(messages)
-        start = time.monotonic()
-        try:
-            response = await self._llm.ainvoke(
-                lc_messages, **drop_unsupported_sampling(self._model_name, kwargs)
-            )
-        except Exception as exc:
-            raise _wrap_anthropic_error(exc) from exc
-
-        latency_ms = (time.monotonic() - start) * 1000
-        usage = getattr(response, "usage_metadata", None) or {}
-        return CompletionResult(
-            text=str(response.content),
-            input_tokens=usage.get("input_tokens", 0),
-            output_tokens=usage.get("output_tokens", 0),
-            model=self._model_name,
-            finish_reason=getattr(response, "response_metadata", {}).get("stop_reason", "stop"),
-            latency_ms=latency_ms,
-        )
-
-    async def stream(
-        self, messages: list[dict[str, str]], **kwargs: Any
-    ) -> AsyncGenerator[str, None]:
-        lc_messages = _to_lc_messages(messages)
-        async for chunk in self._llm.astream(
-            lc_messages, **drop_unsupported_sampling(self._model_name, kwargs)
-        ):
-            yield str(chunk.content)
+        if idx is None:
+            return messages
+        content = messages[idx].get("content") or ""
+        blocks = [text_block(content)] if isinstance(content, str) else list(content)
+        if not blocks or any("cache_control" in b for b in blocks):
+            return messages
+        blocks[-1] = {**blocks[-1], "cache_control": dict(CACHE_BREAKPOINT)}
+        marked = list(messages)
+        marked[idx] = {**messages[idx], "content": blocks}
+        return marked
 
 
 class AnthropicEmbeddingProvider(EmbeddingProvider):
@@ -146,11 +113,4 @@ class AnthropicEmbeddingProvider(EmbeddingProvider):
 
 
 def _wrap_anthropic_error(exc: Exception) -> ProviderError:
-    cls_name = type(exc).__name__
-    if "RateLimit" in cls_name:
-        return RateLimitError(str(exc))
-    if "Timeout" in cls_name:
-        return APITimeoutError(str(exc))
-    if "Connection" in cls_name:
-        return APIConnectionError(str(exc))
-    return ProviderError(str(exc))
+    return wrap_error_by_class_name(exc)

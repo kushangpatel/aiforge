@@ -333,11 +333,10 @@ class Generator(BaseModule):
                 max_tokens=self.max_tokens,
                 temperature=self.temperature,
             )
-            from aiforge.core.pricing import calculate_cost
 
             total_in += llm.input_tokens
             total_out += llm.output_tokens
-            total_cost += calculate_cost(llm.model, llm.input_tokens, llm.output_tokens)
+            total_cost += llm.cost
             model = llm.model
             generated_text = llm.text.strip()
 
@@ -395,11 +394,10 @@ class Generator(BaseModule):
                 max_tokens=self.max_tokens,
                 temperature=self.temperature,
             )
-            from aiforge.core.pricing import calculate_cost
 
             total_in += llm.input_tokens
             total_out += llm.output_tokens
-            total_cost += calculate_cost(llm.model, llm.input_tokens, llm.output_tokens)
+            total_cost += llm.cost
             model = llm.model
             generated_text = llm.text.strip()
 
@@ -536,9 +534,8 @@ class Generator(BaseModule):
             temperature=0.0,
             max_tokens=8,
         )
-        from aiforge.core.pricing import calculate_cost
 
-        cost = calculate_cost(llm.model, llm.input_tokens, llm.output_tokens)
+        cost = llm.cost
         return "YES" in llm.text.upper(), llm.input_tokens, llm.output_tokens, cost
 
     async def _acheck_professional_tone(self, text: str) -> tuple[bool, int, int, float]:
@@ -549,9 +546,8 @@ class Generator(BaseModule):
             temperature=0.0,
             max_tokens=8,
         )
-        from aiforge.core.pricing import calculate_cost
 
-        cost = calculate_cost(llm.model, llm.input_tokens, llm.output_tokens)
+        cost = llm.cost
         return "YES" in llm.text.upper(), llm.input_tokens, llm.output_tokens, cost
 
     # ------------------------------------------------------------------

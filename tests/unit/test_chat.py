@@ -8,6 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from aiforge.core.types import CompletionResult, ToolCall
 from aiforge.modules.chat.agent import (
     ChatAgentState,
     _parse_tool_calls,
@@ -52,6 +53,7 @@ def _agent(
     agent._messages = [{"role": "system", "content": agent.system_prompt}]
     agent._system_prompt_override = system_prompt
     agent._mcp_manager = None
+    agent._native_tools = False
 
     import structlog
 
@@ -74,15 +76,16 @@ def _fake_llm(
     text: str = "test response",
     inp: int = 50,
     out: int = 30,
-) -> MagicMock:
+    tool_calls: list[ToolCall] | None = None,
+) -> CompletionResult:
     """Create a fake CompletionResult."""
-    result = MagicMock()
-    result.text = text
-    result.input_tokens = inp
-    result.output_tokens = out
-    result.model = "gpt-4o-mini"
-    result.finish_reason = "stop"
-    return result
+    return CompletionResult(
+        text=text,
+        input_tokens=inp,
+        output_tokens=out,
+        model="gpt-4o-mini",
+        tool_calls=tool_calls or [],
+    )
 
 
 def _initial_state(

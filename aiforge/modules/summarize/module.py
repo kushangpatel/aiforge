@@ -204,9 +204,8 @@ class Summarizer(BaseModule):
     def _stuff(self, text: str, t0: float, system: str) -> SummarizeResponse:
         messages = self._build_stuff_messages(text, system)
         llm = self._call_llm(messages, temperature=self.temperature)
-        from aiforge.core.pricing import calculate_cost
 
-        cost = calculate_cost(llm.model, llm.input_tokens, llm.output_tokens)
+        cost = llm.cost
         return SummarizeResponse(
             summary=llm.text.strip(),
             strategy_used="stuff",
@@ -221,9 +220,8 @@ class Summarizer(BaseModule):
     async def _astuff(self, text: str, t0: float, system: str) -> SummarizeResponse:
         messages = self._build_stuff_messages(text, system)
         llm = await self._acall_llm(messages, temperature=self.temperature)
-        from aiforge.core.pricing import calculate_cost
 
-        cost = calculate_cost(llm.model, llm.input_tokens, llm.output_tokens)
+        cost = llm.cost
         return SummarizeResponse(
             summary=llm.text.strip(),
             strategy_used="stuff",
@@ -275,9 +273,8 @@ class Summarizer(BaseModule):
         for chunk in chunks:
             messages = self._build_map_messages(chunk, system)
             llm = self._call_llm(messages, temperature=self.temperature)
-            from aiforge.core.pricing import calculate_cost
 
-            cost = calculate_cost(llm.model, llm.input_tokens, llm.output_tokens)
+            cost = llm.cost
             total_in += llm.input_tokens
             total_out += llm.output_tokens
             total_cost += cost
@@ -288,9 +285,8 @@ class Summarizer(BaseModule):
         combined = "\n\n".join(chunk_summaries)
         messages = self._build_reduce_messages(combined, system)
         llm = self._call_llm(messages, temperature=self.temperature)
-        from aiforge.core.pricing import calculate_cost
 
-        cost = calculate_cost(llm.model, llm.input_tokens, llm.output_tokens)
+        cost = llm.cost
         total_in += llm.input_tokens
         total_out += llm.output_tokens
         total_cost += cost
@@ -325,9 +321,7 @@ class Summarizer(BaseModule):
 
         map_results = await asyncio.gather(*[_summarize_chunk(c) for c in chunks])
         for llm in map_results:
-            from aiforge.core.pricing import calculate_cost
-
-            cost = calculate_cost(llm.model, llm.input_tokens, llm.output_tokens)
+            cost = llm.cost
             total_in += llm.input_tokens
             total_out += llm.output_tokens
             total_cost += cost
@@ -338,9 +332,8 @@ class Summarizer(BaseModule):
         combined = "\n\n".join(chunk_summaries)
         messages = self._build_reduce_messages(combined, system)
         llm = await self._acall_llm(messages, temperature=self.temperature)
-        from aiforge.core.pricing import calculate_cost
 
-        cost = calculate_cost(llm.model, llm.input_tokens, llm.output_tokens)
+        cost = llm.cost
         total_in += llm.input_tokens
         total_out += llm.output_tokens
         total_cost += cost

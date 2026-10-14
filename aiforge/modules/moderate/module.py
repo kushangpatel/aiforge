@@ -111,6 +111,25 @@ def _luhn_ok(number: str) -> bool:
 # ---------------------------------------------------------------------------
 
 
+def _verdict_schema(title: str, flag: str) -> dict[str, Any]:
+    """JSON schema for a yes/no moderation verdict."""
+    return {
+        "title": title,
+        "type": "object",
+        "properties": {
+            flag: {"type": "boolean"},
+            "confidence": {"type": "number"},
+            "reason": {"type": "string"},
+        },
+        "required": [flag, "confidence", "reason"],
+        "additionalProperties": False,
+    }
+
+
+_TOXICITY_SCHEMA = _verdict_schema("toxicity_verdict", "is_toxic")
+_INJECTION_SCHEMA = _verdict_schema("injection_verdict", "is_injection")
+
+
 def _extract_json(raw: str) -> str:
     """Strip markdown code fences from LLM output before JSON parsing."""
     text = raw.strip()
@@ -221,6 +240,7 @@ class Moderator(BaseModule):
                     {"role": "user", "content": TOXICITY_USER.format(text=text)},
                 ],
                 temperature=0.0,
+                **self._structured_kwargs(_TOXICITY_SCHEMA),
             )
             input_tokens += llm.input_tokens
             output_tokens += llm.output_tokens
@@ -241,6 +261,7 @@ class Moderator(BaseModule):
                     {"role": "user", "content": INJECTION_USER.format(text=text)},
                 ],
                 temperature=0.0,
+                **self._structured_kwargs(_INJECTION_SCHEMA),
             )
             input_tokens += llm.input_tokens
             output_tokens += llm.output_tokens
@@ -273,6 +294,7 @@ class Moderator(BaseModule):
                     {"role": "user", "content": TOXICITY_USER.format(text=text)},
                 ],
                 temperature=0.0,
+                **self._structured_kwargs(_TOXICITY_SCHEMA),
             )
             input_tokens += llm.input_tokens
             output_tokens += llm.output_tokens
@@ -293,6 +315,7 @@ class Moderator(BaseModule):
                     {"role": "user", "content": INJECTION_USER.format(text=text)},
                 ],
                 temperature=0.0,
+                **self._structured_kwargs(_INJECTION_SCHEMA),
             )
             input_tokens += llm.input_tokens
             output_tokens += llm.output_tokens

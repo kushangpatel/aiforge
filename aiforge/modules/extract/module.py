@@ -183,11 +183,12 @@ class Extractor(BaseModule):
                 error_msg,
                 system=resolved_system,
             )
-            llm = self._call_llm(messages, temperature=self.temperature)
-            from aiforge.core.pricing import calculate_cost
+            llm = self._call_llm(
+                messages, temperature=self.temperature, **self._structured_kwargs(schema)
+            )
 
             model_name = llm.model
-            cost = calculate_cost(llm.model, llm.input_tokens, llm.output_tokens)
+            cost = llm.cost
             total_in += llm.input_tokens
             total_out += llm.output_tokens
             total_cost += cost
@@ -260,11 +261,12 @@ class Extractor(BaseModule):
                 error_msg,
                 system=resolved_system,
             )
-            llm = await self._acall_llm(messages, temperature=self.temperature)
-            from aiforge.core.pricing import calculate_cost
+            llm = await self._acall_llm(
+                messages, temperature=self.temperature, **self._structured_kwargs(schema)
+            )
 
             model_name = llm.model
-            cost = calculate_cost(llm.model, llm.input_tokens, llm.output_tokens)
+            cost = llm.cost
             total_in += llm.input_tokens
             total_out += llm.output_tokens
             total_cost += cost

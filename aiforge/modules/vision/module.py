@@ -165,9 +165,7 @@ class Vision(BaseModule):
             temperature=self.temperature,
         )
 
-        from aiforge.core.pricing import calculate_cost
-
-        cost = calculate_cost(llm.model, llm.input_tokens, llm.output_tokens)
+        cost = llm.cost
 
         return VisionResponse(
             text=llm.text.strip(),
@@ -208,9 +206,7 @@ class Vision(BaseModule):
             temperature=self.temperature,
         )
 
-        from aiforge.core.pricing import calculate_cost
-
-        cost = calculate_cost(llm.model, llm.input_tokens, llm.output_tokens)
+        cost = llm.cost
 
         return VisionResponse(
             text=llm.text.strip(),

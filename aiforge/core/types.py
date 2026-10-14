@@ -63,6 +63,14 @@ class ConfigError(AIForgeError):
 # ---------------------------------------------------------------------------
 
 
+class ToolCall(BaseModel):
+    """A tool invocation requested by the model (native tool calling)."""
+
+    id: str = ""
+    name: str
+    arguments: dict[str, Any] = Field(default_factory=dict)
+
+
 class CompletionResult(BaseModel):
     """Normalised result returned by every LLMProvider.complete() call."""
 
@@ -74,12 +82,36 @@ class CompletionResult(BaseModel):
         default="stop",
         description="stop | length | tool_calls | content_filter",
     )
+    tool_calls: list[ToolCall] = Field(default_factory=list)
+    parsed: dict[str, Any] | None = Field(
+        default=None,
+        description="Schema-validated object when the call used response_format=.",
+    )
+    cache_read_tokens: int = Field(
+        default=0, description="Input tokens served from the provider's prompt cache."
+    )
+    cache_write_tokens: int = Field(
+        default=0, description="Input tokens written to the provider's prompt cache."
+    )
     raw_response: dict[str, Any] | None = None
     latency_ms: float = 0.0
 
     @property
     def total_tokens(self) -> int:
         return self.input_tokens + self.output_tokens
+
+    @property
+    def cost(self) -> float:
+        """USD cost of this call, with prompt-cache reads and writes priced separately."""
+        from aiforge.core.pricing import calculate_cost
+
+        return calculate_cost(
+            self.model,
+            self.input_tokens,
+            self.output_tokens,
+            cache_read_tokens=self.cache_read_tokens,
+            cache_write_tokens=self.cache_write_tokens,
+        )
 
 
 class ModuleResponse(BaseModel):
@@ -235,6 +267,20 @@ class BaseModule(ABC):
 
             self._embedding_provider = get_embedding_provider(self.settings)
         return self._embedding_provider
+
+    def _provider_supports(self, capability: str) -> bool:
+        """Whether this module's provider declares *capability* (e.g. ``"supports_tools"``)."""
+        if self._provider is not None:
+            return getattr(self._provider, capability, False) is True
+        from aiforge.providers import provider_supports
+
+        return provider_supports(self.settings, capability)
+
+    def _structured_kwargs(self, schema: type[BaseModel] | dict[str, Any]) -> dict[str, Any]:
+        """``response_format=schema`` when the provider can enforce it natively, else ``{}``."""
+        if self._provider_supports("supports_structured_output"):
+            return {"response_format": schema}
+        return {}
 
     # ------------------------------------------------------------------
     # Abstract interface
@@ -450,9 +496,7 @@ class BaseModule(ABC):
 
     def _record_cost(self, result: CompletionResult) -> None:
         """Track token usage and cost in the session cost tracker."""
-        from aiforge.core.pricing import calculate_cost
-
-        cost = calculate_cost(result.model, result.input_tokens, result.output_tokens)
+        cost = result.cost
         self.cost_tracker.record(
             module=self.__class__.__name__.lower(),
             model=result.model,

@@ -112,6 +112,20 @@ def register_provider(
     _REGISTRY[name.lower()] = (llm_class, embedding_class)
 
 
+def provider_supports(settings: AIForgeSettings, capability: str) -> bool:
+    """Whether the configured provider declares *capability* without instantiating it.
+
+    Capabilities are boolean class attributes on :class:`LLMProvider`, e.g.
+    ``"supports_tools"`` or ``"supports_structured_output"``. Providers
+    registered as plain factory functions report ``False``.
+    """
+    _ensure_registered()
+    entry = _REGISTRY.get(settings.PROVIDER.lower())
+    if entry is None:
+        return False
+    return bool(getattr(entry[0], capability, False))
+
+
 def list_providers() -> list[str]:
     """Return names of all registered providers."""
     _ensure_registered()

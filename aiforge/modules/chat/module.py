@@ -76,6 +76,10 @@ class ChatAgent(BaseModule):
         mcp_servers:         List of MCP server config dicts.  Each dict is
                              parsed into :class:`~aiforge.mcp.config.MCPServerConfig`.
                              Falls back to ``settings.MCP_SERVERS`` when *None*.
+        native_tools:        Use the provider's native tool-calling API. Defaults
+                             to whatever the provider supports (all built-in
+                             providers do); ``False`` forces the prompted JSON
+                             protocol used for custom providers.
         **kwargs:            Forwarded to :class:`~aiforge.core.types.BaseModule`.
     """
 
@@ -87,6 +91,7 @@ class ChatAgent(BaseModule):
         memory_k: int = 20,
         max_tool_iterations: int = 5,
         mcp_servers: list[dict[str, Any]] | None = None,
+        native_tools: bool | None = None,
         **kwargs: Any,
     ) -> None:
         super().__init__(**kwargs)
@@ -104,6 +109,11 @@ class ChatAgent(BaseModule):
         self.conversation_id: str = uuid.uuid4().hex[:16]
         self._system_prompt_override: str | None = system_prompt
         self._mcp_manager: Any | None = None
+        if native_tools is None:
+            from aiforge.providers import provider_supports
+
+            native_tools = provider_supports(self.settings, "supports_tools")
+        self._native_tools: bool = native_tools
 
         # ── MCP server integration ────────────────────────────────────
         raw_servers = mcp_servers if mcp_servers is not None else self.settings.MCP_SERVERS
@@ -117,7 +127,7 @@ class ChatAgent(BaseModule):
             config_override=self.settings.CUSTOM_PROMPTS.get("chat", {}).get("system"),
             default=DEFAULT_SYSTEM_PROMPT,
         )
-        if self.tools:
+        if self.tools and not self._native_tools:
             tool_descs = "\n".join(_describe_tool(t) for t in self.tools)
             tool_instructions = TOOL_USE_SYSTEM.format(
                 tool_descriptions=tool_descs,
@@ -213,6 +223,7 @@ class ChatAgent(BaseModule):
         graph = build_chat_graph(
             llm_fn=self._make_llm_fn(),
             tools=self.tools,
+            native_tools=self._native_tools,
         )
         final = graph.invoke(self._initial_state(message))
 
@@ -247,6 +258,7 @@ class ChatAgent(BaseModule):
         graph = build_chat_graph(
             llm_fn=self._make_llm_fn(),
             tools=self.tools,
+            native_tools=self._native_tools,
         )
         final = await graph.ainvoke(self._initial_state(message))
 
@@ -277,6 +289,7 @@ class ChatAgent(BaseModule):
         graph = build_chat_graph(
             llm_fn=self._make_llm_fn(),
             tools=self.tools,
+            native_tools=self._native_tools,
         )
 
         full_response = ""
@@ -367,7 +380,7 @@ class ChatAgent(BaseModule):
             config_override=self.settings.CUSTOM_PROMPTS.get("chat", {}).get("system"),
             default=DEFAULT_SYSTEM_PROMPT,
         )
-        if self.tools:
+        if self.tools and not self._native_tools:
             tool_descs = "\n".join(_describe_tool(t) for t in self.tools)
             effective = f"{base}\n\n{TOOL_USE_SYSTEM.format(tool_descriptions=tool_descs)}"
         else:
@@ -404,7 +417,7 @@ class ChatAgent(BaseModule):
     # Internal helpers
     # ------------------------------------------------------------------
 
-    def _make_llm_fn(self) -> Callable[[list[dict[str, str]]], CompletionResult]:
+    def _make_llm_fn(self) -> Callable[[list[dict[str, Any]]], CompletionResult]:
         """Return a closure wrapping ``_call_llm`` for the LangGraph nodes.
 
         Both sync (``chat``) and async (``achat``, ``chat_stream``) paths
@@ -413,7 +426,10 @@ class ChatAgent(BaseModule):
         pool, so the event loop is not blocked.
         """
 
-        def _fn(messages: list[dict[str, str]]) -> CompletionResult:
+        def _fn(messages: list[dict[str, Any]]) -> CompletionResult:
+            if self._native_tools and self.tools:
+                # Tool-call turns aren't safe to replay from the response cache.
+                return self._call_llm(messages, tools=self.tools, use_cache=False)
             return self._call_llm(messages)
 
         return _fn
@@ -430,6 +446,7 @@ class ChatAgent(BaseModule):
             "trace": [],
             "total_input_tokens": 0,
             "total_output_tokens": 0,
+            "total_cost": 0.0,
             "model": "",
         }
 
@@ -450,11 +467,9 @@ class ChatAgent(BaseModule):
     ) -> ChatResponse:
         """Construct a :class:`ChatResponse` from graph output."""
         model = final.get("model", "") or ""
-        cost = calculate_cost(
-            model,
-            final["total_input_tokens"],
-            final["total_output_tokens"],
-        )
+        cost = final.get("total_cost")
+        if cost is None:
+            cost = calculate_cost(model, final["total_input_tokens"], final["total_output_tokens"])
         tool_records = [
             ToolCallRecord(
                 tool=tr["tool"],
