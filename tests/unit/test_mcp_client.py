@@ -436,12 +436,17 @@ class TestChatAgentMCP:
 
 
 # ---------------------------------------------------------------------------
-# End to end against a real MCP server over Streamable HTTP
+# End to end against a real MCP server over each HTTP transport
 # ---------------------------------------------------------------------------
 
 
-def test_streamable_http_end_to_end() -> None:
-    """Connect, discover and call a tool on a local MCP server, sending headers."""
+@pytest.mark.filterwarnings("ignore::DeprecationWarning")
+@pytest.mark.parametrize(("transport", "path"), [("streamable_http", "/mcp"), ("sse", "/sse")])
+def test_http_transports_end_to_end(transport: str, path: str) -> None:
+    """Connect, discover and call a tool on a local MCP server, sending headers.
+
+    SSE stays covered: some hosted servers still only speak the legacy transport.
+    """
     import socket
     import threading
     import time
@@ -459,7 +464,7 @@ def test_streamable_http_end_to_end() -> None:
         """Add two integers."""
         return a + b
 
-    app = server.streamable_http_app()
+    app = server.streamable_http_app() if transport == "streamable_http" else server.sse_app()
     seen: dict[str, str] = {}
 
     async def capture_headers(scope: Any, receive: Any, send: Any) -> None:
@@ -482,8 +487,8 @@ def test_streamable_http_end_to_end() -> None:
         [
             MCPServerConfig(
                 name="demo",
-                transport="http",
-                url=f"http://127.0.0.1:{port}/mcp",
+                transport=transport,  # type: ignore[arg-type]
+                url=f"http://127.0.0.1:{port}{path}",
                 headers={"X-Api-Key": "secret"},
             )
         ]
