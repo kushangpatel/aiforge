@@ -697,6 +697,10 @@ except ProviderError as e:
     print(f"Provider error: {e}")
 ```
 
+**Native structured output:** On providers that support it, the classifier
+sends a JSON schema whose `label` field is an enum of your labels, so the model
+can only answer with one of them (or a list of them in multi-label mode).
+
 **Graceful degradation:** If the LLM returns malformed JSON or an unrecognized label, the classifier does not raise an error. Instead, it returns a `ClassifyResponse` with `label=None` and empty `scores`.
 
 ---

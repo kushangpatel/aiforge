@@ -465,7 +465,9 @@ Uses an LLM to classify text for toxicity, hate speech, harassment, violence, or
 
 **How it works:**
 1. Sends text to the LLM with a classification prompt
-2. LLM returns JSON: `{"is_toxic": true/false, "confidence": 0.0-1.0, "reason": "..."}`
+2. LLM returns JSON: `{"is_toxic": true/false, "confidence": 0.0-1.0, "reason": "..."}`.
+   On providers that support native structured output this shape is enforced
+   by a JSON schema, so the reply always parses.
 3. If `is_toxic` is true, a `ModerationFlag(type="toxicity")` is added
 
 ```python

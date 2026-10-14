@@ -496,7 +496,7 @@ OpenAI and Azure cache long prompts automatically. Either way, cached input
 tokens are reported on `CompletionResult.cache_read_tokens` /
 `cache_write_tokens` and priced at the discounted rate (Claude: reads 0.1x,
 writes 1.25x; OpenAI: reads 0.5x). Override with `cache_read` / `cache_write`
-keys in `pricing:`.
+keys in `custom_pricing`. See [Cost Tracking](cost-tracking.md#prompt-caching--cost-savings).
 
 ### EmbeddingProvider
 
