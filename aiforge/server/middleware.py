@@ -86,9 +86,9 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
         request_id = str(uuid.uuid4())
-        start = time.monotonic()
+        start = time.perf_counter()
         response = await call_next(request)
-        latency_ms = (time.monotonic() - start) * 1000
+        latency_ms = (time.perf_counter() - start) * 1000
 
         _logger.info(
             "HTTP request",

@@ -14,7 +14,7 @@ from __future__ import annotations
 import contextlib
 from functools import lru_cache
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import yaml
 from pydantic import field_validator, model_validator
@@ -134,6 +134,11 @@ class AIForgeSettings(BaseSettings):
     MODEL: str = "gpt-4o"
     TEMPERATURE: float = 0.0
     MAX_TOKENS: int | None = None
+    # Anthropic prompt caching: "system" caches the tools + system prompt
+    # prefix, "auto" also caches each conversation's history, "off" disables.
+    # OpenAI and Azure cache prompts automatically; cached tokens are priced
+    # at the discounted rate either way.
+    PROMPT_CACHE: Literal["off", "system", "auto"] = "system"
     EMBEDDING_MODEL: str = "text-embedding-3-small"
 
     # ------------------------------------------------------------------

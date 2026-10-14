@@ -29,6 +29,7 @@ any extra instrumentation.
 - [Custom Context Windows](#custom-context-windows)
 - [Fuzzy Model Matching](#fuzzy-model-matching)
 - [Cost Calculation Formula](#cost-calculation-formula)
+- [Prompt Caching — Cost Savings](#prompt-caching--cost-savings)
 - [Request Cache — Cost Savings](#request-cache--cost-savings)
 - [Rate Limiting — Budget Protection](#rate-limiting--budget-protection)
 - [Batch Operations](#batch-operations)
@@ -53,7 +54,7 @@ any extra instrumentation.
 | No breakdown by feature or model | Aggregation by module **and** by model |
 | No budget guardrails | `cost_warn_threshold` logs a WARNING for expensive calls |
 | Manual token counting | Input/output tokens tracked automatically |
-| No caching awareness | Cache hits return `cost=0` — free repeat calls |
+| No caching awareness | Cache hits return `cost=0`, and provider prompt-cache reads are billed at the discounted rate |
 
 Cost tracking is **enabled by default**. Set `AIFORGE_COST_TRACKING_ENABLED=false` to disable.
 
@@ -69,9 +70,12 @@ Module.run(text)
     ├── RequestCache.get(key)          ← return cached result (cost=0) if hit
     │
     ├── Provider.complete(messages)    ← actual LLM call
-    │       returns CompletionResult { text, input_tokens, output_tokens, model }
+    │       returns CompletionResult { text, input_tokens, output_tokens, model,
+    │                                  cache_read_tokens, cache_write_tokens }
     │
-    ├── calculate_cost(model, input_tokens, output_tokens)
+    ├── CompletionResult.cost
+    │       → calculate_cost(model, input_tokens, output_tokens,
+    │                        cache_read_tokens=..., cache_write_tokens=...)
     │       looks up PRICING table → USD amount
     │
     ├── CostTracker.record(module, model, tokens, cost)
@@ -257,12 +261,13 @@ defined in `aiforge/core/pricing.py` and kept as a best-effort snapshot.
 
 | Model | Input ($/1M) | Output ($/1M) | Context Window |
 |-------|-------------|---------------|---------------|
-| `gpt-4o` | 5.00 | 15.00 | 128,000 |
+| `gpt-4o` | 2.50 | 10.00 | 128,000 |
 | `gpt-4o-mini` | 0.15 | 0.60 | 128,000 |
 | `gpt-4-turbo` | 10.00 | 30.00 | 128,000 |
 | `gpt-4.5` / `gpt-4.5-preview` | 75.00 | 150.00 | 128,000 |
 | `gpt-3.5-turbo` | 0.50 | 1.50 | 16,385 |
-| `o1` / `o1-preview` | 15.00 | 60.00 | 200,000 |
+| `o1` | 15.00 | 60.00 | 200,000 |
+| `o1-preview` | 15.00 | 60.00 | 128,000 |
 | `o1-mini` | 3.00 | 12.00 | 128,000 |
 | `o3` | 10.00 | 40.00 | 200,000 |
 | `o3-mini` | 1.10 | 4.40 | 200,000 |
@@ -332,7 +337,15 @@ custom_pricing:
   my-finetuned-model:        # add new model
     input: 6.00
     output: 18.00
+  claude-sonnet-5-5:         # optional explicit prompt-cache prices
+    input: 2.00
+    output: 10.00
+    cache_read: 0.20
+    cache_write: 2.50
 ```
+
+`cache_read` and `cache_write` are optional. When they are left out, the
+default multipliers in [Prompt Caching](#prompt-caching--cost-savings) apply.
 
 Overrides are applied at startup via `apply_pricing_overrides()` and take
 precedence over the built-in `PRICING` table. The lookup order is:
@@ -391,14 +404,21 @@ dates to model names.
 ## Cost Calculation Formula
 
 ```
-cost = (input_price_per_1M × input_tokens / 1,000,000)
-     + (output_price_per_1M × output_tokens / 1,000,000)
+uncached = input_tokens − cache_read_tokens − cache_write_tokens
+
+cost = (input_price  × uncached
+      + cache_read_price  × cache_read_tokens
+      + cache_write_price × cache_write_tokens
+      + output_price × output_tokens) / 1,000,000
 ```
+
+Without prompt caching both cache counts are zero, so this reduces to
+`input_price × input_tokens + output_price × output_tokens`.
 
 **Example:** A `gpt-4o` call with 2,000 input tokens and 500 output tokens:
 
 $$
-\text{cost} = \frac{5.00 \times 2{,}000}{1{,}000{,}000} + \frac{15.00 \times 500}{1{,}000{,}000} = 0.01 + 0.0075 = \$0.0175
+\text{cost} = \frac{2.50 \times 2{,}000}{1{,}000{,}000} + \frac{10.00 \times 500}{1{,}000{,}000} = 0.005 + 0.005 = \$0.01
 $$
 
 **API function:**
@@ -407,8 +427,47 @@ $$
 from aiforge.core.pricing import calculate_cost
 
 cost = calculate_cost("gpt-4o", input_tokens=2000, output_tokens=500)
-# 0.0175
+# 0.01
+
+# With prompt caching: 1,800 of the 2,000 input tokens were cache reads
+cost = calculate_cost("gpt-4o", 2000, 500, cache_read_tokens=1800)
+# 0.00775  (2.50 × 200 + 1.25 × 1,800 + 10.00 × 500) / 1M
 ```
+
+`CompletionResult.cost` applies this formula to a provider result directly.
+
+---
+
+## Prompt Caching — Cost Savings
+
+Providers can reuse a long, repeated prompt prefix (system prompt, tool
+definitions, a document) across calls and bill those input tokens at a
+discount. AIForge reports them on every `CompletionResult`:
+
+| Field | Meaning |
+|-------|---------|
+| `cache_read_tokens` | Input tokens served from the provider's prompt cache |
+| `cache_write_tokens` | Input tokens written to the cache on this call (Anthropic) |
+| `cost` | USD cost with cache reads and writes priced at their own rates |
+
+Default cache prices, as multiples of the model's input price:
+
+| Provider | Cache read | Cache write |
+|----------|-----------|-------------|
+| Anthropic (Claude) | 0.1× | 1.25× |
+| OpenAI / Azure / others | 0.5× | 1.0× (no surcharge) |
+
+OpenAI and Azure cache long prompts automatically. For Anthropic, caching is
+controlled by `prompt_cache` (`system` by default, or `auto` / `off`); see
+[Configuration](configuration.md) and [Providers → Prompt caching](providers.md#prompt-caching).
+
+Example from a live run of `claude-haiku-5-5` with a ~13.8K-token system
+prompt sent twice:
+
+| Call | Cache write | Cache read | Cost |
+|------|------------|-----------|------|
+| 1st | 13,821 | 0 | $0.00173 |
+| 2nd | 0 | 13,821 | $0.00014 |
 
 ---
 
@@ -501,12 +560,12 @@ for r in batch.results:
 
 | Component | Unit Cost | Estimated Dev Usage | Monthly Cost |
 |-----------|----------|-------------------|-------------|
-| OpenAI GPT-4o | $5/1M input, $15/1M output | ~2M input, ~500K output | ~$17.50 |
+| OpenAI GPT-4o | $2.50/1M input, $10/1M output | ~2M input, ~500K output | ~$10.00 |
 | OpenAI text-embedding-3-small | $0.02/1M tokens | ~5M tokens | ~$0.10 |
-| Anthropic Claude 3.5 Sonnet | $3/1M input, $15/1M output | ~1M input, ~250K output | ~$6.75 |
+| Anthropic Claude Sonnet 5.5 | $2/1M input, $10/1M output | ~1M input, ~250K output | ~$4.50 |
 | Ollama (local) | Free | Unlimited | $0.00 |
 | ChromaDB | Free (local) | Unlimited | $0.00 |
-| **Total (OpenAI only)** | | | **~$17.60/mo** |
+| **Total (OpenAI only)** | | | **~$10.10/mo** |
 | **Total (mixed: Ollama dev + cloud prod)** | | | **~$5.00/mo** |
 
 > **Tip:** Use Ollama during development (`provider: ollama`) and switch to

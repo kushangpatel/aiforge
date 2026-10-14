@@ -112,7 +112,7 @@ class Extractor(BaseModule):
                 "output_schema must be provided either in constructor or extract() call"
             )
         exs = examples if examples is not None else self.examples
-        t0 = time.monotonic()
+        t0 = time.perf_counter()
         return self._extract_loop(text, schema, exs, t0, system_prompt=system_prompt)
 
     async def aextract(
@@ -132,7 +132,7 @@ class Extractor(BaseModule):
                 "output_schema must be provided either in constructor or extract() call"
             )
         exs = examples if examples is not None else self.examples
-        t0 = time.monotonic()
+        t0 = time.perf_counter()
         return await self._aextract_loop(text, schema, exs, t0, system_prompt=system_prompt)
 
     def run(self, text: str, **kwargs: Any) -> ExtractResponse:
@@ -183,11 +183,12 @@ class Extractor(BaseModule):
                 error_msg,
                 system=resolved_system,
             )
-            llm = self._call_llm(messages, temperature=self.temperature)
-            from aiforge.core.pricing import calculate_cost
+            llm = self._call_llm(
+                messages, temperature=self.temperature, **self._structured_kwargs(schema)
+            )
 
             model_name = llm.model
-            cost = calculate_cost(llm.model, llm.input_tokens, llm.output_tokens)
+            cost = llm.cost
             total_in += llm.input_tokens
             total_out += llm.output_tokens
             total_cost += cost
@@ -204,7 +205,7 @@ class Extractor(BaseModule):
                     input_tokens=total_in,
                     output_tokens=total_out,
                     model=model_name,
-                    latency_ms=(time.monotonic() - t0) * 1000,
+                    latency_ms=(time.perf_counter() - t0) * 1000,
                 )
             error_msg = err
             self.logger.warning(
@@ -223,7 +224,7 @@ class Extractor(BaseModule):
             input_tokens=total_in,
             output_tokens=total_out,
             model=model_name,
-            latency_ms=(time.monotonic() - t0) * 1000,
+            latency_ms=(time.perf_counter() - t0) * 1000,
         )
 
     async def _aextract_loop(
@@ -260,11 +261,12 @@ class Extractor(BaseModule):
                 error_msg,
                 system=resolved_system,
             )
-            llm = await self._acall_llm(messages, temperature=self.temperature)
-            from aiforge.core.pricing import calculate_cost
+            llm = await self._acall_llm(
+                messages, temperature=self.temperature, **self._structured_kwargs(schema)
+            )
 
             model_name = llm.model
-            cost = calculate_cost(llm.model, llm.input_tokens, llm.output_tokens)
+            cost = llm.cost
             total_in += llm.input_tokens
             total_out += llm.output_tokens
             total_cost += cost
@@ -281,7 +283,7 @@ class Extractor(BaseModule):
                     input_tokens=total_in,
                     output_tokens=total_out,
                     model=model_name,
-                    latency_ms=(time.monotonic() - t0) * 1000,
+                    latency_ms=(time.perf_counter() - t0) * 1000,
                 )
             error_msg = err
             self.logger.warning(
@@ -299,7 +301,7 @@ class Extractor(BaseModule):
             input_tokens=total_in,
             output_tokens=total_out,
             model=model_name,
-            latency_ms=(time.monotonic() - t0) * 1000,
+            latency_ms=(time.perf_counter() - t0) * 1000,
         )
 
     # ------------------------------------------------------------------

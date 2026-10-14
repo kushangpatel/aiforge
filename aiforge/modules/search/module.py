@@ -149,7 +149,7 @@ class SemanticSearch(BaseModule):
             raise ValueError("documents must not be empty")
 
         docs = [_coerce_document(d) for d in documents]
-        t0 = time.monotonic()
+        t0 = time.perf_counter()
         total_tokens = 0
         embedding_model = ""
 
@@ -189,7 +189,7 @@ class SemanticSearch(BaseModule):
             cost=cost,
             input_tokens=total_tokens,
             model=embedding_model,
-            latency_ms=(time.monotonic() - t0) * 1000,
+            latency_ms=(time.perf_counter() - t0) * 1000,
         )
 
     async def aindex(
@@ -203,7 +203,7 @@ class SemanticSearch(BaseModule):
             raise ValueError("documents must not be empty")
 
         docs = [_coerce_document(d) for d in documents]
-        t0 = time.monotonic()
+        t0 = time.perf_counter()
         total_tokens = 0
         embedding_model = ""
 
@@ -243,7 +243,7 @@ class SemanticSearch(BaseModule):
             cost=cost,
             input_tokens=total_tokens,
             model=embedding_model,
-            latency_ms=(time.monotonic() - t0) * 1000,
+            latency_ms=(time.perf_counter() - t0) * 1000,
         )
 
     def index_files(
@@ -341,7 +341,7 @@ class SemanticSearch(BaseModule):
         if k < 1 or k > _TOP_K_MAX:
             raise ValueError(f"top_k must be between 1 and {_TOP_K_MAX}")
 
-        t0 = time.monotonic()
+        t0 = time.perf_counter()
         try:
             embedding = self.embedding_provider.embed_query(query)
         except Exception as exc:
@@ -387,7 +387,7 @@ class SemanticSearch(BaseModule):
             cost=cost,
             input_tokens=token_count,
             model=embedding_model,
-            latency_ms=(time.monotonic() - t0) * 1000,
+            latency_ms=(time.perf_counter() - t0) * 1000,
         )
 
     async def aquery(
@@ -405,7 +405,7 @@ class SemanticSearch(BaseModule):
         if k < 1 or k > _TOP_K_MAX:
             raise ValueError(f"top_k must be between 1 and {_TOP_K_MAX}")
 
-        t0 = time.monotonic()
+        t0 = time.perf_counter()
         try:
             embedding = await self.embedding_provider.embed_query_async(query)
         except Exception as exc:
@@ -458,7 +458,7 @@ class SemanticSearch(BaseModule):
             cost=cost,
             input_tokens=token_count,
             model=embedding_model,
-            latency_ms=(time.monotonic() - t0) * 1000,
+            latency_ms=(time.perf_counter() - t0) * 1000,
         )
 
     # ------------------------------------------------------------------

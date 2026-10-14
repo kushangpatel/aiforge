@@ -87,7 +87,7 @@ class Translator(BaseModule):
         """Translate *text* synchronously."""
         if not text or not text.strip():
             raise ValueError("text must not be empty or whitespace-only")
-        t0 = time.monotonic()
+        t0 = time.perf_counter()
         total_in = total_out = 0
         total_cost = 0.0
 
@@ -108,11 +108,9 @@ class Translator(BaseModule):
         messages = self._build_messages(text, detected_source, resolved_system)
         llm = self._call_llm(messages, temperature=self.temperature)
 
-        from aiforge.core.pricing import calculate_cost
-
         total_in += llm.input_tokens
         total_out += llm.output_tokens
-        total_cost += calculate_cost(llm.model, llm.input_tokens, llm.output_tokens)
+        total_cost += llm.cost
 
         return TranslateResponse(
             text=llm.text.strip(),
@@ -123,14 +121,14 @@ class Translator(BaseModule):
             input_tokens=total_in,
             output_tokens=total_out,
             model=llm.model,
-            latency_ms=(time.monotonic() - t0) * 1000,
+            latency_ms=(time.perf_counter() - t0) * 1000,
         )
 
     async def atranslate(self, text: str, *, system_prompt: str | None = None) -> TranslateResponse:
         """Async version of :meth:`translate`."""
         if not text or not text.strip():
             raise ValueError("text must not be empty or whitespace-only")
-        t0 = time.monotonic()
+        t0 = time.perf_counter()
         total_in = total_out = 0
         total_cost = 0.0
 
@@ -151,11 +149,9 @@ class Translator(BaseModule):
         messages = self._build_messages(text, detected_source, resolved_system)
         llm = await self._acall_llm(messages, temperature=self.temperature)
 
-        from aiforge.core.pricing import calculate_cost
-
         total_in += llm.input_tokens
         total_out += llm.output_tokens
-        total_cost += calculate_cost(llm.model, llm.input_tokens, llm.output_tokens)
+        total_cost += llm.cost
 
         return TranslateResponse(
             text=llm.text.strip(),
@@ -166,7 +162,7 @@ class Translator(BaseModule):
             input_tokens=total_in,
             output_tokens=total_out,
             model=llm.model,
-            latency_ms=(time.monotonic() - t0) * 1000,
+            latency_ms=(time.perf_counter() - t0) * 1000,
         )
 
     # Pipeline interface -----------------------------------------------
@@ -229,9 +225,8 @@ class Translator(BaseModule):
             {"role": "user", "content": DETECT_LANGUAGE.format(text=text[:500])},
         ]
         llm = self._call_llm(messages, temperature=0.0)
-        from aiforge.core.pricing import calculate_cost
 
-        cost = calculate_cost(llm.model, llm.input_tokens, llm.output_tokens)
+        cost = llm.cost
         detected = llm.text.strip().strip('"').strip("'")
         return detected, llm.input_tokens, llm.output_tokens, cost, llm.model
 
@@ -242,8 +237,7 @@ class Translator(BaseModule):
             {"role": "user", "content": DETECT_LANGUAGE.format(text=text[:500])},
         ]
         llm = await self._acall_llm(messages, temperature=0.0)
-        from aiforge.core.pricing import calculate_cost
 
-        cost = calculate_cost(llm.model, llm.input_tokens, llm.output_tokens)
+        cost = llm.cost
         detected = llm.text.strip().strip('"').strip("'")
         return detected, llm.input_tokens, llm.output_tokens, cost, llm.model

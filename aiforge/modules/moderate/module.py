@@ -111,6 +111,25 @@ def _luhn_ok(number: str) -> bool:
 # ---------------------------------------------------------------------------
 
 
+def _verdict_schema(title: str, flag: str) -> dict[str, Any]:
+    """JSON schema for a yes/no moderation verdict."""
+    return {
+        "title": title,
+        "type": "object",
+        "properties": {
+            flag: {"type": "boolean"},
+            "confidence": {"type": "number"},
+            "reason": {"type": "string"},
+        },
+        "required": [flag, "confidence", "reason"],
+        "additionalProperties": False,
+    }
+
+
+_TOXICITY_SCHEMA = _verdict_schema("toxicity_verdict", "is_toxic")
+_INJECTION_SCHEMA = _verdict_schema("injection_verdict", "is_injection")
+
+
 def _extract_json(raw: str) -> str:
     """Strip markdown code fences from LLM output before JSON parsing."""
     text = raw.strip()
@@ -199,7 +218,7 @@ class Moderator(BaseModule):
         PII checks are regex-only (< 1 ms).  Toxicity and prompt-injection
         checks make one LLM call each.
         """
-        t0 = time.monotonic()
+        t0 = time.perf_counter()
         flags: list[ModerationFlag] = []
         input_tokens = output_tokens = 0
         model = ""
@@ -221,6 +240,7 @@ class Moderator(BaseModule):
                     {"role": "user", "content": TOXICITY_USER.format(text=text)},
                 ],
                 temperature=0.0,
+                **self._structured_kwargs(_TOXICITY_SCHEMA),
             )
             input_tokens += llm.input_tokens
             output_tokens += llm.output_tokens
@@ -241,6 +261,7 @@ class Moderator(BaseModule):
                     {"role": "user", "content": INJECTION_USER.format(text=text)},
                 ],
                 temperature=0.0,
+                **self._structured_kwargs(_INJECTION_SCHEMA),
             )
             input_tokens += llm.input_tokens
             output_tokens += llm.output_tokens
@@ -251,7 +272,7 @@ class Moderator(BaseModule):
 
     async def acheck(self, text: str, *, system_prompt: str | None = None) -> ModerateResponse:
         """Async version of :meth:`check`."""
-        t0 = time.monotonic()
+        t0 = time.perf_counter()
         flags: list[ModerationFlag] = []
         input_tokens = output_tokens = 0
         model = ""
@@ -273,6 +294,7 @@ class Moderator(BaseModule):
                     {"role": "user", "content": TOXICITY_USER.format(text=text)},
                 ],
                 temperature=0.0,
+                **self._structured_kwargs(_TOXICITY_SCHEMA),
             )
             input_tokens += llm.input_tokens
             output_tokens += llm.output_tokens
@@ -293,6 +315,7 @@ class Moderator(BaseModule):
                     {"role": "user", "content": INJECTION_USER.format(text=text)},
                 ],
                 temperature=0.0,
+                **self._structured_kwargs(_INJECTION_SCHEMA),
             )
             input_tokens += llm.input_tokens
             output_tokens += llm.output_tokens
@@ -307,13 +330,13 @@ class Moderator(BaseModule):
         Only runs PII detection when ``"pii"`` is in the configured checks.
         Returns the original text unchanged if PII checks are disabled.
         """
-        t0 = time.monotonic()
+        t0 = time.perf_counter()
         flags = self._run_pii(text) if "pii" in self.checks else []
         redacted = _apply_redactions(text, flags)
         return RedactResponse(
             text=redacted,
             redactions=flags,
-            latency_ms=(time.monotonic() - t0) * 1000,
+            latency_ms=(time.perf_counter() - t0) * 1000,
         )
 
     async def aredact(self, text: str) -> RedactResponse:
@@ -443,5 +466,5 @@ class Moderator(BaseModule):
             input_tokens=input_tokens,
             output_tokens=output_tokens,
             model=model,
-            latency_ms=(time.monotonic() - t0) * 1000,
+            latency_ms=(time.perf_counter() - t0) * 1000,
         )

@@ -20,6 +20,11 @@ model: gpt-4o
 # Sampling temperature (0.0 – 2.0). Lower = more deterministic.
 temperature: 0.0
 
+# Anthropic prompt caching: "system" caches tools + system prompt, "auto"
+# also caches the conversation so far, "off" disables. OpenAI caches
+# automatically. Cached tokens are priced at the discounted rate.
+# prompt_cache: system
+
 # Hard token cap per LLM response. Omit (or set to null) to use model default.
 # max_tokens: 2048
 
@@ -267,8 +272,10 @@ api_port: 8000
 #     env:
 #       GITHUB_TOKEN: "..."   # prefer .env
 #   - name: custom
-#     transport: sse
-#     url: "http://localhost:3000/mcp"
+#     transport: streamable_http   # remote server; "sse" is deprecated
+#     url: "https://mcp.example.com/mcp"
+#     headers:
+#       Authorization: "Bearer ..."   # prefer .env
 #     timeout: 60.0
 
 # ---------------------------------------------------------------------------

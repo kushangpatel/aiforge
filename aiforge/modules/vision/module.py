@@ -147,7 +147,7 @@ class Vision(BaseModule):
             labels:  Classification labels for ``task="classify"``.
             system_prompt: Override the system prompt.
         """
-        t0 = time.monotonic()
+        t0 = time.perf_counter()
         system, user_text = self._resolve_prompts(
             question=question,
             focus=focus,
@@ -165,9 +165,7 @@ class Vision(BaseModule):
             temperature=self.temperature,
         )
 
-        from aiforge.core.pricing import calculate_cost
-
-        cost = calculate_cost(llm.model, llm.input_tokens, llm.output_tokens)
+        cost = llm.cost
 
         return VisionResponse(
             text=llm.text.strip(),
@@ -177,7 +175,7 @@ class Vision(BaseModule):
             input_tokens=llm.input_tokens,
             output_tokens=llm.output_tokens,
             model=llm.model,
-            latency_ms=(time.monotonic() - t0) * 1000,
+            latency_ms=(time.perf_counter() - t0) * 1000,
         )
 
     async def aanalyze(
@@ -190,7 +188,7 @@ class Vision(BaseModule):
         system_prompt: str | None = None,
     ) -> VisionResponse:
         """Async version of :meth:`analyze`."""
-        t0 = time.monotonic()
+        t0 = time.perf_counter()
         system, user_text = self._resolve_prompts(
             question=question,
             focus=focus,
@@ -208,9 +206,7 @@ class Vision(BaseModule):
             temperature=self.temperature,
         )
 
-        from aiforge.core.pricing import calculate_cost
-
-        cost = calculate_cost(llm.model, llm.input_tokens, llm.output_tokens)
+        cost = llm.cost
 
         return VisionResponse(
             text=llm.text.strip(),
@@ -220,7 +216,7 @@ class Vision(BaseModule):
             input_tokens=llm.input_tokens,
             output_tokens=llm.output_tokens,
             model=llm.model,
-            latency_ms=(time.monotonic() - t0) * 1000,
+            latency_ms=(time.perf_counter() - t0) * 1000,
         )
 
     # Pipeline interface -----------------------------------------------

@@ -356,6 +356,20 @@ example = ExtractExample(
 
 ---
 
+## Native Structured Output
+
+When the provider supports it (OpenAI, Azure OpenAI, Anthropic and Ollama all
+do), the Extractor passes your schema to the model as a native structured-output
+constraint (`response_format`). The model can then only return JSON that
+matches the schema, so `retry_count` is almost always `0`.
+
+The schema is still validated locally afterwards. If a model or schema isn't
+accepted by the provider's native mode, the call quietly falls back to a plain
+prompt and the retry loop below handles any validation errors. See
+[Providers → Native structured output](../providers.md#native-structured-output) for the provider-level API.
+
+---
+
 ## Retry Mechanism
 
 The extractor automatically retries when LLM output fails schema validation. On each retry, the validation error message is fed back to the LLM so it can self-correct.

@@ -125,6 +125,7 @@ Settings picks it up. This means `provider: openai` in YAML becomes
 provider: openai                    # openai | anthropic | ollama | azure
 model: gpt-4o                      # default LLM model
 temperature: 0.0                    # 0.0–2.0
+prompt_cache: system                # system | auto | off  (Anthropic prompt caching)
 embedding_model: text-embedding-3-small
 
 # ── Vector Store ──────────────────────────────────────
@@ -241,6 +242,7 @@ All settings use the `AIFORGE_` prefix as an environment variable. In `aiforge.y
 | `MODEL` | `str` | `"gpt-4o"` | `AIFORGE_MODEL` | Default LLM model name for the chosen provider |
 | `TEMPERATURE` | `float` | `0.0` | `AIFORGE_TEMPERATURE` | Sampling temperature (validated: 0.0–2.0) |
 | `MAX_TOKENS` | `int \| None` | `None` | `AIFORGE_MAX_TOKENS` | Hard token cap per LLM response; `None` = use model default |
+| `PROMPT_CACHE` | `"system" \| "auto" \| "off"` | `"system"` | `AIFORGE_PROMPT_CACHE` | Anthropic prompt caching: cache the system prompt, also the conversation, or nothing (see [Providers](providers.md#prompt-caching)) |
 | `EMBEDDING_MODEL` | `str` | `"text-embedding-3-small"` | `AIFORGE_EMBEDDING_MODEL` | Embedding model (validated against PROVIDER compatibility) |
 
 **Provider-compatible embedding models:**
@@ -588,6 +590,7 @@ Every field in `AIForgeSettings` maps to an `AIFORGE_`-prefixed environment vari
 | `AIFORGE_MODEL` | `str` | `gpt-4o` | Default LLM model |
 | `AIFORGE_TEMPERATURE` | `float` | `0.0` | Sampling temperature (0.0–2.0) |
 | `AIFORGE_MAX_TOKENS` | `int` | — | Hard token cap per response |
+| `AIFORGE_PROMPT_CACHE` | `str` | `system` | Anthropic prompt caching: `system`, `auto` or `off` |
 | `AIFORGE_EMBEDDING_MODEL` | `str` | `text-embedding-3-small` | Embedding model |
 | `AIFORGE_OPENAI_API_KEY` | `str` | — | OpenAI API key |
 | `AIFORGE_ANTHROPIC_API_KEY` | `str` | — | Anthropic API key |

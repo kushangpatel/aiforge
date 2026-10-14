@@ -22,10 +22,29 @@ class TestMCPServerConfig:
         assert cfg.transport == "stdio"
         assert cfg.command == "npx"
 
-    def test_sse_valid(self):
-        cfg = MCPServerConfig(name="test", transport="sse", url="http://localhost:3000/mcp")
+    def test_sse_valid_but_deprecated(self):
+        with pytest.warns(DeprecationWarning, match="streamable_http"):
+            cfg = MCPServerConfig(name="test", transport="sse", url="http://localhost:3000/mcp")
         assert cfg.transport == "sse"
         assert cfg.url == "http://localhost:3000/mcp"
+
+    def test_streamable_http_valid(self):
+        cfg = MCPServerConfig(
+            name="remote",
+            transport="streamable_http",
+            url="https://mcp.example.com/mcp",
+            headers={"Authorization": "Bearer t"},
+        )
+        assert cfg.transport == "streamable_http"
+        assert cfg.headers == {"Authorization": "Bearer t"}
+
+    def test_http_is_an_alias(self):
+        cfg = MCPServerConfig(name="remote", transport="http", url="https://mcp.example.com/mcp")
+        assert cfg.transport == "streamable_http"
+
+    def test_streamable_http_missing_url(self):
+        with pytest.raises(ValueError, match="streamable_http transport requires 'url'"):
+            MCPServerConfig(name="bad", transport="streamable_http")
 
     def test_stdio_missing_command(self):
         with pytest.raises(ValueError, match="stdio transport requires 'command'"):
@@ -67,7 +86,7 @@ def _mock_mcp_tool(name: str = "list_issues", description: str = "List issues"):
     tool = MagicMock()
     tool.name = name
     tool.description = description
-    tool.inputSchema = {
+    tool.input_schema = {
         "type": "object",
         "properties": {
             "project": {"type": "string", "description": "Project key"},
@@ -414,3 +433,72 @@ class TestChatAgentMCP:
         # MCP manager should NOT be disconnected
         mock_manager.disconnect_sync.assert_not_called()
         assert agent._mcp_manager is mock_manager
+
+
+# ---------------------------------------------------------------------------
+# End to end against a real MCP server over each HTTP transport
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.filterwarnings("ignore::DeprecationWarning")
+@pytest.mark.parametrize(("transport", "path"), [("streamable_http", "/mcp"), ("sse", "/sse")])
+def test_http_transports_end_to_end(transport: str, path: str) -> None:
+    """Connect, discover and call a tool on a local MCP server, sending headers.
+
+    SSE stays covered: some hosted servers still only speak the legacy transport.
+    """
+    import socket
+    import threading
+    import time
+
+    pytest.importorskip("mcp.server.mcpserver")
+    uvicorn = pytest.importorskip("uvicorn")
+    from mcp.server.mcpserver import MCPServer
+
+    from aiforge.mcp.client import MCPClientManager
+
+    server = MCPServer("demo")
+
+    @server.tool()
+    def add(a: int, b: int) -> int:
+        """Add two integers."""
+        return a + b
+
+    app = server.streamable_http_app() if transport == "streamable_http" else server.sse_app()
+    seen: dict[str, str] = {}
+
+    async def capture_headers(scope: Any, receive: Any, send: Any) -> None:
+        if scope["type"] == "http":
+            seen.update({k.decode(): v.decode() for k, v in scope["headers"]})
+        await app(scope, receive, send)
+
+    with socket.socket() as sock:
+        sock.bind(("127.0.0.1", 0))
+        port = sock.getsockname()[1]
+    http = uvicorn.Server(
+        uvicorn.Config(capture_headers, host="127.0.0.1", port=port, log_level="warning")
+    )
+    threading.Thread(target=http.run, daemon=True).start()
+    deadline = time.monotonic() + 10
+    while not http.started and time.monotonic() < deadline:
+        time.sleep(0.05)
+
+    manager = MCPClientManager(
+        [
+            MCPServerConfig(
+                name="demo",
+                transport=transport,  # type: ignore[arg-type]
+                url=f"http://127.0.0.1:{port}{path}",
+                headers={"X-Api-Key": "secret"},
+            )
+        ]
+    )
+    try:
+        manager.connect_sync()
+        assert manager.tool_names() == ["demo_add"]
+        (tool,) = manager.get_langchain_tools()
+        assert tool.invoke({"a": 2, "b": 3}) == "5"
+        assert seen.get("x-api-key") == "secret"
+    finally:
+        manager.disconnect_sync()
+        http.should_exit = True

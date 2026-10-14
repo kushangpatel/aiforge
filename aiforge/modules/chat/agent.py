@@ -4,6 +4,15 @@ The graph implements a route → execute_tool → process_result pipeline with
 a conditional loop: if the *process_result* node detects more tool calls,
 control flows back to *execute_tool* (up to ``max_tool_iterations`` times).
 
+Tool calls are read one of two ways:
+
+* **native** (``native_tools=True``): the provider receives the tools via its
+  tool-calling API and returns structured :class:`~aiforge.core.types.ToolCall`
+  objects; results go back as ``tool`` messages tied to each call's id.
+* **prompted** (the default, for custom providers without tool calling): the
+  system prompt asks for ``{"tool": ..., "input": ...}`` JSON, which is parsed
+  out of the reply text and results are returned as a user message.
+
 Usage::
 
     graph = build_chat_graph(llm_fn=my_llm, tools=[calculator])
@@ -32,7 +41,7 @@ class ChatAgentState(TypedDict):
     semantics: node return values are **accumulated** rather than replaced.
     """
 
-    messages: list[dict[str, str]]
+    messages: list[dict[str, Any]]
     current_input: str
     tool_calls: list[dict[str, Any]]
     tool_results: Annotated[list[dict[str, Any]], operator.add]
@@ -41,6 +50,7 @@ class ChatAgentState(TypedDict):
     trace: Annotated[list[dict[str, Any]], operator.add]
     total_input_tokens: Annotated[int, operator.add]
     total_output_tokens: Annotated[int, operator.add]
+    total_cost: Annotated[float, operator.add]
     model: str
 
 
@@ -50,16 +60,21 @@ class ChatAgentState(TypedDict):
 
 
 def build_chat_graph(
-    llm_fn: Callable[[list[dict[str, str]]], Any],
+    llm_fn: Callable[[list[dict[str, Any]]], Any],
     tools: list[Any] | None = None,
+    *,
+    native_tools: bool = False,
 ) -> Any:
     """Build and compile the chat agent graph.
 
     Args:
         llm_fn:  ``(messages: list[dict]) → CompletionResult`` — wraps the
-                 module's ``_call_llm`` method.
+                 module's ``_call_llm`` method. With ``native_tools`` it must
+                 offer the tools to the provider itself.
         tools:   List of LangChain-compatible tools (each has ``.name``,
                  ``.description``, and ``.invoke()``).
+        native_tools: Read tool calls from ``CompletionResult.tool_calls``
+                 instead of parsing JSON out of the reply text.
 
     Returns:
         A compiled LangGraph ``Runnable``.
@@ -71,35 +86,69 @@ def build_chat_graph(
 
     # -- nodes ---------------------------------------------------------------
 
-    def route_node(state: ChatAgentState) -> dict[str, Any]:
-        """Send the full message history to the LLM; parse tool calls."""
+    def _decide(
+        state: ChatAgentState, step: str, tool_decision: str, answer: str
+    ) -> dict[str, Any]:
+        """Call the LLM once and either queue tool calls or record the answer."""
         result = llm_fn(state["messages"])
         raw = result.text.strip()
 
-        parsed_tools = _parse_tool_calls(raw)
+        if native_tools:
+            parsed_tools = [
+                {"id": tc.id, "tool": tc.name, "input": tc.arguments} for tc in result.tool_calls
+            ]
+        else:
+            parsed_tools = _parse_tool_calls(raw)
 
         updates: dict[str, Any] = {
             "total_input_tokens": result.input_tokens,
             "total_output_tokens": result.output_tokens,
+            "total_cost": result.cost,
             "model": result.model,
         }
 
-        if parsed_tools:
+        if parsed_tools and state["iteration"] < state["max_tool_iterations"]:
+            updates["tool_calls"] = parsed_tools
+            if native_tools:
+                # The assistant turn that made the calls must precede their results.
+                updates["messages"] = state["messages"] + [
+                    {
+                        "role": "assistant",
+                        "content": raw,
+                        "tool_calls": [
+                            {"id": tc["id"], "name": tc["tool"], "arguments": tc["input"]}
+                            for tc in parsed_tools
+                        ],
+                    }
+                ]
+            updates["trace"] = [
+                {
+                    "step": step,
+                    "decision": tool_decision,
+                    "tool_calls": [tc["tool"] for tc in parsed_tools],
+                }
+            ]
+        elif parsed_tools and not native_tools:
+            # Prompted mode at the iteration cap: keep the legacy behaviour of
+            # leaving the request pending (the caller sees the last marker).
             updates["tool_calls"] = parsed_tools
             updates["trace"] = [
                 {
-                    "step": "route",
-                    "decision": "needs_tool",
+                    "step": step,
+                    "decision": tool_decision,
                     "tool_calls": [tc["tool"] for tc in parsed_tools],
                 }
             ]
         else:
-            # Direct answer — append AI message
             updates["tool_calls"] = []
             updates["messages"] = state["messages"] + [{"role": "assistant", "content": raw}]
-            updates["trace"] = [{"step": "route", "decision": "direct_answer"}]
+            updates["trace"] = [{"step": step, "decision": answer}]
 
         return updates
+
+    def route_node(state: ChatAgentState) -> dict[str, Any]:
+        """Send the full message history to the LLM; collect tool calls."""
+        return _decide(state, "route", "needs_tool", "direct_answer")
 
     def execute_tool_node(state: ChatAgentState) -> dict[str, Any]:
         """Execute all pending tool calls and record results."""
@@ -109,6 +158,7 @@ def build_chat_graph(
             tool_name = tc["tool"]
             tool_input = tc.get("input", {})
 
+            failed = True
             if tool_name in tool_map:
                 try:
                     if isinstance(tool_input, dict):
@@ -118,22 +168,44 @@ def build_chat_graph(
                         output = str(tool_map[tool_name].invoke(tool_input))
                     else:
                         output = str(tool_map[tool_name].invoke(str(tool_input)))
+                    failed = False
                 except Exception as exc:
                     output = f"Error: {exc}"
             else:
                 output = f"Error: Unknown tool '{tool_name}'"
 
-            new_results.append({"tool": tool_name, "input": tool_input, "output": output})
+            new_results.append(
+                {
+                    "id": tc.get("id", ""),
+                    "tool": tool_name,
+                    "input": tool_input,
+                    "output": output,
+                    "is_error": failed,
+                }
+            )
 
-        # Append tool results as a message so the LLM can see them
-        tool_summary = "\n".join(f"Tool '{r['tool']}' returned: {r['output']}" for r in new_results)
-        new_messages = state["messages"] + [
-            {
-                "role": "assistant",
-                "content": f"[Tool calls: {', '.join(tc['tool'] for tc in state['tool_calls'])}]",
-            },
-            {"role": "user", "content": f"Tool results:\n{tool_summary}"},
-        ]
+        if native_tools:
+            new_messages = state["messages"] + [
+                {
+                    "role": "tool",
+                    "tool_call_id": r["id"],
+                    "content": r["output"],
+                    "is_error": r["is_error"],
+                }
+                for r in new_results
+            ]
+        else:
+            # Append tool results as a message so the LLM can see them
+            tool_summary = "\n".join(
+                f"Tool '{r['tool']}' returned: {r['output']}" for r in new_results
+            )
+            new_messages = state["messages"] + [
+                {
+                    "role": "assistant",
+                    "content": f"[Tool calls: {', '.join(tc['tool'] for tc in state['tool_calls'])}]",
+                },
+                {"role": "user", "content": f"Tool results:\n{tool_summary}"},
+            ]
 
         return {
             "messages": new_messages,
@@ -151,32 +223,7 @@ def build_chat_graph(
 
     def process_result_node(state: ChatAgentState) -> dict[str, Any]:
         """Let the LLM process tool results and decide next action."""
-        result = llm_fn(state["messages"])
-        raw = result.text.strip()
-
-        parsed_tools = _parse_tool_calls(raw)
-
-        updates: dict[str, Any] = {
-            "total_input_tokens": result.input_tokens,
-            "total_output_tokens": result.output_tokens,
-            "model": result.model,
-        }
-
-        if parsed_tools:
-            updates["tool_calls"] = parsed_tools
-            updates["trace"] = [
-                {
-                    "step": "process_result",
-                    "decision": "more_tools",
-                    "tool_calls": [tc["tool"] for tc in parsed_tools],
-                }
-            ]
-        else:
-            updates["tool_calls"] = []
-            updates["messages"] = state["messages"] + [{"role": "assistant", "content": raw}]
-            updates["trace"] = [{"step": "process_result", "decision": "respond"}]
-
-        return updates
+        return _decide(state, "process_result", "more_tools", "respond")
 
     # -- routing -------------------------------------------------------------
 

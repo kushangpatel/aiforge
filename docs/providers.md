@@ -404,19 +404,22 @@ All providers implement two abstract base classes defined in
 
 ```python
 from abc import ABC, abstractmethod
-from typing import AsyncGenerator
+from typing import Any, AsyncGenerator
 
 class LLMProvider(ABC):
+    supports_tools: bool = False              # accepts tools= / tool_choice=
+    supports_structured_output: bool = False  # accepts response_format=
+
     @abstractmethod
-    def complete(self, messages: list[dict[str, str]], **kwargs) -> CompletionResult:
+    def complete(self, messages: list[dict[str, Any]], **kwargs) -> CompletionResult:
         """Synchronous completion."""
 
     @abstractmethod
-    async def complete_async(self, messages: list[dict[str, str]], **kwargs) -> CompletionResult:
+    async def complete_async(self, messages: list[dict[str, Any]], **kwargs) -> CompletionResult:
         """Asynchronous completion."""
 
     @abstractmethod
-    async def stream(self, messages: list[dict[str, str]], **kwargs) -> AsyncGenerator[str, None]:
+    async def stream(self, messages: list[dict[str, Any]], **kwargs) -> AsyncGenerator[str, None]:
         """Token-by-token streaming."""
 
     @property
@@ -425,17 +428,75 @@ class LLMProvider(ABC):
         """Return the configured model identifier."""
 ```
 
-Messages use the OpenAI-style format:
+All built-in providers support tools and structured output. Custom providers
+leave the flags `False` and modules fall back to prompt-based JSON.
+
+### Messages
+
+Messages use the OpenAI-style format. `content` is a string or a list of
+content blocks, and `aiforge.core.messages` has builders for every shape:
 
 ```python
-messages = [
-    {"role": "system", "content": "You are a helpful assistant."},
-    {"role": "user", "content": "Summarise this document..."},
+from aiforge.core import messages as m
+
+msgs = [
+    m.system("You are a helpful assistant."),
+    m.user("What does this invoice say?", m.file(path="invoice.pdf")),
+    m.user("And this photo?", m.image(path="receipt.jpg")),
 ]
 ```
 
-All providers internally convert these to LangChain message objects via
-`to_lc_messages()` (SystemMessage, HumanMessage, AIMessage).
+Assistant turns can carry tool calls (`m.assistant(text, [ToolCall(...)])`)
+and tool results go back as `m.tool_result(call_id, output)`. Providers
+convert everything to LangChain messages via `to_lc_messages()`, and each
+LangChain chat model translates the blocks to its own API.
+
+### Native tool calling
+
+```python
+result = provider.complete(msgs, tools=[my_langchain_tool])
+for call in result.tool_calls:          # list[ToolCall(id, name, arguments)]
+    ...
+```
+
+`ChatAgent` uses this automatically on providers that support it. Claude
+Opus 5.5, Sonnet 5.5 and Fable 5.1 reject forced `tool_choice` values, so
+leave `tool_choice` unset for them.
+
+### Native structured output
+
+```python
+class Invoice(BaseModel):
+    vendor: str
+    total: float
+
+result = provider.complete(msgs, response_format=Invoice)  # or a JSON-schema dict
+result.parsed   # {"vendor": "...", "total": 12.5}
+result.text     # the same object as JSON
+```
+
+The provider's native `json_schema` mode constrains generation to the schema
+(OpenAI and Azure response formats, Claude `output_config.format`, Ollama
+`format`). If a model or schema isn't accepted, the call is retried once
+without `response_format` and the caller's own validation takes over.
+`Extractor`, `Classifier` (labels restricted to the taxonomy) and `Moderator`
+use this path.
+
+### Prompt caching
+
+`PROMPT_CACHE` controls Anthropic prompt caching:
+
+| Value | Behaviour |
+|-------|-----------|
+| `system` (default) | Cache breakpoint on the system prompt, so tools + system prompt are reused |
+| `auto` | Top-level automatic caching, which also reuses a growing conversation history |
+| `off` | No breakpoints |
+
+OpenAI and Azure cache long prompts automatically. Either way, cached input
+tokens are reported on `CompletionResult.cache_read_tokens` /
+`cache_write_tokens` and priced at the discounted rate (Claude: reads 0.1x,
+writes 1.25x; OpenAI: reads 0.5x). Override with `cache_read` / `cache_write`
+keys in `custom_pricing`. See [Cost Tracking](cost-tracking.md#prompt-caching--cost-savings).
 
 ### EmbeddingProvider
 
@@ -474,6 +535,10 @@ class CompletionResult(BaseModel):
     output_tokens: int                  # Completion tokens generated
     model: str                          # Model identifier (e.g., "gpt-4o-2024-08-06")
     finish_reason: str                  # "stop" | "length" | "tool_calls" | "content_filter"
+    tool_calls: list[ToolCall] = []     # Native tool calls requested by the model
+    parsed: dict | None = None          # Schema-validated object (response_format=)
+    cache_read_tokens: int = 0          # Input tokens served from the prompt cache
+    cache_write_tokens: int = 0         # Input tokens written to the prompt cache
     latency_ms: float                   # Wall-clock time for this call
     raw_response: dict | None = None    # Provider-specific raw response
 
@@ -489,9 +554,13 @@ class CompletionResult(BaseModel):
 | `output_tokens` | `int` | Tokens generated in the response |
 | `model` | `str` | Exact model version used |
 | `finish_reason` | `str` | Why generation stopped |
+| `tool_calls` | `list[ToolCall]` | Tool calls requested by the model |
+| `parsed` | `dict \| None` | Structured output, when `response_format` was used |
+| `cache_read_tokens` / `cache_write_tokens` | `int` | Prompt-cache usage, included in `input_tokens` |
 | `latency_ms` | `float` | Wall-clock time in milliseconds |
 | `raw_response` | `dict \| None` | Full provider-specific payload |
 | `total_tokens` | `int` (property) | `input_tokens + output_tokens` |
+| `cost` | `float` (property) | USD cost, with cached tokens at their own rates |
 
 ---
 

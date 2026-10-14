@@ -16,12 +16,26 @@ from aiforge.core.types import CompletionResult
 
 
 class LLMProvider(ABC):
-    """Abstract provider for chat-completion LLM calls."""
+    """Abstract provider for chat-completion LLM calls.
+
+    Messages are OpenAI-style dicts; ``content`` may be a string or a list of
+    content blocks (see :mod:`aiforge.core.messages`).
+
+    Providers that set :attr:`supports_tools` accept ``tools=`` (and
+    ``tool_choice=``) in ``**kwargs`` and report requested calls on
+    :attr:`CompletionResult.tool_calls`. Providers that set
+    :attr:`supports_structured_output` accept ``response_format=`` (a Pydantic
+    model or JSON-schema dict) and fill :attr:`CompletionResult.parsed`.
+    Callers check these flags before passing the keywords.
+    """
+
+    supports_tools: bool = False
+    supports_structured_output: bool = False
 
     @abstractmethod
     def complete(
         self,
-        messages: list[dict[str, str]],
+        messages: list[dict[str, Any]],
         **kwargs: Any,
     ) -> CompletionResult:
         """Synchronous chat completion.
@@ -29,7 +43,8 @@ class LLMProvider(ABC):
         Args:
             messages: OpenAI-style message list, e.g.
                       ``[{"role": "user", "content": "Hello"}]``
-            **kwargs: Provider-specific overrides (temperature, max_tokens …)
+            **kwargs: Provider-specific overrides (temperature, max_tokens …),
+                      plus ``tools`` / ``response_format`` where supported.
 
         Returns:
             :class:`CompletionResult` with text, token counts, latency, etc.
@@ -38,7 +53,7 @@ class LLMProvider(ABC):
     @abstractmethod
     async def complete_async(
         self,
-        messages: list[dict[str, str]],
+        messages: list[dict[str, Any]],
         **kwargs: Any,
     ) -> CompletionResult:
         """Async chat completion."""
@@ -46,7 +61,7 @@ class LLMProvider(ABC):
     @abstractmethod
     async def stream(
         self,
-        messages: list[dict[str, str]],
+        messages: list[dict[str, Any]],
         **kwargs: Any,
     ) -> AsyncGenerator[str, None]:
         """Async streaming completion.

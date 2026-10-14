@@ -146,7 +146,7 @@ class RedisBackend(CacheBackend):
 
 def _make_cache_key(
     model: str,
-    messages: list[dict[str, str]],
+    messages: list[dict[str, Any]],
     temperature: float,
     max_tokens: int | None,
     module: str,
@@ -224,7 +224,7 @@ class RequestCache:
     def build_key(
         self,
         model: str,
-        messages: list[dict[str, str]],
+        messages: list[dict[str, Any]],
         temperature: float,
         max_tokens: int | None,
         module: str,

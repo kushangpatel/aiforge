@@ -534,6 +534,7 @@ class TestChatAgentOverride:
         agent.max_tool_iterations = 5
         agent.conversation_id = "test-conv-id"
         agent._system_prompt_override = system_prompt
+        agent._native_tools = False
         agent.logger = structlog.get_logger()
         agent._provider = None
         agent._embedding_provider = MagicMock()

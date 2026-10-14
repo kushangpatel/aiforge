@@ -12,18 +12,39 @@ import re
 from typing import Any
 
 
-def to_lc_messages(messages: list[dict[str, str]]) -> list[Any]:
-    """Convert OpenAI-style message dicts to LangChain message objects."""
-    from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+def to_lc_messages(messages: list[dict[str, Any]]) -> list[Any]:
+    """Convert AIForge message dicts to LangChain message objects.
+
+    Handles string or content-block ``content``, assistant messages carrying
+    ``tool_calls`` and ``tool`` result messages (see :mod:`aiforge.core.messages`).
+    """
+    from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 
     lc: list[Any] = []
     for msg in messages:
         role = msg.get("role", "user")
-        content = msg.get("content", "")
+        content = msg.get("content") or ""
         if role == "system":
             lc.append(SystemMessage(content=content))
         elif role == "assistant":
-            lc.append(AIMessage(content=content))
+            tool_calls = [
+                {
+                    "id": tc.get("id") or "",
+                    "name": tc["name"],
+                    "args": tc.get("arguments") or {},
+                    "type": "tool_call",
+                }
+                for tc in msg.get("tool_calls") or []
+            ]
+            lc.append(AIMessage(content=content, tool_calls=tool_calls))
+        elif role == "tool":
+            lc.append(
+                ToolMessage(
+                    content=content,
+                    tool_call_id=msg.get("tool_call_id", ""),
+                    status="error" if msg.get("is_error") else "success",
+                )
+            )
         else:
             lc.append(HumanMessage(content=content))
     return lc

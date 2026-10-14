@@ -120,7 +120,12 @@ pip install -e ".[server]"             # FastAPI server + Streamlit playground
 pip install -e ".[observability]"      # OpenTelemetry + LangSmith
 pip install -e ".[docs]"              # PDF, DOCX, HTML document loaders
 pip install -e ".[all]"               # Everything
+pip install -e ".[mcp]"               # MCP client (stdio + Streamable HTTP)
 ```
+
+For development, `uv sync --all-extras` installs the exact versions CI tests
+against from `uv.lock`. CI also runs the suite on the lowest versions
+`pyproject.toml` allows, and Dependabot proposes lockfile updates weekly.
 
 ---
 

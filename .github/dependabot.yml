@@ -1,0 +1,17 @@
+version: 2
+updates:
+  # Keeps uv.lock current; CI runs the full suite on every bump.
+  - package-ecosystem: uv
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      langchain:
+        patterns: ["langchain*", "langgraph*", "langsmith"]
+      minor-and-patch:
+        update-types: [minor, patch]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly

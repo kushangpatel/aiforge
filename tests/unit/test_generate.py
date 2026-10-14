@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from aiforge.core.types import CompletionResult
 from aiforge.modules.generate.module import (
     _CUSTOM_GUARDRAILS,
     _MAX_RETRIES,
@@ -59,14 +60,9 @@ def _gen(
     return g
 
 
-def _fake_llm(text: str = "Generated content here.") -> MagicMock:
+def _fake_llm(text: str = "Generated content here.") -> CompletionResult:
     """Create a fake CompletionResult."""
-    r = MagicMock()
-    r.text = text
-    r.input_tokens = 50
-    r.output_tokens = 30
-    r.model = "gpt-4o-mini"
-    return r
+    return CompletionResult(text=text, input_tokens=50, output_tokens=30, model="gpt-4o-mini")
 
 
 # ---------------------------------------------------------------------------

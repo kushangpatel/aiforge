@@ -8,20 +8,18 @@ Requires:
 
 from __future__ import annotations
 
-import time
-from collections.abc import AsyncGenerator
 from typing import TYPE_CHECKING, Any
 
-from aiforge.core.provider import EmbeddingProvider, LLMProvider
-from aiforge.core.types import APIConnectionError, CompletionResult, ProviderError
-from aiforge.infra.retry import retry_embedding_call, retry_llm_call
-from aiforge.providers._utils import to_lc_messages as _to_lc_messages
+from aiforge.core.provider import EmbeddingProvider
+from aiforge.core.types import APIConnectionError, ProviderError
+from aiforge.infra.retry import retry_embedding_call
+from aiforge.providers._langchain import LangChainLLMProvider
 
 if TYPE_CHECKING:
     from aiforge.infra.config import AIForgeSettings
 
 
-class OllamaProvider(LLMProvider):
+class OllamaProvider(LangChainLLMProvider):
     """LLM provider backed by Ollama (local models)."""
 
     def __init__(self, settings: AIForgeSettings) -> None:
@@ -39,62 +37,17 @@ class OllamaProvider(LLMProvider):
             base_url=settings.OLLAMA_BASE_URL,
         )
 
-    @property
-    def model_name(self) -> str:
-        return self._model_name
+    def _wrap_error(self, exc: Exception) -> ProviderError:
+        return _wrap_ollama_error(exc)
 
-    @retry_llm_call()
-    def complete(self, messages: list[dict[str, str]], **kwargs: Any) -> CompletionResult:
-        lc_messages = _to_lc_messages(messages)
-        messages_text = " ".join(m.get("content", "") for m in messages)
-        start = time.monotonic()
-        try:
-            response = self._llm.invoke(lc_messages, **kwargs)
-        except Exception as exc:
-            raise _wrap_ollama_error(exc) from exc
+    def _request_kwargs(self, kwargs: dict[str, Any]) -> dict[str, Any]:
+        return dict(kwargs)
 
-        latency_ms = (time.monotonic() - start) * 1000
-        response_text = str(response.content)
-        input_tokens, output_tokens = _extract_tokens(response, messages_text, response_text)
-        return CompletionResult(
-            text=response_text,
-            input_tokens=input_tokens,
-            output_tokens=output_tokens,
-            model=self._model_name,
-            finish_reason="stop",
-            latency_ms=latency_ms,
+    def _usage(self, response: Any, messages: list[dict[str, Any]], text: str) -> tuple[int, int]:
+        messages_text = " ".join(
+            m["content"] for m in messages if isinstance(m.get("content"), str)
         )
-
-    @retry_llm_call()
-    async def complete_async(
-        self, messages: list[dict[str, str]], **kwargs: Any
-    ) -> CompletionResult:
-        lc_messages = _to_lc_messages(messages)
-        messages_text = " ".join(m.get("content", "") for m in messages)
-        start = time.monotonic()
-        try:
-            response = await self._llm.ainvoke(lc_messages, **kwargs)
-        except Exception as exc:
-            raise _wrap_ollama_error(exc) from exc
-
-        latency_ms = (time.monotonic() - start) * 1000
-        response_text = str(response.content)
-        input_tokens, output_tokens = _extract_tokens(response, messages_text, response_text)
-        return CompletionResult(
-            text=response_text,
-            input_tokens=input_tokens,
-            output_tokens=output_tokens,
-            model=self._model_name,
-            finish_reason="stop",
-            latency_ms=latency_ms,
-        )
-
-    async def stream(
-        self, messages: list[dict[str, str]], **kwargs: Any
-    ) -> AsyncGenerator[str, None]:
-        lc_messages = _to_lc_messages(messages)
-        async for chunk in self._llm.astream(lc_messages, **kwargs):
-            yield str(chunk.content)
+        return _extract_tokens(response, messages_text, text)
 
 
 class OllamaEmbeddingProvider(EmbeddingProvider):

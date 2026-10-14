@@ -114,7 +114,7 @@ class DocQA(BaseModule):
         from aiforge.core.doc_loader import DocLoader
         from aiforge.core.text_splitter import TextSplitter
 
-        t0 = time.monotonic()
+        t0 = time.perf_counter()
 
         loader = DocLoader(file_extensions=file_extensions)
         documents, stats = loader.load(source)
@@ -172,7 +172,7 @@ class DocQA(BaseModule):
         from aiforge.core.doc_loader import DocLoader
         from aiforge.core.text_splitter import TextSplitter
 
-        t0 = time.monotonic()
+        t0 = time.perf_counter()
 
         loader = DocLoader(file_extensions=file_extensions)
         loop = asyncio.get_running_loop()
@@ -262,7 +262,7 @@ class DocQA(BaseModule):
         from aiforge.core.doc_loader import DocLoader
         from aiforge.core.text_splitter import TextSplitter
 
-        t0 = time.monotonic()
+        t0 = time.perf_counter()
 
         # 1. Load source through DocLoader (same source semantics as ingest).
         loader = DocLoader(file_extensions=file_extensions)
@@ -393,7 +393,7 @@ class DocQA(BaseModule):
 
         from aiforge.modules.qa.agent import build_qa_graph
 
-        t0 = time.monotonic()
+        t0 = time.perf_counter()
 
         coll_stats = self._store.collection_stats(self.collection)
         if coll_stats.get("chunks", 0) == 0:
@@ -422,7 +422,7 @@ class DocQA(BaseModule):
 
         from aiforge.modules.qa.agent import build_qa_graph
 
-        t0 = time.monotonic()
+        t0 = time.perf_counter()
 
         coll_stats = self._store.collection_stats(self.collection)
         if coll_stats.get("chunks", 0) == 0:
@@ -868,4 +868,4 @@ class DocQA(BaseModule):
     @staticmethod
     def _elapsed_ms(t0: float) -> float:
         """Return non-zero elapsed ms for very fast code paths."""
-        return max((time.monotonic() - t0) * 1000, 0.001)
+        return max((time.perf_counter() - t0) * 1000, 0.001)

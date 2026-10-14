@@ -173,16 +173,43 @@ def get_model_pricing(model: str) -> dict[str, float] | None:
     return None
 
 
+def _cache_multipliers(model: str) -> tuple[float, float]:
+    """Default (read, write) price multipliers for prompt-cached input tokens.
+
+    Anthropic bills cache reads at 0.1x and 5-minute cache writes at 1.25x the
+    input price. OpenAI-style automatic caching bills reads at 0.5x and adds
+    no write surcharge. A model's pricing entry can override either with
+    explicit ``cache_read`` / ``cache_write`` prices.
+    """
+    if model.lower().split("/")[-1].startswith("claude"):
+        return 0.1, 1.25
+    return 0.5, 1.0
+
+
 def calculate_cost(
     model: str,
     input_tokens: int,
     output_tokens: int,
+    *,
+    cache_read_tokens: int = 0,
+    cache_write_tokens: int = 0,
 ) -> float:
-    """Calculate USD cost for a completed LLM or embedding call."""
+    """Calculate USD cost for a completed LLM or embedding call.
+
+    *input_tokens* is the total prompt size; the cached portions given by
+    *cache_read_tokens* and *cache_write_tokens* are priced at their own rates.
+    """
     pricing = get_model_pricing(model)
     if pricing is None:
         return 0.0
-    input_cost = pricing.get("input", 0.0) * input_tokens / 1_000_000
+    input_price = pricing.get("input", 0.0)
+    read_mult, write_mult = _cache_multipliers(model)
+    read_price = pricing.get("cache_read", input_price * read_mult)
+    write_price = pricing.get("cache_write", input_price * write_mult)
+    uncached = max(input_tokens - cache_read_tokens - cache_write_tokens, 0)
+    input_cost = (
+        input_price * uncached + read_price * cache_read_tokens + write_price * cache_write_tokens
+    ) / 1_000_000
     output_cost = pricing.get("output", 0.0) * output_tokens / 1_000_000
     return input_cost + output_cost
 

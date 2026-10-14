@@ -11,7 +11,7 @@ Get AIForge running in under 5 minutes.
 pip install aiforge
 
 # Specific providers
-pip install "aiforge[anthropicai]"      # Anthropic + Voyage AI embeddings
+pip install "aiforge[anthropic]"        # Anthropic + Voyage AI embeddings
 pip install "aiforge[local]"            # Ollama
 
 # Everything
@@ -29,7 +29,7 @@ pip install "aiforge[playground]"       # Streamlit UI
 
 ### Plugin System
 
-AIForge auto-registers all 8 built-in modules and vector stores on import. You can extend it with custom plugins:
+AIForge auto-registers all 10 built-in modules and vector stores on import. You can extend it with custom plugins:
 
 ```python
 from aiforge.registry import register_module, list_modules

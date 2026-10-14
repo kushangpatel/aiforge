@@ -125,7 +125,7 @@ class Summarizer(BaseModule):
         """
         if not text or not text.strip():
             raise ValueError("text must not be empty or whitespace-only")
-        t0 = time.monotonic()
+        t0 = time.perf_counter()
         chosen = self._choose_strategy(text, strategy)
         resolved = self._resolve_system_prompt(system_prompt)
         if chosen == "stuff":
@@ -142,7 +142,7 @@ class Summarizer(BaseModule):
         """Async version of :meth:`summarize`."""
         if not text or not text.strip():
             raise ValueError("text must not be empty or whitespace-only")
-        t0 = time.monotonic()
+        t0 = time.perf_counter()
         chosen = self._choose_strategy(text, strategy)
         resolved = self._resolve_system_prompt(system_prompt)
         if chosen == "stuff":
@@ -204,9 +204,8 @@ class Summarizer(BaseModule):
     def _stuff(self, text: str, t0: float, system: str) -> SummarizeResponse:
         messages = self._build_stuff_messages(text, system)
         llm = self._call_llm(messages, temperature=self.temperature)
-        from aiforge.core.pricing import calculate_cost
 
-        cost = calculate_cost(llm.model, llm.input_tokens, llm.output_tokens)
+        cost = llm.cost
         return SummarizeResponse(
             summary=llm.text.strip(),
             strategy_used="stuff",
@@ -215,15 +214,14 @@ class Summarizer(BaseModule):
             input_tokens=llm.input_tokens,
             output_tokens=llm.output_tokens,
             model=llm.model,
-            latency_ms=(time.monotonic() - t0) * 1000,
+            latency_ms=(time.perf_counter() - t0) * 1000,
         )
 
     async def _astuff(self, text: str, t0: float, system: str) -> SummarizeResponse:
         messages = self._build_stuff_messages(text, system)
         llm = await self._acall_llm(messages, temperature=self.temperature)
-        from aiforge.core.pricing import calculate_cost
 
-        cost = calculate_cost(llm.model, llm.input_tokens, llm.output_tokens)
+        cost = llm.cost
         return SummarizeResponse(
             summary=llm.text.strip(),
             strategy_used="stuff",
@@ -232,7 +230,7 @@ class Summarizer(BaseModule):
             input_tokens=llm.input_tokens,
             output_tokens=llm.output_tokens,
             model=llm.model,
-            latency_ms=(time.monotonic() - t0) * 1000,
+            latency_ms=(time.perf_counter() - t0) * 1000,
         )
 
     # ------------------------------------------------------------------
@@ -275,9 +273,8 @@ class Summarizer(BaseModule):
         for chunk in chunks:
             messages = self._build_map_messages(chunk, system)
             llm = self._call_llm(messages, temperature=self.temperature)
-            from aiforge.core.pricing import calculate_cost
 
-            cost = calculate_cost(llm.model, llm.input_tokens, llm.output_tokens)
+            cost = llm.cost
             total_in += llm.input_tokens
             total_out += llm.output_tokens
             total_cost += cost
@@ -288,9 +285,8 @@ class Summarizer(BaseModule):
         combined = "\n\n".join(chunk_summaries)
         messages = self._build_reduce_messages(combined, system)
         llm = self._call_llm(messages, temperature=self.temperature)
-        from aiforge.core.pricing import calculate_cost
 
-        cost = calculate_cost(llm.model, llm.input_tokens, llm.output_tokens)
+        cost = llm.cost
         total_in += llm.input_tokens
         total_out += llm.output_tokens
         total_cost += cost
@@ -304,7 +300,7 @@ class Summarizer(BaseModule):
             input_tokens=total_in,
             output_tokens=total_out,
             model=model,
-            latency_ms=(time.monotonic() - t0) * 1000,
+            latency_ms=(time.perf_counter() - t0) * 1000,
         )
 
     async def _amap_reduce(self, text: str, t0: float, system: str) -> SummarizeResponse:
@@ -325,9 +321,7 @@ class Summarizer(BaseModule):
 
         map_results = await asyncio.gather(*[_summarize_chunk(c) for c in chunks])
         for llm in map_results:
-            from aiforge.core.pricing import calculate_cost
-
-            cost = calculate_cost(llm.model, llm.input_tokens, llm.output_tokens)
+            cost = llm.cost
             total_in += llm.input_tokens
             total_out += llm.output_tokens
             total_cost += cost
@@ -338,9 +332,8 @@ class Summarizer(BaseModule):
         combined = "\n\n".join(chunk_summaries)
         messages = self._build_reduce_messages(combined, system)
         llm = await self._acall_llm(messages, temperature=self.temperature)
-        from aiforge.core.pricing import calculate_cost
 
-        cost = calculate_cost(llm.model, llm.input_tokens, llm.output_tokens)
+        cost = llm.cost
         total_in += llm.input_tokens
         total_out += llm.output_tokens
         total_cost += cost
@@ -354,5 +347,5 @@ class Summarizer(BaseModule):
             input_tokens=total_in,
             output_tokens=total_out,
             model=model,
-            latency_ms=(time.monotonic() - t0) * 1000,
+            latency_ms=(time.perf_counter() - t0) * 1000,
         )

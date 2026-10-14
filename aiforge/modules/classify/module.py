@@ -167,14 +167,15 @@ class Classifier(BaseModule):
         """Classify *text* synchronously and return a :class:`ClassifyResponse`."""
         if not text or not text.strip():
             raise ValueError("text must not be empty or whitespace-only")
-        t0 = time.monotonic()
+        t0 = time.perf_counter()
         llm = self._call_llm(
-            self._build_messages(text, system_prompt=system_prompt), temperature=self.temperature
+            self._build_messages(text, system_prompt=system_prompt),
+            temperature=self.temperature,
+            **self._structured_kwargs(self._output_schema()),
         )
         result = self._parse_response(llm.text)
-        from aiforge.core.pricing import calculate_cost
 
-        cost = calculate_cost(llm.model, llm.input_tokens, llm.output_tokens)
+        cost = llm.cost
         return ClassifyResponse(
             label=result.label,
             scores=result.scores,
@@ -183,21 +184,22 @@ class Classifier(BaseModule):
             input_tokens=llm.input_tokens,
             output_tokens=llm.output_tokens,
             model=llm.model,
-            latency_ms=(time.monotonic() - t0) * 1000,
+            latency_ms=(time.perf_counter() - t0) * 1000,
         )
 
     async def aclassify(self, text: str, *, system_prompt: str | None = None) -> ClassifyResponse:
         """Async version of :meth:`classify`."""
         if not text or not text.strip():
             raise ValueError("text must not be empty or whitespace-only")
-        t0 = time.monotonic()
+        t0 = time.perf_counter()
         llm = await self._acall_llm(
-            self._build_messages(text, system_prompt=system_prompt), temperature=self.temperature
+            self._build_messages(text, system_prompt=system_prompt),
+            temperature=self.temperature,
+            **self._structured_kwargs(self._output_schema()),
         )
         result = self._parse_response(llm.text)
-        from aiforge.core.pricing import calculate_cost
 
-        cost = calculate_cost(llm.model, llm.input_tokens, llm.output_tokens)
+        cost = llm.cost
         return ClassifyResponse(
             label=result.label,
             scores=result.scores,
@@ -206,7 +208,7 @@ class Classifier(BaseModule):
             input_tokens=llm.input_tokens,
             output_tokens=llm.output_tokens,
             model=llm.model,
-            latency_ms=(time.monotonic() - t0) * 1000,
+            latency_ms=(time.perf_counter() - t0) * 1000,
         )
 
     def run(self, text: str, **kwargs: Any) -> ClassifyResponse:
@@ -240,13 +242,12 @@ class Classifier(BaseModule):
         """
         if not text or not text.strip():
             raise ValueError("text must not be empty or whitespace-only")
-        t0 = time.monotonic()
+        t0 = time.perf_counter()
         messages = self._build_sentiment_messages(text, aspects, system_prompt)
         llm = self._call_llm(messages, temperature=self.temperature)
         parsed = self._parse_sentiment(llm.text, aspects)
-        from aiforge.core.pricing import calculate_cost
 
-        cost = calculate_cost(llm.model, llm.input_tokens, llm.output_tokens)
+        cost = llm.cost
         return SentimentResponse(
             overall=parsed.overall,
             score=parsed.score,
@@ -257,7 +258,7 @@ class Classifier(BaseModule):
             input_tokens=llm.input_tokens,
             output_tokens=llm.output_tokens,
             model=llm.model,
-            latency_ms=(time.monotonic() - t0) * 1000,
+            latency_ms=(time.perf_counter() - t0) * 1000,
         )
 
     async def asentiment(
@@ -270,13 +271,12 @@ class Classifier(BaseModule):
         """Async version of :meth:`sentiment`."""
         if not text or not text.strip():
             raise ValueError("text must not be empty or whitespace-only")
-        t0 = time.monotonic()
+        t0 = time.perf_counter()
         messages = self._build_sentiment_messages(text, aspects, system_prompt)
         llm = await self._acall_llm(messages, temperature=self.temperature)
         parsed = self._parse_sentiment(llm.text, aspects)
-        from aiforge.core.pricing import calculate_cost
 
-        cost = calculate_cost(llm.model, llm.input_tokens, llm.output_tokens)
+        cost = llm.cost
         return SentimentResponse(
             overall=parsed.overall,
             score=parsed.score,
@@ -287,7 +287,7 @@ class Classifier(BaseModule):
             input_tokens=llm.input_tokens,
             output_tokens=llm.output_tokens,
             model=llm.model,
-            latency_ms=(time.monotonic() - t0) * 1000,
+            latency_ms=(time.perf_counter() - t0) * 1000,
         )
 
     def _build_sentiment_messages(
@@ -360,6 +360,33 @@ class Classifier(BaseModule):
     # ------------------------------------------------------------------
     # Private helpers
     # ------------------------------------------------------------------
+
+    def _output_schema(self) -> dict[str, Any]:
+        """JSON schema for the classification reply, with labels restricted to the taxonomy."""
+        label = {"type": "string", "enum": list(self.labels)}
+        confidence = {"type": "number"}
+        if self.multi_label:
+            properties: dict[str, Any] = {
+                "labels": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {"label": label, "confidence": confidence},
+                        "required": ["label", "confidence"],
+                        "additionalProperties": False,
+                    },
+                },
+                "rationale": {"type": "string"},
+            }
+        else:
+            properties = {"label": label, "confidence": confidence, "rationale": {"type": "string"}}
+        return {
+            "title": "classification",
+            "type": "object",
+            "properties": properties,
+            "required": list(properties),
+            "additionalProperties": False,
+        }
 
     def _build_messages(
         self, text: str, *, system_prompt: str | None = None

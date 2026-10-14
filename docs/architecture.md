@@ -106,8 +106,8 @@ graph TB
 | Technology | Version | Where Used | Purpose |
 |---|---|---|---|
 | **Python** | 3.12+ | Entire SDK | Runtime language |
-| **Pydantic v2** | ≥2.0 | `core/types.py`, `infra/config.py`, all `schemas.py` | Data validation, settings management, response models |
-| **Pydantic Settings v2** | ≥2.0 | `infra/config.py` → `AIForgeSettings` | Hierarchical config: defaults → `aiforge.yaml` → `.env` → env vars → constructor kwargs |
+| **Pydantic v2** | ≥2.7 | `core/types.py`, `infra/config.py`, all `schemas.py` | Data validation, settings management, response models |
+| **Pydantic Settings v2** | ≥2.3 | `infra/config.py` → `AIForgeSettings` | Hierarchical config: defaults → `aiforge.yaml` → `.env` → env vars → constructor kwargs |
 | **structlog** | ≥24.0 | `infra/logging.py` | Structured JSON logging across all components |
 | **PyYAML** | ≥6.0 | `infra/config.py` | Parsing `aiforge.yaml` configuration files |
 | **tiktoken** | ≥0.7 | `core/pricing.py`, rate limiter | Token counting for cost estimation and rate limiting |
@@ -116,20 +116,21 @@ graph TB
 
 | Technology | Version | Where Used | Purpose |
 |---|---|---|---|
-| **LangChain Core** | ≥0.3 | `core/types.py`, `core/provider.py` | Base abstractions for LLM interaction (messages, prompts) |
-| **langchain-openai** | ≥0.2 | `providers/openai.py` | OpenAI GPT-4o, GPT-4o-mini, o1, o3-mini provider |
-| **langchain-anthropic** | extra | `providers/anthropic.py` | Anthropic Claude 3.5 Sonnet/Haiku provider |
-| **langchain-ollama** | extra | `providers/ollama.py` | Local model inference (Llama, Mistral, etc.) |
+| **LangChain Core** | ≥1.0 | `core/types.py`, `providers/_langchain.py` | Message, tool-calling and structured-output abstractions shared by every provider |
+| **langchain-openai** | ≥1.0 | `providers/openai.py`, `providers/azure.py` | OpenAI and Azure OpenAI provider |
+| **langchain-anthropic** | ≥1.4 (extra) | `providers/anthropic.py` | Anthropic Claude provider (Opus, Sonnet, Haiku, Fable) with prompt caching |
+| **langchain-ollama** | ≥1.0 (extra) | `providers/ollama.py` | Local model inference (Llama, Mistral, etc.) |
 | **langchain-voyageai** | extra | `providers/anthropic.py` | Voyage AI embeddings (used with Anthropic provider) |
-| **LangGraph** | extra | `modules/docqa/`, `modules/chat_agent/` | Agentic workflows: multi-step reasoning, tool use, memory |
-| **langchain-text-splitters** | ≥0.3 | `core/text_splitter.py` | Language-aware document chunking for RAG |
+| **LangGraph** | ≥1.0 (extra) | `modules/qa/`, `modules/chat/` | Agentic workflows: multi-step reasoning, tool use, memory |
+| **MCP SDK** | ≥2.0 (extra) | `mcp/` | Model Context Protocol client: stdio, streamable HTTP and (deprecated) SSE transports |
+| **langchain-text-splitters** | ≥1.0 | `core/text_splitter.py` | Language-aware document chunking for RAG |
 
 ### Vector Store Backends
 
 | Technology | Version | Where Used | Purpose |
 |---|---|---|---|
-| **ChromaDB** | ≥0.5 | `core/vectorstore.py` (default) | Embedded vector store, SQLite-backed, cosine similarity |
-| **langchain-chroma** | ≥0.2 | `core/vectorstore.py` | ChromaDB ↔ LangChain integration |
+| **ChromaDB** | ≥1.3 | `core/vectorstore.py` (default) | Embedded vector store, SQLite-backed, cosine similarity |
+| **langchain-chroma** | ≥1.0 | `core/vectorstore.py` | ChromaDB ↔ LangChain integration |
 | **pgvector** | extra | `core/vectorstore_factory.py` | PostgreSQL vector extension for production-scale RAG |
 | **psycopg** | extra | pgvector adapter | PostgreSQL driver (binary wheels) |
 | **Pinecone** | extra | `core/vectorstore_factory.py` | Managed cloud vector database |
@@ -149,7 +150,7 @@ graph TB
 
 | Technology | Version | Where Used | Purpose |
 |---|---|---|---|
-| **Typer** | ≥0.12 | `cli/main.py`, `cli/commands_*.py` | CLI framework (20+ commands) |
+| **Typer** | ≥0.13 | `cli/main.py`, `cli/commands_*.py` | CLI framework (20+ commands) |
 | **Rich** | ≥13.0 | `cli/` | Terminal formatting: tables, panels, progress bars |
 | **Streamlit** | extra | `playground/`, `modules/*/widget.py`, `pipeline/widget.py` | Multi-page web UI (st.navigation) for interactive module testing |
 
@@ -466,9 +467,15 @@ All modules inherit from `BaseModule` which provides:
 
 ```
 LLMProvider (ABC)
-  ├─ complete(messages) → CompletionResult
-  ├─ complete_async(messages) → CompletionResult
-  └─ stream(messages) → AsyncIterator[str]
+  ├─ complete(messages, tools=?, response_format=?) → CompletionResult
+  ├─ complete_async(messages, ...) → CompletionResult
+  ├─ stream(messages) → AsyncIterator[str]
+  └─ supports_tools / supports_structured_output (capability flags)
+
+LangChainLLMProvider(LLMProvider)          ← providers/_langchain.py
+  shared by all built-in providers: message conversion, native tool
+  calling (bind_tools), native structured output (json_schema with a
+  plain-prompt fallback), prompt-cache token accounting, streaming
 
 EmbeddingProvider (ABC)
   ├─ embed(texts) → list[list[float]]
@@ -477,7 +484,7 @@ EmbeddingProvider (ABC)
 
 Implementations:
   ├─ OpenAIProvider / OpenAIEmbeddingProvider
-  ├─ AnthropicProvider / AnthropicEmbeddingProvider (→ Voyage AI)
+  ├─ AnthropicProvider / AnthropicEmbeddingProvider (→ Voyage AI, prompt caching)
   ├─ OllamaProvider / OllamaEmbeddingProvider
   └─ AzureProvider / AzureEmbeddingProvider
 ```
