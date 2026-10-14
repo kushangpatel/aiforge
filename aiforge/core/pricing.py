@@ -19,8 +19,9 @@ _logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 PRICING: dict[str, dict[str, float]] = {
-    # OpenAI GPT-4 family
-    "gpt-4o": {"input": 5.00, "output": 15.00},
+    # OpenAI GPT-4 family (gpt-4-turbo, gpt-3.5-turbo, o1 and o3-mini shut down
+    # 2026-10-23; gpt-4o / gpt-4o-mini snapshots on 2027-01-14)
+    "gpt-4o": {"input": 2.50, "output": 10.00},
     "gpt-4o-mini": {"input": 0.15, "output": 0.60},
     "gpt-4-turbo": {"input": 10.00, "output": 30.00},
     "gpt-4.5": {"input": 75.00, "output": 150.00},
@@ -36,7 +37,23 @@ PRICING: dict[str, dict[str, float]] = {
     "text-embedding-3-small": {"input": 0.02, "output": 0.0},
     "text-embedding-3-large": {"input": 0.13, "output": 0.0},
     "text-embedding-ada-002": {"input": 0.10, "output": 0.0},
-    # Anthropic Claude 3.5 / 3 family
+    # Anthropic Claude — current models
+    "claude-fable-5-1": {"input": 10.00, "output": 50.00},
+    "claude-opus-5-5": {"input": 4.00, "output": 20.00},
+    "claude-opus-5": {"input": 5.00, "output": 25.00},
+    "claude-opus-4-8": {"input": 5.00, "output": 25.00},
+    "claude-opus-4-7": {"input": 5.00, "output": 25.00},
+    "claude-opus-4-6": {"input": 5.00, "output": 25.00},
+    "claude-sonnet-5-5": {"input": 2.00, "output": 10.00},
+    "claude-sonnet-5": {"input": 2.00, "output": 10.00},
+    "claude-sonnet-4-6": {"input": 3.00, "output": 15.00},
+    # Haiku 5.5 rate for prompts up to 100K tokens ($0.50 / $2.50 beyond)
+    "claude-haiku-5-5": {"input": 0.10, "output": 0.50},
+    "claude-haiku-4-5": {"input": 1.00, "output": 5.00},
+    # Anthropic Claude 4.0 (deprecated)
+    "claude-opus-4": {"input": 15.00, "output": 75.00},
+    "claude-sonnet-4": {"input": 3.00, "output": 15.00},
+    # Anthropic Claude 3.x (retired — kept for historical cost reports)
     "claude-3-7-sonnet-20250219": {"input": 3.00, "output": 15.00},
     "claude-3-7-sonnet": {"input": 3.00, "output": 15.00},
     "claude-3-5-sonnet-20241022": {"input": 3.00, "output": 15.00},
@@ -47,9 +64,6 @@ PRICING: dict[str, dict[str, float]] = {
     "claude-3-haiku": {"input": 0.25, "output": 1.25},
     "claude-3-opus-20240229": {"input": 15.00, "output": 75.00},
     "claude-3-opus": {"input": 15.00, "output": 75.00},
-    # Anthropic Claude 4 (future)
-    "claude-opus-4": {"input": 15.00, "output": 75.00},
-    "claude-sonnet-4": {"input": 3.00, "output": 15.00},
     # Voyage AI embeddings (used with Anthropic provider)
     "voyage-3": {"input": 0.06, "output": 0.0},
     "voyage-3-lite": {"input": 0.02, "output": 0.0},
@@ -88,6 +102,17 @@ MODEL_CONTEXT_WINDOWS: dict[str, int] = {
     "o1-preview": 128_000,
     "o3-mini": 200_000,
     "o3": 200_000,
+    "claude-fable-5-1": 1_000_000,
+    "claude-opus-5-5": 1_000_000,
+    "claude-opus-5": 1_000_000,
+    "claude-opus-4-8": 1_000_000,
+    "claude-opus-4-7": 1_000_000,
+    "claude-opus-4-6": 1_000_000,
+    "claude-sonnet-5-5": 1_000_000,
+    "claude-sonnet-5": 1_000_000,
+    "claude-sonnet-4-6": 1_000_000,
+    "claude-haiku-5-5": 1_000_000,
+    "claude-haiku-4-5": 200_000,
     "claude-3-7-sonnet-20250219": 200_000,
     "claude-3-7-sonnet": 200_000,
     "claude-3-5-sonnet-20241022": 200_000,

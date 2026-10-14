@@ -341,7 +341,7 @@ Token counts are estimated using **tiktoken** when the model is recognized (Open
 The strategy selector reads the model's max token limit from AIForge's built-in pricing registry via `get_context_window()`. Examples:
 - `gpt-4o` → 128K tokens → stuff threshold at ~102K tokens
 - `gpt-4o-mini` → 128K tokens → stuff threshold at ~102K tokens
-- `claude-3.5-sonnet` → 200K tokens → stuff threshold at ~160K tokens
+- `claude-sonnet-5-5` → 1M tokens → stuff threshold at ~800K tokens
 
 ### Force a Strategy
 

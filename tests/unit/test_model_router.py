@@ -50,7 +50,7 @@ class TestSelect:
     def test_high_returns_high_tier(self) -> None:
         router = ModelRouter()
         model = router.select("high")
-        # Only high-tier models; cheapest is claude-3-5-sonnet at $3.00
+        # Only high-tier models; cheapest is claude-sonnet-5-5 at $2.00
         spec = next(m for m in MODEL_CATALOG if m.name == model)
         assert spec.tier == "high"
 
@@ -63,7 +63,7 @@ class TestSelect:
     def test_provider_filter(self) -> None:
         router = ModelRouter()
         model = router.select("medium", provider="anthropic")
-        assert model == "claude-3-haiku-20240307"
+        assert model == "claude-haiku-5-5"
 
     def test_prefer_local(self) -> None:
         router = ModelRouter()
@@ -113,8 +113,8 @@ class TestEstimateCost:
     def test_known_model(self) -> None:
         router = ModelRouter()
         cost = router.estimate_cost("gpt-4o", input_tokens=1_000_000, output_tokens=500_000)
-        # 5.00 * 1 + 15.00 * 0.5 = 12.50
-        assert cost == pytest.approx(12.50)
+        # 2.50 * 1 + 10.00 * 0.5 = 7.50
+        assert cost == pytest.approx(7.50)
 
     def test_unknown_model(self) -> None:
         router = ModelRouter()
@@ -300,7 +300,7 @@ class TestBaseModuleRouterIntegration:
         assert default_model == clf.settings.MODEL
 
     def test_quality_with_anthropic_provider(self) -> None:
-        """quality='medium' + PROVIDER='anthropic' → claude-3-haiku."""
+        """quality='medium' + PROVIDER='anthropic' → claude-haiku-5-5."""
         from aiforge.modules.classify import Classifier
 
         clf = Classifier(
@@ -310,7 +310,7 @@ class TestBaseModuleRouterIntegration:
             ANTHROPIC_API_KEY="sk-fake",
             EMBEDDING_MODEL="voyage-3",
         )
-        assert clf.settings.MODEL == "claude-3-haiku-20240307"
+        assert clf.settings.MODEL == "claude-haiku-5-5"
 
     def test_quality_does_not_mutate_singleton(self) -> None:
         """Routing creates a private settings copy, not mutating the global."""
@@ -436,7 +436,7 @@ class TestEstimateCostDelegation:
         from aiforge.core.pricing import calculate_cost
 
         router = ModelRouter()
-        for model in ("gpt-4o", "gpt-4o-mini", "claude-3-5-sonnet-20241022"):
+        for model in ("gpt-4o", "gpt-4o-mini", "claude-sonnet-5-5"):
             router_cost = router.estimate_cost(model, 1_000_000, 500_000)
             pricing_cost = calculate_cost(model, 1_000_000, 500_000)
             assert router_cost == pytest.approx(pricing_cost), f"Mismatch for {model}"

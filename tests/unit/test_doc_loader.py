@@ -170,3 +170,41 @@ class TestTextSplitter:
         code = "def foo():\n    pass\n\n" * 100
         chunks = splitter.split_text(code, ext="py")
         assert len(chunks) >= 1
+
+
+# ---------------------------------------------------------------------------
+# PDF / DOCX loaders (aiforge[docs])
+# ---------------------------------------------------------------------------
+
+
+def test_load_pdf_one_document_per_page(tmp_path):
+    pypdf = pytest.importorskip("pypdf")
+    from aiforge.core.doc_loader import DocLoader
+
+    writer = pypdf.PdfWriter()
+    writer.add_blank_page(100, 100)
+    writer.add_blank_page(100, 100)
+    pdf = tmp_path / "two.pdf"
+    writer.write(str(pdf))
+
+    docs = DocLoader()._load_pdf(pdf)
+
+    assert [d.metadata["page"] for d in docs] == [0, 1]
+    assert all(d.metadata["file_type"] == "pdf" for d in docs)
+
+
+def test_load_docx_joins_paragraphs(tmp_path):
+    docx = pytest.importorskip("docx")
+    from aiforge.core.doc_loader import DocLoader
+
+    document = docx.Document()
+    document.add_paragraph("Hello")
+    document.add_paragraph("World")
+    path = tmp_path / "a.docx"
+    document.save(str(path))
+
+    docs = DocLoader()._load_docx(path)
+
+    assert len(docs) == 1
+    assert docs[0].page_content == "Hello\nWorld"
+    assert docs[0].metadata["file_type"] == "docx"

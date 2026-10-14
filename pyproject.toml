@@ -38,13 +38,18 @@ dependencies = [
 
 [project.optional-dependencies]
 openai = ["langchain-openai>=0.2.0"]
+anthropic = [
+    "langchain-anthropic>=0.2.0",
+    "langchain-voyageai>=0.2.0",
+]
+# Kept for backward compatibility; same as [anthropic].
 anthropicai = [
     "langchain-anthropic>=0.2.0",
     "langchain-voyageai>=0.2.0",
 ]
 local = ["langchain-ollama>=0.2.0"]
 agentic = ["langgraph>=0.2.0"]
-pinecone = ["pinecone-client>=3.0.0"]
+pinecone = ["pinecone>=5.1.0"]
 qdrant = ["qdrant-client>=1.7.0"]
 pgvector = ["psycopg[binary]>=3.1.0"]
 server = ["fastapi>=0.115.0", "uvicorn>=0.32.0"]
@@ -83,7 +88,7 @@ all = [
     "langsmith>=0.1.0",
     "pypdf>=4.0.0",
     "python-docx>=1.0.0",
-    "pinecone-client>=3.0.0",
+    "pinecone>=5.1.0",
     "qdrant-client>=1.7.0",
     "psycopg[binary]>=3.1.0",
     "pytest>=8.0.0",

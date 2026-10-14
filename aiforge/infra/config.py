@@ -11,9 +11,10 @@ Layered priority (low → high):
 
 from __future__ import annotations
 
+import contextlib
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Tuple, Type
+from typing import Any
 
 import yaml
 from pydantic import field_validator, model_validator
@@ -68,7 +69,7 @@ class YamlConfigSettingsSource(PydanticBaseSettingsSource):
 
     def __init__(
         self,
-        settings_cls: Type[BaseSettings],
+        settings_cls: type[BaseSettings],
         yaml_path: Path = _DEFAULT_YAML_PATH,
     ) -> None:
         super().__init__(settings_cls)
@@ -92,7 +93,7 @@ class YamlConfigSettingsSource(PydanticBaseSettingsSource):
 
     def get_field_value(
         self, field: Any, field_name: str
-    ) -> Tuple[Any, str, bool]:
+    ) -> tuple[Any, str, bool]:
         # field_name is already the canonical name (without prefix).
         value = self._data.get(field_name)
         return value, field_name, value is not None
@@ -105,12 +106,10 @@ class YamlConfigSettingsSource(PydanticBaseSettingsSource):
         for field_name, field_info in self.settings_cls.model_fields.items():
             value, _, found = self.get_field_value(field_info, field_name)
             if found:
-                try:
+                with contextlib.suppress(Exception):
                     value = self.prepare_field_value(
                         field_name, field_info, value, value  # type: ignore[arg-type]
                     )
-                except Exception:  # noqa: BLE001
-                    pass
                 result[field_name] = value
         return result
 
@@ -366,12 +365,12 @@ class AIForgeSettings(BaseSettings):
     @classmethod
     def settings_customise_sources(
         cls,
-        settings_cls: Type[BaseSettings],
+        settings_cls: type[BaseSettings],
         init_settings: PydanticBaseSettingsSource,
         env_settings: PydanticBaseSettingsSource,
         dotenv_settings: PydanticBaseSettingsSource,
         file_secret_settings: PydanticBaseSettingsSource,
-    ) -> Tuple[PydanticBaseSettingsSource, ...]:
+    ) -> tuple[PydanticBaseSettingsSource, ...]:
         """Priority order (highest → lowest): init > env > .env > yaml > defaults."""
         yaml_path = _YAML_PATH_OVERRIDE if _YAML_PATH_OVERRIDE is not None else _DEFAULT_YAML_PATH
         return (

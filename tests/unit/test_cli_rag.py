@@ -9,7 +9,6 @@ from typer.testing import CliRunner
 from aiforge.cli.commands_rag import qa_app
 from aiforge.modules.qa.schemas import IngestResponse
 
-
 runner = CliRunner()
 
 

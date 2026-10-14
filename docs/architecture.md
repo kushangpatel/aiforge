@@ -435,7 +435,7 @@ Settings are resolved in this order (later wins):
    ↓
 4. Environment variables (AIFORGE_PROVIDER, AIFORGE_MODEL, etc.)
    ↓
-5. Constructor kwargs (Summarizer(provider="anthropic", model="claude-3-5-sonnet"))
+5. Constructor kwargs (Summarizer(provider="anthropic", model="claude-sonnet-5-5"))
 ```
 
 ---

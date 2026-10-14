@@ -14,7 +14,6 @@ from pydantic import BaseModel, Field
 
 if TYPE_CHECKING:
     from aiforge.core.model_router import QualityTier
-    from aiforge.infra.config import AIForgeSettings
     from aiforge.infra.cost_tracker import CostTracker
 
 # ---------------------------------------------------------------------------

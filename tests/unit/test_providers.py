@@ -19,11 +19,11 @@ from aiforge.core.types import APIConnectionError, CompletionResult, ProviderErr
 class TestPricing:
     def test_known_model_gpt4o(self) -> None:
         cost = calculate_cost("gpt-4o", input_tokens=1_000_000, output_tokens=0)
-        assert pytest.approx(cost) == 5.00
+        assert pytest.approx(cost) == 2.50
 
     def test_known_model_output_cost(self) -> None:
         cost = calculate_cost("gpt-4o", input_tokens=0, output_tokens=1_000_000)
-        assert pytest.approx(cost) == 15.00
+        assert pytest.approx(cost) == 10.00
 
     def test_embedding_only_has_input_cost(self) -> None:
         cost = calculate_cost("text-embedding-3-small", input_tokens=1_000_000, output_tokens=0)
@@ -78,7 +78,7 @@ class TestCustomPricingOverrides:
     def test_override_takes_precedence(self) -> None:
         original = get_model_pricing("gpt-4o")
         assert original is not None
-        assert original["input"] == 5.00
+        assert original["input"] == 2.50
         apply_pricing_overrides({"gpt-4o": {"input": 99.0, "output": 99.0}})
         overridden = get_model_pricing("gpt-4o")
         assert overridden is not None
@@ -209,3 +209,71 @@ class TestOllamaErrorWrapper:
         err = _wrap_ollama_error(RuntimeError("model not found"))
         assert isinstance(err, ProviderError)
         assert "model not found" in str(err)
+
+
+# ---------------------------------------------------------------------------
+# Sampling-parameter support
+# ---------------------------------------------------------------------------
+
+
+class TestSamplingParamSupport:
+    @pytest.mark.parametrize(
+        "model",
+        [
+            "gpt-4o",
+            "gpt-4o-mini",
+            "gpt-5-chat-latest",
+            "claude-3-5-sonnet-20241022",
+            "claude-opus-4-20250514",
+            "claude-opus-4-6",
+            "claude-sonnet-4-6",
+            "claude-haiku-4-5",
+            "llama3.1",
+        ],
+    )
+    def test_supported(self, model: str) -> None:
+        from aiforge.providers._utils import supports_sampling_params
+
+        assert supports_sampling_params(model)
+
+    @pytest.mark.parametrize(
+        "model",
+        [
+            "claude-opus-4-7",
+            "claude-opus-4-8",
+            "claude-opus-5",
+            "claude-opus-5-5",
+            "claude-sonnet-5-5",
+            "claude-haiku-5-5",
+            "claude-fable-5-1",
+            "o1",
+            "o3-mini",
+            "gpt-5",
+            "gpt-5.6-sol",
+        ],
+    )
+    def test_unsupported(self, model: str) -> None:
+        from aiforge.providers._utils import supports_sampling_params
+
+        assert not supports_sampling_params(model)
+
+    def test_drop_unsupported_sampling(self) -> None:
+        from aiforge.providers._utils import drop_unsupported_sampling
+
+        params = {"temperature": 0.0, "top_p": 0.9, "max_tokens": 100}
+        assert drop_unsupported_sampling("claude-sonnet-5-5", params) == {"max_tokens": 100}
+        assert drop_unsupported_sampling("gpt-4o", params) == params
+
+    def test_anthropic_provider_omits_temperature(self) -> None:
+        pytest.importorskip("langchain_anthropic")
+        from aiforge.infra.config import AIForgeSettings
+        from aiforge.providers.anthropic import AnthropicProvider
+
+        settings = AIForgeSettings(
+            PROVIDER="anthropic",
+            MODEL="claude-sonnet-5-5",
+            EMBEDDING_MODEL="voyage-3",
+            ANTHROPIC_API_KEY="test",
+        )
+        provider = AnthropicProvider(settings)
+        assert provider._llm.temperature is None

@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING, Any
 from aiforge.core.provider import EmbeddingProvider, LLMProvider
 from aiforge.core.types import CompletionResult, ConfigError
 from aiforge.infra.retry import retry_embedding_call, retry_llm_call
+from aiforge.providers._utils import drop_unsupported_sampling, supports_sampling_params
 from aiforge.providers._utils import to_lc_messages as _to_lc_messages
 from aiforge.providers.openai import _wrap_openai_error
 
@@ -48,7 +49,9 @@ class AzureProvider(LLMProvider):
             azure_endpoint=settings.AZURE_OPENAI_ENDPOINT,
             api_key=settings.AZURE_OPENAI_API_KEY,  # type: ignore[arg-type]
             api_version=settings.AZURE_OPENAI_API_VERSION,
-            temperature=settings.TEMPERATURE,
+            temperature=settings.TEMPERATURE
+            if supports_sampling_params(self._model_name)
+            else None,
             max_tokens=settings.MAX_TOKENS,  # type: ignore[call-arg]
         )
 
@@ -61,7 +64,9 @@ class AzureProvider(LLMProvider):
         lc_messages = _to_lc_messages(messages)
         start = time.monotonic()
         try:
-            response = self._llm.invoke(lc_messages, **kwargs)
+            response = self._llm.invoke(
+                lc_messages, **drop_unsupported_sampling(self._model_name, kwargs)
+            )
         except Exception as exc:
             raise _wrap_openai_error(exc) from exc
 
@@ -83,7 +88,9 @@ class AzureProvider(LLMProvider):
         lc_messages = _to_lc_messages(messages)
         start = time.monotonic()
         try:
-            response = await self._llm.ainvoke(lc_messages, **kwargs)
+            response = await self._llm.ainvoke(
+                lc_messages, **drop_unsupported_sampling(self._model_name, kwargs)
+            )
         except Exception as exc:
             raise _wrap_openai_error(exc) from exc
 
@@ -102,7 +109,9 @@ class AzureProvider(LLMProvider):
         self, messages: list[dict[str, str]], **kwargs: Any
     ) -> AsyncGenerator[str, None]:
         lc_messages = _to_lc_messages(messages)
-        async for chunk in self._llm.astream(lc_messages, **kwargs):
+        async for chunk in self._llm.astream(
+            lc_messages, **drop_unsupported_sampling(self._model_name, kwargs)
+        ):
             yield str(chunk.content)
 
 
