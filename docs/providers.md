@@ -80,7 +80,7 @@ imported when you actually use a provider.
 | Provider | Install Extra | LLM Models | Embedding Models | Local? | API Keys Required |
 |----------|--------------|-----------|-----------------|--------|-------------------|
 | **OpenAI** | *(included by default)* | gpt-4o, gpt-4o-mini, gpt-4-turbo, gpt-3.5-turbo, o1, o1-mini, o3-mini, o3 | text-embedding-3-small, text-embedding-3-large, text-embedding-ada-002 | No | `OPENAI_API_KEY` |
-| **Anthropic** | `pip install "aiforge[anthropicai]"` | claude-3-7-sonnet, claude-3-5-sonnet, claude-3-5-haiku, claude-3-haiku, claude-3-opus | voyage-3, voyage-3-lite, voyage-large-2, voyage-code-2 | No | `ANTHROPIC_API_KEY` + `VOYAGE_API_KEY` |
+| **Anthropic** | `pip install "aiforge[anthropicai]"` | claude-opus-5-5, claude-sonnet-5-5, claude-haiku-5-5, claude-fable-5-1 | voyage-3, voyage-3-lite, voyage-large-2, voyage-code-2 | No | `ANTHROPIC_API_KEY` + `VOYAGE_API_KEY` |
 | **Ollama** | `pip install "aiforge[local]"` | llama3, llama3.1, llama3.2, llama3.3, mistral, mistral-nemo, codellama, phi-3, phi-4, gemma2, qwen2.5 | nomic-embed-text, mxbai-embed-large, all-minilm | Yes | None |
 | **Azure OpenAI** | *(shares langchain-openai)* | Same as OpenAI (via deployment names) | Same as OpenAI (via deployment names) | No | `AZURE_OPENAI_API_KEY` + `AZURE_OPENAI_ENDPOINT` |
 
@@ -93,14 +93,14 @@ imported when you actually use a provider.
 ```yaml
 # aiforge.yaml — change these two lines, nothing else
 provider: anthropic
-model: claude-3-5-sonnet-20241022
+model: claude-sonnet-5-5
 ```
 
 ### Via Environment Variables
 
 ```bash
 export AIFORGE_PROVIDER=anthropic
-export AIFORGE_MODEL=claude-3-5-sonnet-20241022
+export AIFORGE_MODEL=claude-sonnet-5-5
 ```
 
 ### Via Code
@@ -109,7 +109,7 @@ export AIFORGE_MODEL=claude-3-5-sonnet-20241022
 from aiforge import Summarizer
 
 # Provider override at module level — no global config change needed
-result = Summarizer(provider="anthropic", model="claude-3-5-sonnet-20241022").run(
+result = Summarizer(provider="anthropic", model="claude-sonnet-5-5").run(
     "Long document text here..."
 )
 ```
@@ -190,7 +190,7 @@ This installs `langchain-anthropic` (LLM) and `langchain-voyageai` (embeddings).
 
 ```bash
 AIFORGE_PROVIDER=anthropic
-AIFORGE_MODEL=claude-3-5-sonnet-20241022
+AIFORGE_MODEL=claude-sonnet-5-5
 AIFORGE_ANTHROPIC_API_KEY=sk-ant-...
 AIFORGE_VOYAGE_API_KEY=pa-...            # Required for embeddings
 AIFORGE_EMBEDDING_MODEL=voyage-3
@@ -200,7 +200,7 @@ AIFORGE_EMBEDDING_MODEL=voyage-3
 |----------|----------|---------|-------------|
 | `AIFORGE_ANTHROPIC_API_KEY` | Yes | — | Anthropic API key |
 | `AIFORGE_VOYAGE_API_KEY` | Yes (for embeddings) | — | Voyage AI key for embeddings |
-| `AIFORGE_MODEL` | No | `claude-3-5-sonnet-20241022` | LLM model |
+| `AIFORGE_MODEL` | No | `claude-sonnet-5-5` | LLM model |
 | `AIFORGE_EMBEDDING_MODEL` | No | `voyage-3` | Embedding model |
 | `AIFORGE_MAX_TOKENS` | No | `4096` | Default 4096 if not explicitly set |
 
@@ -210,11 +210,13 @@ AIFORGE_EMBEDDING_MODEL=voyage-3
 
 | Model | Quality Tier | Context Window | Input / 1M | Output / 1M |
 |-------|-------------|----------------|------------|-------------|
-| claude-3-7-sonnet-20250219 | High | 200,000 | $3.00 | $15.00 |
-| claude-3-5-sonnet-20241022 | High | 200,000 | $3.00 | $15.00 |
-| claude-3-5-haiku-20241022 | Medium | 200,000 | $0.80 | $4.00 |
-| claude-3-haiku-20240307 | Medium | 200,000 | $0.25 | $1.25 |
-| claude-3-opus-20240229 | High | 200,000 | $15.00 | $75.00 |
+| claude-opus-5-5 | High | 1,000,000 | $4.00 | $20.00 |
+| claude-sonnet-5-5 | High | 1,000,000 | $2.00 | $10.00 |
+| claude-haiku-5-5 | Medium | 1,000,000 | $0.10 | $0.50 |
+| claude-fable-5-1 | High | 1,000,000 | $10.00 | $50.00 |
+
+Claude 3.x models are retired. Current Claude models reject `temperature` /
+`top_p` / `top_k`; AIForge drops those parameters automatically for them.
 
 ### Embeddings via Voyage AI
 
@@ -619,19 +621,19 @@ quality you need*, not *which model to use*.
 
 | Tier | When to use | Example models |
 |------|-------------|----------------|
-| `high` | Complex reasoning, important outputs | gpt-4o, claude-3-5-sonnet, claude-3-opus |
-| `medium` | General tasks, good quality/cost balance | gpt-4o-mini, claude-3-haiku, llama3.1 |
+| `high` | Complex reasoning, important outputs | gpt-4o, claude-opus-5-5, claude-sonnet-5-5 |
+| `medium` | General tasks, good quality/cost balance | gpt-4o-mini, claude-haiku-5-5, llama3.1 |
 | `low` | Simple tasks, maximum throughput | gpt-3.5-turbo, llama3.2 |
 
 ### Built-in Model Catalogue
 
 | Model | Provider | Tier | Input / 1M | Output / 1M | Context |
 |-------|----------|------|------------|-------------|---------|
-| gpt-4o | openai | high | $5.00 | $15.00 | 128K |
+| gpt-4o | openai | high | $2.50 | $10.00 | 128K |
 | gpt-4o-mini | openai | medium | $0.15 | $0.60 | 128K |
-| gpt-3.5-turbo | openai | low | $0.50 | $1.50 | 16K |
-| claude-3-5-sonnet-20241022 | anthropic | high | $3.00 | $15.00 | 200K |
-| claude-3-haiku-20240307 | anthropic | medium | $0.25 | $1.25 | 200K |
+| claude-opus-5-5 | anthropic | high | $4.00 | $20.00 | 1M |
+| claude-sonnet-5-5 | anthropic | high | $2.00 | $10.00 | 1M |
+| claude-haiku-5-5 | anthropic | medium | $0.10 | $0.50 | 1M |
 | llama3.1 | ollama | medium | $0.00 | $0.00 | 131K |
 | llama3.2 | ollama | low | $0.00 | $0.00 | 131K |
 
@@ -646,7 +648,7 @@ router = ModelRouter()
 
 # Cheapest high-quality model
 model = router.select(quality="high")
-# → "claude-3-5-sonnet-20241022" ($3.00 input — cheaper than gpt-4o's $5.00)
+# → "claude-sonnet-5-5" ($2.00 input — cheaper than gpt-4o's $2.50)
 
 # Cheapest model from a specific provider
 model = router.select(quality="medium", provider="openai")
@@ -658,11 +660,11 @@ model = router.select(quality="medium", prefer_local=True)
 
 # Require large context window
 model = router.select(quality="high", min_context=150_000)
-# → "claude-3-5-sonnet-20241022" (200K context)
+# → "claude-sonnet-5-5" (1M context)
 
 # Estimate cost before calling
 cost = router.estimate_cost("gpt-4o", input_tokens=5000, output_tokens=1000)
-# → 0.04  (USD)
+# → 0.0225  (USD)
 
 # List all models in a tier
 models = router.list_models(quality="high")
@@ -789,7 +791,7 @@ configuration if local throughput is a bottleneck.
 | *(base)* | langchain-openai, chromadb, tenacity, tiktoken | OpenAI + ChromaDB (default) |
 | `anthropicai` | langchain-anthropic, langchain-voyageai | Anthropic LLM + Voyage AI embeddings |
 | `local` | langchain-ollama | Ollama local inference |
-| `pinecone` | pinecone-client≥3.0.0 | Pinecone vector store |
+| `pinecone` | pinecone≥5.1.0 | Pinecone vector store |
 | `qdrant` | qdrant-client≥1.7.0 | Qdrant vector store |
 | `pgvector` | psycopg[binary]≥3.1.0 | PostgreSQL/pgvector |
 | `observability` | opentelemetry-api, opentelemetry-sdk, langsmith | Tracing & monitoring |

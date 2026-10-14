@@ -7,7 +7,6 @@
 # Core Dependencies (always required)
 # ============================================================
 langchain-core>=0.3.0
-langchain_community>=0.4.1
 langchain-text-splitters>=0.3.0
 langgraph>=0.2.0
 chromadb>=0.5.0
@@ -75,7 +74,7 @@ streamlit>=1.40.0
 # ============================================================
 # Documentation
 # ============================================================
-mkdocs-material>=1.6.1
+mkdocs-material>=9.5.0
 
 # ============================================================
 # Vector Database Drivers (uncomment based on your choice of vector store)

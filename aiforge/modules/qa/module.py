@@ -24,6 +24,7 @@ Usage::
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import time
 import uuid
@@ -735,10 +736,9 @@ class DocQA(BaseModule):
                 ):
                     continue
                 full = self._normpath(os.path.join(dirpath, fname))
-                try:
+                # race condition — file may have disappeared; skip it
+                with contextlib.suppress(OSError):
                     result[full] = os.path.getmtime(full)
-                except OSError:
-                    pass  # race condition — file disappeared; skip it
         return result
 
     def _snapshot_loaded_sources(self, documents: list[Any]) -> dict[str, float | None]:
@@ -846,9 +846,7 @@ class DocQA(BaseModule):
         for path in common:
             disk_mtime = disk[path]
             stored_mtime = indexed[path]
-            if disk_mtime is None or stored_mtime is None:
-                updated.add(path)
-            elif abs(disk_mtime - stored_mtime) > 1e-3:
+            if disk_mtime is None or stored_mtime is None or abs(disk_mtime - stored_mtime) > 1e-3:
                 updated.add(path)
             else:
                 unchanged.add(path)

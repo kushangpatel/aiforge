@@ -19,6 +19,7 @@ from aiforge.core.types import (
     RateLimitError,
 )
 from aiforge.infra.retry import retry_embedding_call, retry_llm_call
+from aiforge.providers._utils import drop_unsupported_sampling, supports_sampling_params
 from aiforge.providers._utils import to_lc_messages as _to_lc_messages
 
 if TYPE_CHECKING:
@@ -39,7 +40,7 @@ class OpenAIProvider(LLMProvider):
         self._settings = settings
         self._llm = ChatOpenAI(
             model=settings.MODEL,
-            temperature=settings.TEMPERATURE,
+            temperature=settings.TEMPERATURE if supports_sampling_params(settings.MODEL) else None,
             max_tokens=settings.MAX_TOKENS,  # type: ignore[call-arg]
             api_key=settings.OPENAI_API_KEY,  # type: ignore[arg-type]
         )
@@ -58,7 +59,9 @@ class OpenAIProvider(LLMProvider):
         lc_messages = _to_lc_messages(messages)
         start = time.monotonic()
         try:
-            response = self._llm.invoke(lc_messages, **kwargs)
+            response = self._llm.invoke(
+                lc_messages, **drop_unsupported_sampling(self._model_name, kwargs)
+            )
         except Exception as exc:
             raise _wrap_openai_error(exc) from exc
 
@@ -82,7 +85,9 @@ class OpenAIProvider(LLMProvider):
         lc_messages = _to_lc_messages(messages)
         start = time.monotonic()
         try:
-            response = await self._llm.ainvoke(lc_messages, **kwargs)
+            response = await self._llm.ainvoke(
+                lc_messages, **drop_unsupported_sampling(self._model_name, kwargs)
+            )
         except Exception as exc:
             raise _wrap_openai_error(exc) from exc
 
@@ -103,7 +108,9 @@ class OpenAIProvider(LLMProvider):
         **kwargs: Any,
     ) -> AsyncGenerator[str, None]:
         lc_messages = _to_lc_messages(messages)
-        async for chunk in self._llm.astream(lc_messages, **kwargs):
+        async for chunk in self._llm.astream(
+            lc_messages, **drop_unsupported_sampling(self._model_name, kwargs)
+        ):
             yield str(chunk.content)
 
 

@@ -11,6 +11,7 @@ Usage:
 
 from __future__ import annotations
 
+import inspect
 import logging
 from collections.abc import Callable
 from typing import Any, TypeVar
@@ -31,6 +32,17 @@ F = TypeVar("F", bound=Callable[..., Any])
 
 _LLM_RETRYABLE = (RateLimitError, APITimeoutError, APIConnectionError)
 
+# tenacity 9.2 renamed ``initial`` to ``multiplier`` and warns on the old name.
+_JITTER_BASE_ARG = (
+    "multiplier"
+    if "multiplier" in inspect.signature(wait_exponential_jitter.__init__).parameters
+    else "initial"
+)
+
+
+def _backoff(min_wait: float, max_wait: float) -> wait_exponential_jitter:
+    return wait_exponential_jitter(**{_JITTER_BASE_ARG: min_wait}, max=max_wait, jitter=2)
+
 
 def retry_llm_call(
     max_attempts: int = 3,
@@ -44,7 +56,7 @@ def retry_llm_call(
     """
     return retry(  # type: ignore[return-value]
         stop=stop_after_attempt(max_attempts),
-        wait=wait_exponential_jitter(initial=min_wait, max=max_wait, jitter=2),
+        wait=_backoff(min_wait, max_wait),
         retry=retry_if_exception_type(_LLM_RETRYABLE),
         before_sleep=before_sleep_log(_logger, logging.WARNING),
         reraise=True,
@@ -59,7 +71,7 @@ def retry_embedding_call(
     """Decorator factory — wraps an embedding call with retry logic."""
     return retry(  # type: ignore[return-value]
         stop=stop_after_attempt(max_attempts),
-        wait=wait_exponential_jitter(initial=min_wait, max=max_wait, jitter=2),
+        wait=_backoff(min_wait, max_wait),
         retry=retry_if_exception_type(_LLM_RETRYABLE),
         before_sleep=before_sleep_log(_logger, logging.WARNING),
         reraise=True,

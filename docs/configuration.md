@@ -369,7 +369,7 @@ print(tracker.summary())
 
 The API server's `GET /stats` endpoint exposes these same metrics over HTTP.
 
-**Built-in pricing table** covers OpenAI (gpt-4o, gpt-4o-mini, gpt-4-turbo, gpt-4.5, gpt-3.5-turbo, o1, o1-mini, o3-mini, o3), Anthropic (claude-3-7-sonnet, claude-3-5-sonnet, claude-3-5-haiku, claude-3-opus), and Ollama models (zero cost). See [Custom Pricing](#custom-pricing) to override or add models.
+**Built-in pricing table** covers OpenAI (gpt-4o, gpt-4o-mini, gpt-4-turbo, gpt-4.5, gpt-3.5-turbo, o1, o1-mini, o3-mini, o3), Anthropic (claude-opus-5-5, claude-sonnet-5-5, claude-haiku-5-5 and earlier 4.x/5.x models), and Ollama models (zero cost). See [Custom Pricing](#custom-pricing) to override or add models.
 
 ### Request Cache
 
@@ -506,8 +506,8 @@ The model router maps quality tiers to specific models:
 
 | Quality | Typical Model | Best For |
 |---------|-------------|----------|
-| `high` | `gpt-4o`, `claude-3-7-sonnet` | Complex reasoning, nuanced tasks |
-| `medium` | `gpt-4o-mini`, `claude-3-5-haiku` | Balanced cost/quality |
+| `high` | `gpt-4o`, `claude-sonnet-5-5` | Complex reasoning, nuanced tasks |
+| `medium` | `gpt-4o-mini`, `claude-haiku-5-5` | Balanced cost/quality |
 | `low` | `gpt-3.5-turbo`, local Ollama models | High-volume, simple tasks |
 
 ```python

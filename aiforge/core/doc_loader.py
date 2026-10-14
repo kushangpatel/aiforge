@@ -20,8 +20,8 @@ Unsupported file types are skipped with a warning; inspect
 from __future__ import annotations
 
 import logging
-from fnmatch import fnmatchcase
 from dataclasses import dataclass, field
+from fnmatch import fnmatchcase
 from pathlib import Path
 
 from langchain_core.documents import Document
@@ -441,26 +441,35 @@ class DocLoader:
 
     def _load_pdf(self, path: Path) -> list[Document]:
         try:
-            from langchain_community.document_loaders import PyPDFLoader
+            from pypdf import PdfReader
         except ImportError:
-            try:
-                from langchain.document_loaders import PyPDFLoader  # type: ignore[no-redef]
-            except ImportError:
-                raise ImportError(
-                    'PyPDF not installed. Run: pip install "aiforge[docs]" to add PDF support.'
-                ) from None
-        loader = PyPDFLoader(str(path))
-        return loader.load()
+            raise ImportError(
+                'pypdf not installed. Run: pip install "aiforge[docs]" to add PDF support.'
+            ) from None
+        reader = PdfReader(str(path))
+        return [
+            Document(
+                page_content=page.extract_text() or "",
+                metadata={"source": str(path), "file_type": "pdf", "page": index},
+            )
+            for index, page in enumerate(reader.pages)
+        ]
 
     def _load_docx(self, path: Path) -> list[Document]:
         try:
-            from langchain_community.document_loaders import Docx2txtLoader
+            import docx
         except ImportError:
             raise ImportError(
                 'python-docx not installed. Run: pip install "aiforge[docs]" for DOCX support.'
             ) from None
-        loader = Docx2txtLoader(str(path))
-        return loader.load()
+        document = docx.Document(str(path))
+        text = "\n".join(paragraph.text for paragraph in document.paragraphs)
+        return [
+            Document(
+                page_content=text,
+                metadata={"source": str(path), "file_type": "docx"},
+            )
+        ]
 
     def _load_git_repo(self, git_url: str, stats: IngestStats) -> list[Document]:
         """Clone a git repo to a temp dir and load it as a directory."""

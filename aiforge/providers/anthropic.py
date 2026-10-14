@@ -1,5 +1,5 @@
 """
-Anthropic provider: Claude 3.5 (LLM) + Voyage AI (embeddings).
+Anthropic provider: Claude (LLM) + Voyage AI (embeddings).
 
 Requires:
     pip install langchain-anthropic langchain-voyageai
@@ -20,6 +20,7 @@ from aiforge.core.types import (
     RateLimitError,
 )
 from aiforge.infra.retry import retry_embedding_call, retry_llm_call
+from aiforge.providers._utils import drop_unsupported_sampling, supports_sampling_params
 from aiforge.providers._utils import to_lc_messages as _to_lc_messages
 
 if TYPE_CHECKING:
@@ -41,7 +42,7 @@ class AnthropicProvider(LLMProvider):
         self._model_name = settings.MODEL
         self._llm = ChatAnthropic(
             model=settings.MODEL,
-            temperature=settings.TEMPERATURE,
+            temperature=settings.TEMPERATURE if supports_sampling_params(settings.MODEL) else None,
             max_tokens=settings.MAX_TOKENS or 4096,
             api_key=settings.ANTHROPIC_API_KEY,  # type: ignore[arg-type]
         )
@@ -55,7 +56,9 @@ class AnthropicProvider(LLMProvider):
         lc_messages = _to_lc_messages(messages)
         start = time.monotonic()
         try:
-            response = self._llm.invoke(lc_messages, **kwargs)
+            response = self._llm.invoke(
+                lc_messages, **drop_unsupported_sampling(self._model_name, kwargs)
+            )
         except Exception as exc:
             raise _wrap_anthropic_error(exc) from exc
 
@@ -77,7 +80,9 @@ class AnthropicProvider(LLMProvider):
         lc_messages = _to_lc_messages(messages)
         start = time.monotonic()
         try:
-            response = await self._llm.ainvoke(lc_messages, **kwargs)
+            response = await self._llm.ainvoke(
+                lc_messages, **drop_unsupported_sampling(self._model_name, kwargs)
+            )
         except Exception as exc:
             raise _wrap_anthropic_error(exc) from exc
 
@@ -96,7 +101,9 @@ class AnthropicProvider(LLMProvider):
         self, messages: list[dict[str, str]], **kwargs: Any
     ) -> AsyncGenerator[str, None]:
         lc_messages = _to_lc_messages(messages)
-        async for chunk in self._llm.astream(lc_messages, **kwargs):
+        async for chunk in self._llm.astream(
+            lc_messages, **drop_unsupported_sampling(self._model_name, kwargs)
+        ):
             yield str(chunk.content)
 
 

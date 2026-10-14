@@ -125,7 +125,7 @@ def list_vectorstores() -> list[str]:
 # settings-based resolution).  We re-export the registration and listing
 # functions here so that registry.py is the unified plugin entry point.
 
-from aiforge.providers import get_provider, list_providers, register_provider
+from aiforge.providers import get_provider, list_providers, register_provider  # noqa: E402
 
 __all__ = [
     "register_module",

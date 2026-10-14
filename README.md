@@ -321,13 +321,13 @@ See [.env.example](.env.example) for the full list.
 ```yaml
 # aiforge.yaml — change these 2 lines
 provider: anthropic
-model: claude-3-5-sonnet-20241022
+model: claude-sonnet-5-5
 ```
 
 Or at runtime:
 
 ```python
-s = Summarizer(provider="anthropic", model="claude-3-5-sonnet-20241022")
+s = Summarizer(provider="anthropic", model="claude-sonnet-5-5")
 ```
 
 ---
@@ -543,7 +543,7 @@ make docker          # Build Docker image
 | Provider | LLM Models | Embedding Models | Local? |
 |----------|-----------|-----------------|--------|
 | **OpenAI** | gpt-4o, gpt-4o-mini | text-embedding-3-small, text-embedding-3-large | No |
-| **Anthropic** | claude-3.5-sonnet, claude-3-haiku | voyage-3 (via Voyage AI) | No |
+| **Anthropic** | claude-opus-5-5, claude-sonnet-5-5, claude-haiku-5-5 | voyage-3 (via Voyage AI) | No |
 | **Ollama** | llama3, mistral, codellama, phi-3 | nomic-embed-text, mxbai-embed-large | Yes |
 | **Azure OpenAI** | Same as OpenAI (deployed models) | Same as OpenAI | No |
 

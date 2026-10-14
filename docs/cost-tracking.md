@@ -274,15 +274,18 @@ defined in `aiforge/core/pricing.py` and kept as a best-effort snapshot.
 
 | Model | Input ($/1M) | Output ($/1M) | Context Window |
 |-------|-------------|---------------|---------------|
-| `claude-3-7-sonnet` | 3.00 | 15.00 | 200,000 |
-| `claude-3-5-sonnet` | 3.00 | 15.00 | 200,000 |
-| `claude-3-5-haiku` | 0.80 | 4.00 | 200,000 |
-| `claude-3-haiku` | 0.25 | 1.25 | 200,000 |
-| `claude-3-opus` | 15.00 | 75.00 | 200,000 |
-| `claude-opus-4` | 15.00 | 75.00 | 200,000 |
-| `claude-sonnet-4` | 3.00 | 15.00 | 200,000 |
+| `claude-fable-5-1` | 10.00 | 50.00 | 1,000,000 |
+| `claude-opus-5-5` | 4.00 | 20.00 | 1,000,000 |
+| `claude-opus-5` | 5.00 | 25.00 | 1,000,000 |
+| `claude-opus-4-8` / `4-7` / `4-6` | 5.00 | 25.00 | 1,000,000 |
+| `claude-sonnet-5-5` | 2.00 | 10.00 | 1,000,000 |
+| `claude-sonnet-5` | 2.00 | 10.00 | 1,000,000 |
+| `claude-sonnet-4-6` | 3.00 | 15.00 | 1,000,000 |
+| `claude-haiku-5-5` | 0.10 | 0.50 | 1,000,000 |
+| `claude-haiku-4-5` | 1.00 | 5.00 | 200,000 |
 
-Date-suffixed variants (e.g., `claude-3-7-sonnet-20250219`) are also included and resolve to the same pricing.
+`claude-haiku-5-5` is listed at its rate for prompts up to 100K tokens. Retired Claude 3.x
+models stay in the table so historical cost reports still resolve.
 
 ### Voyage Embeddings
 

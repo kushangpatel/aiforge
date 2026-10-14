@@ -21,7 +21,7 @@ def mock_pinecone():
     with patch.dict("sys.modules", {"pinecone": MagicMock()}):
         import sys
 
-        setattr(sys.modules["pinecone"], "Pinecone", mock_pc_cls)
+        sys.modules["pinecone"].Pinecone = mock_pc_cls
         yield mock_pc_cls, mock_index
 
 

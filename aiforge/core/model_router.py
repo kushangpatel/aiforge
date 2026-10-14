@@ -32,12 +32,12 @@ class ModelSpec:
 # Built-in catalog — extendable via config or constructor
 MODEL_CATALOG: list[ModelSpec] = [
     # OpenAI
-    ModelSpec("gpt-4o", "openai", "high", 5.00, 15.00, 128_000),
+    ModelSpec("gpt-4o", "openai", "high", 2.50, 10.00, 128_000),
     ModelSpec("gpt-4o-mini", "openai", "medium", 0.15, 0.60, 128_000),
-    ModelSpec("gpt-3.5-turbo", "openai", "low", 0.50, 1.50, 16_385),
     # Anthropic
-    ModelSpec("claude-3-5-sonnet-20241022", "anthropic", "high", 3.00, 15.00, 200_000),
-    ModelSpec("claude-3-haiku-20240307", "anthropic", "medium", 0.25, 1.25, 200_000),
+    ModelSpec("claude-opus-5-5", "anthropic", "high", 4.00, 20.00, 1_000_000),
+    ModelSpec("claude-sonnet-5-5", "anthropic", "high", 2.00, 10.00, 1_000_000),
+    ModelSpec("claude-haiku-5-5", "anthropic", "medium", 0.10, 0.50, 1_000_000),
     # Ollama (local — zero cost)
     ModelSpec("llama3.1", "ollama", "medium", 0.0, 0.0, 131_072),
     ModelSpec("llama3.2", "ollama", "low", 0.0, 0.0, 131_072),
@@ -54,7 +54,7 @@ class ModelRouter:
         # → "gpt-4o-mini" (cheapest medium-or-above model)
 
         model = router.select(quality="medium", provider="anthropic")
-        # → "claude-3-haiku-20240307"
+        # → "claude-haiku-5-5"
     """
 
     def __init__(
