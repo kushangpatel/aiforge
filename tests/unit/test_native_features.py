@@ -253,6 +253,10 @@ class TestProviderResult:
         assert result.text == '{"city": "Oslo", "celsius": 4}'
         assert result.parsed is None
 
+    def test_tools_and_response_format_are_exclusive(self) -> None:
+        with pytest.raises(ValueError, match="not both"):
+            _anthropic().complete([m.user("x")], tools=["t"], response_format=Weather)
+
     def test_transient_errors_do_not_trigger_fallback(self) -> None:
         provider = _anthropic()
         with pytest.raises(RateLimitError):

@@ -119,6 +119,8 @@ class LangChainLLMProvider(LLMProvider):
         tools = kwargs.pop("tools", None)
         tool_choice = kwargs.pop("tool_choice", None)
         response_format = kwargs.pop("response_format", None)
+        if tools and response_format is not None:
+            raise ValueError("Pass either tools= or response_format=, not both")
         call_kwargs = self._request_kwargs(kwargs)
 
         llm = self._llm
