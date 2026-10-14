@@ -28,11 +28,12 @@ import contextlib
 import hashlib
 import time
 import uuid
+from collections.abc import Callable
 from typing import Any
 
 from aiforge.core.pricing import calculate_cost
 from aiforge.core.prompt_override import resolve_prompt
-from aiforge.core.types import AIForgeError, BaseModule
+from aiforge.core.types import AIForgeError, BaseModule, CompletionResult
 from aiforge.core.vectorstore import VectorStoreAdapter
 from aiforge.modules.qa.schemas import IngestResponse, QAResponse
 
@@ -295,9 +296,7 @@ class DocQA(BaseModule):
         embedding_model = ""
         skipped = stats.skipped_files
         docs_to_index = [
-            d
-            for d in documents
-            if self._normpath(d.metadata.get("source", "")) in files_to_index
+            d for d in documents if self._normpath(d.metadata.get("source", "")) in files_to_index
         ]
         languages = dict(stats.languages)
 
@@ -483,7 +482,9 @@ class DocQA(BaseModule):
             settings=self.settings,
         )
 
-    def _make_llm_fn(self, *, system_prompt: str | None = None):
+    def _make_llm_fn(
+        self, *, system_prompt: str | None = None
+    ) -> Callable[[str], CompletionResult]:
         """Return a ``(prompt: str) → CompletionResult`` closure."""
         resolved = resolve_prompt(
             call_override=system_prompt,
@@ -492,7 +493,7 @@ class DocQA(BaseModule):
             default="",
         )
 
-        def _llm(prompt: str):
+        def _llm(prompt: str) -> CompletionResult:
             messages: list[dict[str, str]] = []
             if resolved:
                 messages.append({"role": "system", "content": resolved})
@@ -501,7 +502,7 @@ class DocQA(BaseModule):
 
         return _llm
 
-    def _make_retrieve_fn(self):
+    def _make_retrieve_fn(self) -> Callable[..., list[dict[str, Any]]]:
         """Return a ``(query, top_k, filter) → list[dict]`` closure."""
 
         def _retrieve(
@@ -714,11 +715,23 @@ class DocQA(BaseModule):
         # Mirror DocLoader._IGNORE_DIR_NAMES to avoid scanning dirs it skips.
         _IGNORE = frozenset(
             {
-                ".git", ".svn", ".hg",
-                "__pycache__", ".mypy_cache", ".ruff_cache", ".pytest_cache",
-                "node_modules", ".next", ".nuxt",
-                "venv", ".venv", "env", ".env",
-                "dist", "build", ".build",
+                ".git",
+                ".svn",
+                ".hg",
+                "__pycache__",
+                ".mypy_cache",
+                ".ruff_cache",
+                ".pytest_cache",
+                "node_modules",
+                ".next",
+                ".nuxt",
+                "venv",
+                ".venv",
+                "env",
+                ".env",
+                "dist",
+                "build",
+                ".build",
                 "aiforge_data",
             }
         )
@@ -731,9 +744,7 @@ class DocQA(BaseModule):
             dirnames[:] = [d for d in dirnames if d not in _IGNORE]
 
             for fname in filenames:
-                if ext_set is not None and not any(
-                    fname.lower().endswith(e) for e in ext_set
-                ):
+                if ext_set is not None and not any(fname.lower().endswith(e) for e in ext_set):
                     continue
                 full = self._normpath(os.path.join(dirpath, fname))
                 # race condition — file may have disappeared; skip it
@@ -819,6 +830,7 @@ class DocQA(BaseModule):
         by ``os.path.join`` in ``_scan_disk``.
         """
         import os
+
         if "://" in path or path.startswith("git@"):
             return path.strip().rstrip("/")
         return os.path.normcase(os.path.abspath(path))
@@ -837,8 +849,8 @@ class DocQA(BaseModule):
         disk_set = set(disk)
         indexed_set = set(indexed)
 
-        added = disk_set - indexed_set                   # on disk, not in index
-        deleted = indexed_set - disk_set                 # in index, not on disk
+        added = disk_set - indexed_set  # on disk, not in index
+        deleted = indexed_set - disk_set  # in index, not on disk
         common = disk_set & indexed_set
 
         updated: set[str] = set()
@@ -857,4 +869,3 @@ class DocQA(BaseModule):
     def _elapsed_ms(t0: float) -> float:
         """Return non-zero elapsed ms for very fast code paths."""
         return max((time.monotonic() - t0) * 1000, 0.001)
-

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import tempfile
 from pathlib import Path
+from typing import Any, cast
 
 import streamlit as st
 
@@ -79,7 +80,7 @@ def render() -> None:
             from aiforge.modules.vision.module import Vision
 
             v = Vision(
-                task=task,
+                task=cast(Any, task),  # selectbox options match the Literal
                 max_tokens=max_tokens,
                 temperature=temperature,
             )

@@ -87,19 +87,14 @@ class YamlConfigSettingsSource(PydanticBaseSettingsSource):
         for k, v in raw.items():
             key = k.upper()
             if key.startswith("AIFORGE_"):
-                key = key[len("AIFORGE_"):]
+                key = key[len("AIFORGE_") :]
             normalised[key] = v
         return normalised
 
-    def get_field_value(
-        self, field: Any, field_name: str
-    ) -> tuple[Any, str, bool]:
+    def get_field_value(self, field: Any, field_name: str) -> tuple[Any, str, bool]:
         # field_name is already the canonical name (without prefix).
         value = self._data.get(field_name)
         return value, field_name, value is not None
-
-    def field_is_complex(self, field: Any) -> bool:
-        return self.field_is_complex_cached(field)
 
     def __call__(self) -> dict[str, Any]:
         result: dict[str, Any] = {}
@@ -107,9 +102,7 @@ class YamlConfigSettingsSource(PydanticBaseSettingsSource):
             value, _, found = self.get_field_value(field_info, field_name)
             if found:
                 with contextlib.suppress(Exception):
-                    value = self.prepare_field_value(
-                        field_name, field_info, value, value  # type: ignore[arg-type]
-                    )
+                    value = self.prepare_field_value(field_name, field_info, value, value)
                 result[field_name] = value
         return result
 

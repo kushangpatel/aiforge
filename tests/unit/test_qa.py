@@ -217,6 +217,7 @@ class TestAgentGraphSingleIteration:
                 _fake_llm("Auth uses JWT tokens."),  # respond
             ]
         )
+
         def llm_fn(prompt: Any) -> Any:
             return next(calls)
 
@@ -601,8 +602,12 @@ class TestDocQAIngest:
 
         prefix = "a" * 64
         chunks = [
-            Document(page_content=prefix + "X", metadata={"source": "repo/file.py", "file_type": "py"}),
-            Document(page_content=prefix + "Y", metadata={"source": "repo/file.py", "file_type": "py"}),
+            Document(
+                page_content=prefix + "X", metadata={"source": "repo/file.py", "file_type": "py"}
+            ),
+            Document(
+                page_content=prefix + "Y", metadata={"source": "repo/file.py", "file_type": "py"}
+            ),
         ]
 
         qa._embed_and_store(chunks, batch_size=10)
@@ -963,8 +968,12 @@ class TestDocQAIngestIncremental:
 
         git_url = "https://github.com/example/repo.git"
         docs = [
-            Document(page_content="new a", metadata={"source": f"{git_url}/a.py", "file_type": "py"}),
-            Document(page_content="new b", metadata={"source": f"{git_url}/b.py", "file_type": "py"}),
+            Document(
+                page_content="new a", metadata={"source": f"{git_url}/a.py", "file_type": "py"}
+            ),
+            Document(
+                page_content="new b", metadata={"source": f"{git_url}/b.py", "file_type": "py"}
+            ),
         ]
         stats = IngestStats(files_processed=2, languages={"py": 2})
 

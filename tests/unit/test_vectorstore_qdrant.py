@@ -29,6 +29,11 @@ class _FakeSearchPoint:
         self.vector = vector
 
 
+class _FakeQueryResponse:
+    def __init__(self, points):
+        self.points = points
+
+
 class _FakeCollectionDetail:
     def __init__(self, points_count):
         self.points_count = points_count
@@ -138,7 +143,7 @@ class TestQuery:
 
     def test_returns_hits(self, store) -> None:
         s, mock_client, _ = store
-        mock_client.search.return_value = self._mock_results()
+        mock_client.query_points.return_value = _FakeQueryResponse(self._mock_results())
         hits = s.query(embedding=[0.1, 0.2], top_k=5)
 
         assert len(hits) == 1
@@ -148,32 +153,36 @@ class TestQuery:
 
     def test_converts_similarity_to_distance(self, store) -> None:
         s, mock_client, _ = store
-        mock_client.search.return_value = self._mock_results()
+        mock_client.query_points.return_value = _FakeQueryResponse(self._mock_results())
         hits = s.query(embedding=[0.1])
         assert abs(hits[0]["distance"] - 0.1) < 1e-9  # 1 - 0.9
 
     def test_include_embeddings(self, store) -> None:
         s, mock_client, _ = store
-        mock_client.search.return_value = self._mock_results(include_vector=True)
+        mock_client.query_points.return_value = _FakeQueryResponse(
+            self._mock_results(include_vector=True)
+        )
         hits = s.query(embedding=[0.1], include_embeddings=True)
         assert hits[0]["embeddings"] == [0.1, 0.2]
 
     def test_no_embeddings_by_default(self, store) -> None:
         s, mock_client, _ = store
-        mock_client.search.return_value = self._mock_results()
+        mock_client.query_points.return_value = _FakeQueryResponse(self._mock_results())
         hits = s.query(embedding=[0.1])
         assert "embeddings" not in hits[0]
 
     def test_filter_passed_through(self, store) -> None:
-        s, mock_client, _ = store
-        mock_client.search.return_value = []
+        s, mock_client, mock_models = store
+        mock_client.query_points.return_value = _FakeQueryResponse([])
         s.query(embedding=[0.1], filter={"genre": "sci-fi"})
-        _, kwargs = mock_client.search.call_args
-        assert kwargs["query_filter"] == {"genre": "sci-fi"}
+        mock_models.Filter.model_validate.assert_called_once_with({"genre": "sci-fi"})
+        _, kwargs = mock_client.query_points.call_args
+        assert kwargs["query_filter"] is mock_models.Filter.model_validate.return_value
+        assert kwargs["query"] == [0.1]
 
     def test_empty_results(self, store) -> None:
         s, mock_client, _ = store
-        mock_client.search.return_value = []
+        mock_client.query_points.return_value = _FakeQueryResponse([])
         hits = s.query(embedding=[0.1])
         assert hits == []
 

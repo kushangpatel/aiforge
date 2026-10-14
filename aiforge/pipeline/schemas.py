@@ -30,7 +30,7 @@ class PipelineResult(BaseModel):
     @model_serializer(mode="wrap")
     def _serialize(self, handler: Any) -> dict[str, Any]:
         """Custom serializer so concrete ModuleResponse subclasses round-trip correctly."""
-        base = handler(self)
+        base: dict[str, Any] = handler(self)
         # Re-serialize steps using each subclass's own model_dump so extra fields
         # (e.g. .summary, .label) are preserved in JSON output.
         base["steps"] = {name: resp.model_dump() for name, resp in self.steps.items()}

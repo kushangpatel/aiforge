@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from pydantic import BaseModel, Field
 
 from aiforge.core.types import ModuleResponse
@@ -12,7 +14,7 @@ class SearchDocument(BaseModel):
 
     id: str = Field(description="Unique document identifier", min_length=1)
     text: str = Field(description="Document text content", min_length=1)
-    metadata: dict = Field(default_factory=dict)
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
 
 class IndexRequest(BaseModel):
@@ -28,7 +30,9 @@ class SearchRequest(BaseModel):
     query: str = Field(description="Search query text")
     collection: str = Field(default="default", description="Vector store collection name")
     top_k: int = Field(default=5, ge=1, le=100, description="Number of results to return")
-    filter: dict | None = Field(default=None, description="Metadata filter (ChromaDB where clause)")
+    filter: dict[str, Any] | None = Field(
+        default=None, description="Metadata filter (ChromaDB where clause)"
+    )
     include_embeddings: bool = Field(
         default=False,
         description="Include raw embedding vectors in each SearchHit",
@@ -47,7 +51,7 @@ class SearchHit(BaseModel):
     score: float = Field(ge=0.0, le=1.0)
     """Cosine similarity in [0, 1].  Derived as ``1.0 - cosine_distance``."""
 
-    metadata: dict = Field(default_factory=dict)
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
     embeddings: list[float] | None = None
     """Raw embedding vector for this hit.  Only populated when

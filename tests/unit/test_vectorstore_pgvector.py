@@ -239,11 +239,7 @@ class TestQueryWithFilter:
         mock_cursor.fetchall.return_value = []
         s.query(embedding=[0.1], filter=None)
         params = mock_cursor.execute.call_args_list[-1][0][1]
-        assert all(
-            p != json.dumps({"source": "a.txt"})
-            for p in params
-            if isinstance(p, str)
-        )
+        assert all(p != json.dumps({"source": "a.txt"}) for p in params if isinstance(p, str))
 
     def test_filter_serialised_as_json(self, store) -> None:
         s, _, mock_cursor = store

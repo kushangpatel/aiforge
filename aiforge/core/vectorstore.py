@@ -204,7 +204,7 @@ class ChromaVectorStore(VectorStoreAdapter):
     def list_all_metadata(self) -> list[dict[str, Any]]:
         """Return metadata for every document in this collection."""
         results = self._collection.get(include=["metadatas"])
-        return results["metadatas"] or []
+        return [dict(m) for m in results["metadatas"] or []]
 
     def list_collections(self) -> list[str]:
         return [c.name for c in self._client.list_collections()]

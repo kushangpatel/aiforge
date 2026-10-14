@@ -55,7 +55,7 @@ class LLMProvider(ABC):
         """
         # Make this method an async generator
         return
-        yield  # type: ignore[misc]  # pragma: no cover
+        yield  # pragma: no cover
 
     @property
     @abstractmethod

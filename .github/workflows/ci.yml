@@ -11,7 +11,7 @@ concurrency:
 
 jobs:
   test:
-    name: Lint and unit tests (Python ${{ matrix.python-version }})
+    name: Lint, types and unit tests (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -33,6 +33,12 @@ jobs:
 
       - name: Lint
         run: ruff check aiforge/ tests/
+
+      - name: Format
+        run: ruff format --check aiforge/ tests/
+
+      - name: Type check
+        run: mypy aiforge/
 
       - name: Unit tests
         run: pytest tests/unit -q

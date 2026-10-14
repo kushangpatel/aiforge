@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import cast
+from typing import Any, cast
 
 import typer
 from rich.table import Table
@@ -37,7 +37,7 @@ def config_show(
     format_output(data, fmt)
 
 
-def _mask_secrets(d: dict, _keys: set[str] | None = None) -> None:
+def _mask_secrets(d: dict[str, Any], _keys: set[str] | None = None) -> None:
     """Replace values whose key contains 'key', 'secret', or 'token' with '***'."""
     sensitive = _keys or {"key", "secret", "token", "password", "credential"}
     for k, v in d.items():

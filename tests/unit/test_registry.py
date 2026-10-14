@@ -415,6 +415,6 @@ class TestCustomProviderEndToEnd:
             CUSTOM_PRICING={model: {"input": 1.25, "output": 2.5}},
         )
 
-        assert calculate_cost(model, input_tokens=1_000_000, output_tokens=1_000_000) == pytest.approx(
-            3.75
-        )
+        assert calculate_cost(
+            model, input_tokens=1_000_000, output_tokens=1_000_000
+        ) == pytest.approx(3.75)

@@ -59,7 +59,7 @@ _TOP_K_MAX = 100
 # ---------------------------------------------------------------------------
 
 
-def _coerce_document(raw: dict | SearchDocument) -> SearchDocument:
+def _coerce_document(raw: dict[str, Any] | SearchDocument) -> SearchDocument:
     """Coerce a raw dict into a :class:`SearchDocument`."""
     if isinstance(raw, SearchDocument):
         return raw
@@ -125,7 +125,7 @@ class SemanticSearch(BaseModule):
 
     def index(
         self,
-        documents: Sequence[dict | SearchDocument],
+        documents: Sequence[dict[str, Any] | SearchDocument],
         *,
         batch_size: int = 100,
     ) -> IndexResponse:
@@ -194,7 +194,7 @@ class SemanticSearch(BaseModule):
 
     async def aindex(
         self,
-        documents: Sequence[dict | SearchDocument],
+        documents: Sequence[dict[str, Any] | SearchDocument],
         *,
         batch_size: int = 100,
     ) -> IndexResponse:
@@ -313,7 +313,7 @@ class SemanticSearch(BaseModule):
         query: str,
         *,
         top_k: int | None = None,
-        filter: dict | None = None,
+        filter: dict[str, Any] | None = None,
         include_embeddings: bool = False,
     ) -> SearchResponse:
         """Embed *query* and retrieve the most similar documents.
@@ -395,7 +395,7 @@ class SemanticSearch(BaseModule):
         query: str,
         *,
         top_k: int | None = None,
-        filter: dict | None = None,
+        filter: dict[str, Any] | None = None,
         include_embeddings: bool = False,
     ) -> SearchResponse:
         """Async version of :meth:`query`."""
@@ -481,7 +481,7 @@ class SemanticSearch(BaseModule):
         """Return names of all collections in the vector store."""
         return self._store.list_collections()
 
-    def collection_stats(self, collection: str | None = None) -> dict:
+    def collection_stats(self, collection: str | None = None) -> dict[str, Any]:
         """Return stats for *collection* (defaults to this instance's collection)."""
         return self._store.collection_stats(
             collection if collection is not None else self.collection_name

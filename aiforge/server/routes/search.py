@@ -18,7 +18,7 @@ router = APIRouter(prefix="/search", tags=["search"])
 class _DocumentIn(BaseModel):
     id: str
     text: str
-    metadata: dict = {}
+    metadata: dict[str, Any] = {}
 
 
 class IndexRequest(BaseModel):
@@ -28,7 +28,7 @@ class IndexRequest(BaseModel):
 
     @field_validator("documents")
     @classmethod
-    def _validate_documents(cls, v: list) -> list:
+    def _validate_documents(cls, v: list[Any]) -> list[Any]:
         if not v:
             raise ValueError("documents must not be empty")
         return v
@@ -47,7 +47,7 @@ class QueryRequest(BaseModel):
     query: str = Field(min_length=1)
     collection: str = "default"
     top_k: int = Field(default=5, ge=1, le=100)
-    filter: dict | None = None
+    filter: dict[str, Any] | None = None
     include_embeddings: bool = False
 
 
@@ -55,7 +55,7 @@ class _HitOut(BaseModel):
     id: str
     text: str
     score: float
-    metadata: dict = {}
+    metadata: dict[str, Any] = {}
     embeddings: list[float] | None = None
 
 

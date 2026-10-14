@@ -14,7 +14,7 @@ from __future__ import annotations
 import asyncio
 import threading
 from collections.abc import Callable, Coroutine
-from typing import Any
+from typing import Any, cast
 
 import structlog
 
@@ -85,6 +85,6 @@ def make_sync_tool_caller(
                     parts.append(str(block))
             return "\n".join(parts) if parts else str(result)
 
-        return loop_thread.run(_invoke())
+        return cast(str, loop_thread.run(_invoke()))
 
     return _call

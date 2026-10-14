@@ -11,7 +11,7 @@ import streamlit as st
 # Excluded: DocQA / SemanticSearch (require pre-ingestion),
 #           Extractor (requires a Pydantic output_schema that can't be
 #           configured through a Streamlit form).
-_AVAILABLE_MODULES = {
+_AVAILABLE_MODULES: dict[str, dict[str, Any]] = {
     "Summarizer": {
         "import": "aiforge.modules.summarize.module",
         "class": "Summarizer",

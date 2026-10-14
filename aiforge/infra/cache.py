@@ -14,7 +14,7 @@ import json
 import threading
 import time
 from abc import ABC, abstractmethod
-from typing import Any
+from typing import Any, cast
 
 import structlog
 
@@ -122,7 +122,7 @@ class RedisBackend(CacheBackend):
         raw = self._client.get(self._prefix + key)
         if raw is None:
             return None
-        return json.loads(raw)
+        return cast(dict[str, Any], json.loads(raw))
 
     def set(self, key: str, value: dict[str, Any], ttl_seconds: int) -> None:
         self._client.setex(self._prefix + key, ttl_seconds, json.dumps(value))

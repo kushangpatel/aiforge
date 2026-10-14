@@ -1178,9 +1178,7 @@ class TestResearchTool:
 
         with (
             patch("aiforge.modules.chat.widget._web_search", return_value="[1] Web result"),
-            patch(
-                "aiforge.modules.chat.widget._knowledge_search", return_value="[1] KB result"
-            ),
+            patch("aiforge.modules.chat.widget._knowledge_search", return_value="[1] KB result"),
         ):
             result = _research("test")
             assert "Web Results" in result

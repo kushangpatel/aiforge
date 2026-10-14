@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any, cast
+
 import streamlit as st
 
 
@@ -39,7 +41,7 @@ def render() -> None:
         try:
             from aiforge.modules.summarize.module import Summarizer
 
-            s = Summarizer(style=style, max_length=max_length)
+            s = Summarizer(style=cast(Any, style), max_length=max_length)
             result = s.summarize(text, strategy=strategy)
         except ValueError as exc:
             st.error(f"Configuration error: {exc}")
