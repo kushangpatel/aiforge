@@ -87,7 +87,9 @@ class PineconeVectorStore(VectorStoreAdapter):
 
         hits: list[dict[str, Any]] = []
         for match in matches:
-            meta_raw = match.get("metadata", {}) if isinstance(match, dict) else (match.metadata or {})
+            meta_raw = (
+                match.get("metadata", {}) if isinstance(match, dict) else (match.metadata or {})
+            )
             meta = dict(meta_raw)
             text = meta.pop("_text", "")
             match_id = match.get("id") if isinstance(match, dict) else match.id
@@ -98,7 +100,9 @@ class PineconeVectorStore(VectorStoreAdapter):
                 "metadata": meta,
                 "distance": 1.0 - score,  # similarity -> distance
             }
-            values = match.get("values") if isinstance(match, dict) else getattr(match, "values", None)
+            values = (
+                match.get("values") if isinstance(match, dict) else getattr(match, "values", None)
+            )
             if include_embeddings and values is not None:
                 hit["embeddings"] = values
             hits.append(hit)
@@ -141,9 +145,7 @@ class PineconeVectorStore(VectorStoreAdapter):
                 continue
             for i in range(0, len(ids), batch_size):
                 chunk_ids = ids[i : i + batch_size]
-                fetch_result = self._index.fetch(
-                    ids=chunk_ids, namespace=self._namespace
-                )
+                fetch_result = self._index.fetch(ids=chunk_ids, namespace=self._namespace)
                 for vec in fetch_result.vectors.values():
                     meta = dict(vec.metadata or {})
                     meta.pop("_text", None)  # strip internal text field

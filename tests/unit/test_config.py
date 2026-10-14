@@ -119,9 +119,7 @@ class TestModelFieldsSet:
 
         assert "MODEL" in settings.model_fields_set
 
-    def test_env_var_model_appears_in_fields_set(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_env_var_model_appears_in_fields_set(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """MODEL from AIFORGE_MODEL env var must appear in model_fields_set."""
         monkeypatch.setenv("AIFORGE_MODEL", "gpt-4o-mini")
         monkeypatch.setenv("AIFORGE_OPENAI_API_KEY", "sk-test")

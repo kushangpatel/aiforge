@@ -48,9 +48,7 @@ class Router:
         """
         self._branches = branches
         self._has_default = not isinstance(default, EllipsisType)
-        self._default: BaseModule | None = (
-            None if isinstance(default, EllipsisType) else default
-        )
+        self._default: BaseModule | None = None if isinstance(default, EllipsisType) else default
 
     def resolve(
         self,

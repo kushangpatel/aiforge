@@ -149,9 +149,9 @@ class PgVectorStore(VectorStoreAdapter):
         from psycopg import sql as pgsql
 
         table = self._collection_name
-        stmt = pgsql.SQL(
-            "DELETE FROM {table} WHERE metadata @> %s::jsonb RETURNING id"
-        ).format(table=pgsql.Identifier(table))
+        stmt = pgsql.SQL("DELETE FROM {table} WHERE metadata @> %s::jsonb RETURNING id").format(
+            table=pgsql.Identifier(table)
+        )
 
         with self._conn.cursor() as cur:
             cur.execute(stmt, (json.dumps({"source": source}),))
@@ -165,16 +165,11 @@ class PgVectorStore(VectorStoreAdapter):
         from psycopg import sql as pgsql
 
         table = self._collection_name
-        stmt = pgsql.SQL("SELECT metadata FROM {table}").format(
-            table=pgsql.Identifier(table)
-        )
+        stmt = pgsql.SQL("SELECT metadata FROM {table}").format(table=pgsql.Identifier(table))
         with self._conn.cursor() as cur:
             cur.execute(stmt)
             rows = cur.fetchall()
-        return [
-            json.loads(r[0]) if isinstance(r[0], str) else (r[0] or {})
-            for r in rows
-        ]
+        return [json.loads(r[0]) if isinstance(r[0], str) else (r[0] or {}) for r in rows]
 
     def list_collections(self) -> list[str]:
         sql = """

@@ -137,9 +137,7 @@ class QdrantVectorStore(VectorStoreAdapter):
         from qdrant_client.models import FieldCondition, Filter, MatchValue
 
         # Scroll through all matching points to get their IDs, then delete.
-        source_filter = Filter(
-            must=[FieldCondition(key="source", match=MatchValue(value=source))]
-        )
+        source_filter = Filter(must=[FieldCondition(key="source", match=MatchValue(value=source))])
         ids: list[ExtendedPointId] = []
         offset = None
         while True:

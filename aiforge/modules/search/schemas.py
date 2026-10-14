@@ -30,7 +30,9 @@ class SearchRequest(BaseModel):
     query: str = Field(description="Search query text")
     collection: str = Field(default="default", description="Vector store collection name")
     top_k: int = Field(default=5, ge=1, le=100, description="Number of results to return")
-    filter: dict[str, Any] | None = Field(default=None, description="Metadata filter (ChromaDB where clause)")
+    filter: dict[str, Any] | None = Field(
+        default=None, description="Metadata filter (ChromaDB where clause)"
+    )
     include_embeddings: bool = Field(
         default=False,
         description="Include raw embedding vectors in each SearchHit",

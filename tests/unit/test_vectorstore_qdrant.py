@@ -159,7 +159,9 @@ class TestQuery:
 
     def test_include_embeddings(self, store) -> None:
         s, mock_client, _ = store
-        mock_client.query_points.return_value = _FakeQueryResponse(self._mock_results(include_vector=True))
+        mock_client.query_points.return_value = _FakeQueryResponse(
+            self._mock_results(include_vector=True)
+        )
         hits = s.query(embedding=[0.1], include_embeddings=True)
         assert hits[0]["embeddings"] == [0.1, 0.2]
 

@@ -174,7 +174,11 @@ class BaseModule(ABC):
         # only if the model wasn't already explicitly configured (via YAML/env).
         # An explicit model in aiforge.yaml means the user made a conscious
         # choice; honour it rather than auto-routing to a different model.
-        if not quality_is_explicit and self.settings.MODEL_ROUTER_ENABLED and not model_is_configured:
+        if (
+            not quality_is_explicit
+            and self.settings.MODEL_ROUTER_ENABLED
+            and not model_is_configured
+        ):
             quality = self.settings.DEFAULT_QUALITY
 
         # Model routing decision:
