@@ -167,7 +167,7 @@ class Classifier(BaseModule):
         """Classify *text* synchronously and return a :class:`ClassifyResponse`."""
         if not text or not text.strip():
             raise ValueError("text must not be empty or whitespace-only")
-        t0 = time.monotonic()
+        t0 = time.perf_counter()
         llm = self._call_llm(
             self._build_messages(text, system_prompt=system_prompt),
             temperature=self.temperature,
@@ -184,14 +184,14 @@ class Classifier(BaseModule):
             input_tokens=llm.input_tokens,
             output_tokens=llm.output_tokens,
             model=llm.model,
-            latency_ms=(time.monotonic() - t0) * 1000,
+            latency_ms=(time.perf_counter() - t0) * 1000,
         )
 
     async def aclassify(self, text: str, *, system_prompt: str | None = None) -> ClassifyResponse:
         """Async version of :meth:`classify`."""
         if not text or not text.strip():
             raise ValueError("text must not be empty or whitespace-only")
-        t0 = time.monotonic()
+        t0 = time.perf_counter()
         llm = await self._acall_llm(
             self._build_messages(text, system_prompt=system_prompt),
             temperature=self.temperature,
@@ -208,7 +208,7 @@ class Classifier(BaseModule):
             input_tokens=llm.input_tokens,
             output_tokens=llm.output_tokens,
             model=llm.model,
-            latency_ms=(time.monotonic() - t0) * 1000,
+            latency_ms=(time.perf_counter() - t0) * 1000,
         )
 
     def run(self, text: str, **kwargs: Any) -> ClassifyResponse:
@@ -242,7 +242,7 @@ class Classifier(BaseModule):
         """
         if not text or not text.strip():
             raise ValueError("text must not be empty or whitespace-only")
-        t0 = time.monotonic()
+        t0 = time.perf_counter()
         messages = self._build_sentiment_messages(text, aspects, system_prompt)
         llm = self._call_llm(messages, temperature=self.temperature)
         parsed = self._parse_sentiment(llm.text, aspects)
@@ -258,7 +258,7 @@ class Classifier(BaseModule):
             input_tokens=llm.input_tokens,
             output_tokens=llm.output_tokens,
             model=llm.model,
-            latency_ms=(time.monotonic() - t0) * 1000,
+            latency_ms=(time.perf_counter() - t0) * 1000,
         )
 
     async def asentiment(
@@ -271,7 +271,7 @@ class Classifier(BaseModule):
         """Async version of :meth:`sentiment`."""
         if not text or not text.strip():
             raise ValueError("text must not be empty or whitespace-only")
-        t0 = time.monotonic()
+        t0 = time.perf_counter()
         messages = self._build_sentiment_messages(text, aspects, system_prompt)
         llm = await self._acall_llm(messages, temperature=self.temperature)
         parsed = self._parse_sentiment(llm.text, aspects)
@@ -287,7 +287,7 @@ class Classifier(BaseModule):
             input_tokens=llm.input_tokens,
             output_tokens=llm.output_tokens,
             model=llm.model,
-            latency_ms=(time.monotonic() - t0) * 1000,
+            latency_ms=(time.perf_counter() - t0) * 1000,
         )
 
     def _build_sentiment_messages(

@@ -216,7 +216,7 @@ class ChatAgent(BaseModule):
 
         from aiforge.modules.chat.agent import build_chat_graph
 
-        t0 = time.monotonic()
+        t0 = time.perf_counter()
 
         self._messages.append({"role": "user", "content": message})
 
@@ -251,7 +251,7 @@ class ChatAgent(BaseModule):
 
         from aiforge.modules.chat.agent import build_chat_graph
 
-        t0 = time.monotonic()
+        t0 = time.perf_counter()
 
         self._messages.append({"role": "user", "content": message})
 
@@ -489,5 +489,5 @@ class ChatAgent(BaseModule):
             cost=cost,
             model=model,
             trace_id=uuid.uuid4().hex[:16],
-            latency_ms=(time.monotonic() - t0) * 1000,
+            latency_ms=(time.perf_counter() - t0) * 1000,
         )

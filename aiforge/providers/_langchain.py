@@ -174,7 +174,7 @@ class LangChainLLMProvider(LLMProvider):
             parsed=parsed,
             cache_read_tokens=details.get("cache_read") or 0,
             cache_write_tokens=cache_write,
-            latency_ms=(time.monotonic() - start) * 1000,
+            latency_ms=(time.perf_counter() - start) * 1000,
         )
 
     def _structured_fallback(self, exc: ProviderError, kwargs: dict[str, Any]) -> dict[str, Any]:
@@ -195,7 +195,7 @@ class LangChainLLMProvider(LLMProvider):
 
     def _invoke(self, messages: list[dict[str, Any]], kwargs: dict[str, Any]) -> CompletionResult:
         runnable, response_format, call_kwargs = self._runnable(kwargs)
-        start = time.monotonic()
+        start = time.perf_counter()
         try:
             output = runnable.invoke(
                 to_lc_messages(self._prepare_messages(messages)), **call_kwargs
@@ -208,7 +208,7 @@ class LangChainLLMProvider(LLMProvider):
         self, messages: list[dict[str, Any]], kwargs: dict[str, Any]
     ) -> CompletionResult:
         runnable, response_format, call_kwargs = self._runnable(kwargs)
-        start = time.monotonic()
+        start = time.perf_counter()
         try:
             output = await runnable.ainvoke(
                 to_lc_messages(self._prepare_messages(messages)), **call_kwargs

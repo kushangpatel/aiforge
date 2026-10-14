@@ -169,7 +169,7 @@ class Generator(BaseModule):
         Either *self.template* (with ``**variables``) **or** *prompt* must
         be provided — not both, and not neither.
         """
-        t0 = time.monotonic()
+        t0 = time.perf_counter()
         final_prompt = self._resolve_prompt(prompt, variables)
         resolved_system = resolve_prompt(
             call_override=system_prompt,
@@ -183,7 +183,7 @@ class Generator(BaseModule):
         self, prompt: str | None = None, *, system_prompt: str | None = None, **variables: Any
     ) -> GenerateResponse:
         """Async version of :meth:`generate`."""
-        t0 = time.monotonic()
+        t0 = time.perf_counter()
         final_prompt = self._resolve_prompt(prompt, variables)
         resolved_system = resolve_prompt(
             call_override=system_prompt,
@@ -232,7 +232,7 @@ class Generator(BaseModule):
         """
         if not text or not text.strip():
             raise ValueError("text must not be empty or whitespace-only")
-        t0 = time.monotonic()
+        t0 = time.perf_counter()
         user_prompt = self._build_rewrite_prompt(text, instructions, tone, reading_level)
         resolved_system = resolve_prompt(
             call_override=system_prompt,
@@ -254,7 +254,7 @@ class Generator(BaseModule):
         """Async version of :meth:`rewrite`."""
         if not text or not text.strip():
             raise ValueError("text must not be empty or whitespace-only")
-        t0 = time.monotonic()
+        t0 = time.perf_counter()
         user_prompt = self._build_rewrite_prompt(text, instructions, tone, reading_level)
         resolved_system = resolve_prompt(
             call_override=system_prompt,
@@ -353,7 +353,7 @@ class Generator(BaseModule):
                     input_tokens=total_in,
                     output_tokens=total_out,
                     model=model,
-                    latency_ms=(time.monotonic() - t0) * 1000,
+                    latency_ms=(time.perf_counter() - t0) * 1000,
                 )
 
             guardrail_flags = violations
@@ -373,7 +373,7 @@ class Generator(BaseModule):
             input_tokens=total_in,
             output_tokens=total_out,
             model=model,
-            latency_ms=(time.monotonic() - t0) * 1000,
+            latency_ms=(time.perf_counter() - t0) * 1000,
         )
 
     async def _agenerate_loop(self, final_prompt: str, t0: float, system: str) -> GenerateResponse:
@@ -414,7 +414,7 @@ class Generator(BaseModule):
                     input_tokens=total_in,
                     output_tokens=total_out,
                     model=model,
-                    latency_ms=(time.monotonic() - t0) * 1000,
+                    latency_ms=(time.perf_counter() - t0) * 1000,
                 )
 
             guardrail_flags = violations
@@ -433,7 +433,7 @@ class Generator(BaseModule):
             input_tokens=total_in,
             output_tokens=total_out,
             model=model,
-            latency_ms=(time.monotonic() - t0) * 1000,
+            latency_ms=(time.perf_counter() - t0) * 1000,
         )
 
     # ------------------------------------------------------------------

@@ -87,7 +87,7 @@ class Translator(BaseModule):
         """Translate *text* synchronously."""
         if not text or not text.strip():
             raise ValueError("text must not be empty or whitespace-only")
-        t0 = time.monotonic()
+        t0 = time.perf_counter()
         total_in = total_out = 0
         total_cost = 0.0
 
@@ -121,14 +121,14 @@ class Translator(BaseModule):
             input_tokens=total_in,
             output_tokens=total_out,
             model=llm.model,
-            latency_ms=(time.monotonic() - t0) * 1000,
+            latency_ms=(time.perf_counter() - t0) * 1000,
         )
 
     async def atranslate(self, text: str, *, system_prompt: str | None = None) -> TranslateResponse:
         """Async version of :meth:`translate`."""
         if not text or not text.strip():
             raise ValueError("text must not be empty or whitespace-only")
-        t0 = time.monotonic()
+        t0 = time.perf_counter()
         total_in = total_out = 0
         total_cost = 0.0
 
@@ -162,7 +162,7 @@ class Translator(BaseModule):
             input_tokens=total_in,
             output_tokens=total_out,
             model=llm.model,
-            latency_ms=(time.monotonic() - t0) * 1000,
+            latency_ms=(time.perf_counter() - t0) * 1000,
         )
 
     # Pipeline interface -----------------------------------------------
