@@ -264,6 +264,12 @@ class AIForgeSettings(BaseSettings):
     MCP_SERVERS: list[dict[str, Any]] = []
 
     # ------------------------------------------------------------------
+    # Guardrails defaults (used when a Guard / redaction call omits them)
+    # ------------------------------------------------------------------
+    GUARDRAILS_PII_REDACTION: Literal["mask", "placeholder", "hash"] = "placeholder"
+    GUARDRAILS_ON_FAIL: Literal["block", "redact", "warn"] = "block"
+
+    # ------------------------------------------------------------------
     # Validators
     # ------------------------------------------------------------------
 
