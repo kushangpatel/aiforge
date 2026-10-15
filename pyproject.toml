@@ -46,7 +46,7 @@ dependencies = [
     "tiktoken>=0.7.0",
     "structlog>=24.0.0",
     "pyyaml>=6.0.0",
-    "typer>=0.13.0",
+    "typer>=0.15.4",
     "rich>=13.0.0",
     "langchain-openai>=1.0.0,<2",
 ]
@@ -72,7 +72,7 @@ anthropicai = [
 local = ["langchain-ollama>=1.0.0,<2"]
 gemini = ["langchain-google-genai>=4.0.0,<5"]
 bedrock = ["langchain-aws>=1.5.0,<2"]
-mistral = ["langchain-mistralai>=1.0.0,<2"]
+mistral = ["langchain-mistralai>=1.1.3,<2"]
 agentic = ["langgraph>=1.0.0,<2"]
 pinecone = ["pinecone>=5.1.0,<11"]
 qdrant = ["qdrant-client>=1.10.0,<2"]

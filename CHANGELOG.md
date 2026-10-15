@@ -9,19 +9,32 @@ called out under **Changed** or **Removed**.
 
 ## [Unreleased]
 
-In progress, not yet merged:
-
-- Evaluation harness for module outputs (evals).
-- Guardrails for module inputs and outputs.
-- Hybrid (keyword + vector) retrieval and reranking for DocQA and Search.
-- Gemini, Bedrock and Mistral providers.
-
 ## [0.2.0] - 2026-10-15
 
-First release published to PyPI.
+First release published to PyPI, as `aiforge-kit` (`pip install aiforge-kit`;
+the import name is still `aiforge`).
 
 ### Added
 
+- Evaluations (`aiforge.evals`): datasets from lists, JSONL, CSV or YAML;
+  built-in scorers (exact match, contains, regex, JSON match, numeric, label,
+  embedding similarity, LLM-as-judge) plus custom scorers; reports with pass
+  rates, cost and latency, and run-to-run comparison; and `aiforge eval run` /
+  `aiforge eval compare`, which exit non-zero on a failed threshold or a
+  regression, so they can gate CI.
+- Guardrails (`aiforge.guardrails`): a `Guard` with input and output checks for
+  PII and secrets (detection, masking, reversible placeholders, hashing),
+  prompt injection, length, banned terms, regex, schema and system-prompt
+  leaks; `Guard.wrap()` guards any module or callable. The Moderator's `pii`
+  check uses the new detector and accepts the new PII types.
+- Hybrid retrieval for DocQA and SemanticSearch: `retrieval_mode` of
+  `vector` (default), `keyword` (BM25) or `hybrid` (reciprocal rank fusion).
+- Reranking: an `LLMReranker` and a hook for your own scorer, such as a
+  cross-encoder (`rerank`, `rerank_top_n`, `fetch_k`).
+- Chunking strategies `recursive` (default), `markdown` (keeps the heading
+  path) and `token`; DocQA citations carry source, page and heading path.
+- Google Gemini, Amazon Bedrock and Mistral providers (LLM and embeddings), via
+  the `[gemini]`, `[bedrock]` and `[mistral]` extras, with current pricing.
 - Native tool calling: providers accept `tools=` and return structured
   `ToolCall` objects. `ChatAgent` uses it on providers that support it and
   keeps the prompted JSON protocol for custom providers.
@@ -59,7 +72,7 @@ First release published to PyPI.
 - `temperature`, `top_p` and `top_k` are dropped for models that reject them
   (Claude Opus 4.7+, Claude 5.x, OpenAI o-series and GPT-5+).
 - Dependency floors are the oldest versions verified in CI, and AI-stack
-  packages are capped below their next major. Notably `typer>=0.13`,
+  packages are capped below their next major. Notably `typer>=0.15.4`,
   `chromadb>=1.3`, `langchain-anthropic>=1.4`, `qdrant-client>=1.10`,
   `mcp>=2.0`.
 - The `[pinecone]` extra installs `pinecone` instead of the deprecated

@@ -150,7 +150,7 @@ graph TB
 
 | Technology | Version | Where Used | Purpose |
 |---|---|---|---|
-| **Typer** | ≥0.13 | `cli/main.py`, `cli/commands_*.py` | CLI framework (20+ commands) |
+| **Typer** | ≥0.15.4 | `cli/main.py`, `cli/commands_*.py` | CLI framework (20+ commands) |
 | **Rich** | ≥13.0 | `cli/` | Terminal formatting: tables, panels, progress bars |
 | **Streamlit** | extra | `playground/`, `modules/*/widget.py`, `pipeline/widget.py` | Multi-page web UI (st.navigation) for interactive module testing |
 

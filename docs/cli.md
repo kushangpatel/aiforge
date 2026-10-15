@@ -643,6 +643,29 @@ aiforge chat
 
 ---
 
+## Evaluation Commands
+
+### aiforge eval run
+
+Run a module or a Python callable over a dataset, score each output and
+print a report. It exits non-zero when a threshold is missed or the run
+regressed against a baseline, so it can gate CI.
+
+```bash
+aiforge eval run cases.jsonl --module classify \
+  --module-args '{"labels": ["billing", "bug", "feature_request"]}' \
+  --scorer label_match --min-pass-rate 0.9 \
+  --output report.json --baseline main-report.json
+```
+
+### aiforge eval compare
+
+Compare two saved reports and flag per-scorer regressions.
+
+See [Evaluations](evals.md) for scorers, datasets and exit codes.
+
+---
+
 ## Discovery Commands
 
 ### aiforge config

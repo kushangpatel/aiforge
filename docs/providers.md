@@ -1126,7 +1126,7 @@ configuration if local throughput is a bottleneck.
 | `local` | langchain-ollama | Ollama local inference |
 | `gemini` | langchain-google-genai ≥4.0, <5 | Google Gemini LLM + embeddings |
 | `bedrock` | langchain-aws ≥1.5, <2 | Amazon Bedrock LLM + embeddings |
-| `mistral` | langchain-mistralai ≥1.0, <2 | Mistral AI LLM + embeddings |
+| `mistral` | langchain-mistralai ≥1.1.3, <2 | Mistral AI LLM + embeddings |
 | `pinecone` | pinecone≥5.1.0 | Pinecone vector store |
 | `qdrant` | qdrant-client≥1.7.0 | Qdrant vector store |
 | `pgvector` | psycopg[binary]≥3.1.0 | PostgreSQL/pgvector |
