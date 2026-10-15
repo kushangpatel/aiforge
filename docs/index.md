@@ -2,7 +2,7 @@
 
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.2.1-orange.svg)](https://github.com/kushangpatel/aiforge/blob/main/CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.2.2-orange.svg)](https://github.com/kushangpatel/aiforge/blob/main/CHANGELOG.md)
 
 **AIForge** is a modular, provider-agnostic Python SDK that gives product teams production-ready AI capabilities with a single `pip install` and a config file. Each module — summarization, document Q&A, extraction, classification, semantic search, content generation, conversational agents, content moderation, translation, and vision — is self-contained, composable, and ships with a built-in Streamlit UI widget for instant prototyping.
 
