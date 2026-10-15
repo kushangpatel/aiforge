@@ -9,6 +9,19 @@ called out under **Changed** or **Removed**.
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-10-15
+
+### Changed
+
+- Updated the package documentation link to the hosted AI Forge documentation
+  at [kushangpatel.com/docs/aiforge](https://kushangpatel.com/docs/aiforge/).
+
+### Removed
+
+- Removed internal development guides, planning documents and the product
+  requirements document from the public repository. User-facing documentation
+  remains available in `docs/` and on the hosted documentation site.
+
 ## [0.2.0] - 2026-10-15
 
 First release published to PyPI, as `aiforge-kit` (`pip install aiforge-kit`;
@@ -108,5 +121,6 @@ the import name is still `aiforge`).
 
 Initial development version. Not published to PyPI.
 
-[Unreleased]: https://github.com/kushangpatel/aiforge/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/kushangpatel/aiforge/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/kushangpatel/aiforge/releases/tag/v0.2.1
 [0.2.0]: https://github.com/kushangpatel/aiforge/releases/tag/v0.2.0
