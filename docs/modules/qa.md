@@ -9,7 +9,7 @@
 The QA module is included with the base `aiforge` install. ChromaDB is pulled in as a core dependency.
 
 ```bash
-pip install aiforge
+pip install aiforge-kit
 ```
 
 ---
@@ -55,6 +55,13 @@ DocQA(
     max_iterations: int = 3,
     store: VectorStoreAdapter | None = None,
     system_prompt: str | None = None,
+    *,
+    chunking: str | None = None,         # "recursive" | "markdown" | "token"
+    retrieval_mode: str | None = None,   # "vector" | "hybrid" | "keyword"
+    rerank: bool | None = None,
+    rerank_top_n: int | None = None,
+    fetch_k: int | None = None,
+    reranker: Reranker | None = None,
     # Inherited from BaseModule:
     quality: str | None = None,
     provider: str | None = None,
@@ -74,6 +81,12 @@ DocQA(
 | `max_iterations` | `int` | `3` | Maximum agentic refinement loops before the agent is forced to respond. |
 | `store` | `VectorStoreAdapter \| None` | `None` | Pre-built vector store adapter for dependency injection or testing. When `None`, a ChromaDB store is built automatically. |
 | `system_prompt` | `str \| None` | `None` | Override the default system prompt for LLM calls. See [Prompt Resolution](#prompt-resolution). |
+| `chunking` | `str \| None` | `None` → `AIFORGE_CHUNKING` (`"recursive"`) | Chunking strategy: `"recursive"`, `"markdown"` or `"token"`. See [Chunking Strategies](#chunking-strategies). |
+| `retrieval_mode` | `str \| None` | `None` → `AIFORGE_RETRIEVAL_MODE` (`"vector"`) | `"vector"`, `"hybrid"` or `"keyword"`. See [Retrieval Modes](#retrieval-modes). |
+| `rerank` | `bool \| None` | `None` → `AIFORGE_RERANK` (`False`) | Rerank retrieved candidates. Defaults to `True` when `reranker` is given. |
+| `rerank_top_n` | `int \| None` | `None` → `AIFORGE_RERANK_TOP_N` | Chunks kept per retrieval after reranking. `None` keeps `retrieval_k`. |
+| `fetch_k` | `int \| None` | `None` → `AIFORGE_FETCH_K` (`20`) | Candidates fetched per retriever before fusion / reranking. |
+| `reranker` | `Reranker \| None` | `None` | Custom reranker. When reranking without one, an `LLMReranker` on this module's provider is used. See [Reranking](#reranking). |
 | `quality` | `str \| None` | `None` | Quality tier for model routing: `"high"`, `"medium"`, or `"low"`. |
 | `provider` | `str \| None` | `None` | LLM provider name (`"openai"`, `"anthropic"`, etc.). Falls back to `settings.PROVIDER`. |
 | `**kwargs` | | | Any `AIForgeSettings` field as a keyword override, e.g. `MODEL="gpt-4o"`. |
@@ -523,6 +536,7 @@ from aiforge import QAResponse
 |-------|------|-------------|
 | `text` | `str` | The generated answer with inline source citations. |
 | `sources` | `list[str]` | File paths of retrieved source chunks. |
+| `citations` | `list[Citation]` | One entry per distinct retrieved chunk: `source`, `page`, `heading_path`, `chunk_index`, `score`, `rerank_score`. `Citation.label()` gives e.g. `"guide.pdf, page 3, Setup > Install"`. |
 | `confidence` | `float` | Self-assessed answer confidence `[0.0, 1.0]`. |
 | `iterations` | `int` | Number of retrieve-reason loops the agent performed. |
 | `trace` | `list[dict] \| None` | Step-by-step agent trace (only if `include_trace=True`). |
@@ -605,7 +619,7 @@ The intent is logged in the trace and passed to the reason node for context.
 
 #### 2. Retrieve
 
-Embeds the current query (original or refined) and performs similarity search against ChromaDB. Returns `retrieval_k` chunks per iteration. Chunks accumulate across iterations (LangGraph `operator.add` reducer).
+Runs the configured [retrieval mode](#retrieval-modes) for the current query (original or refined), then the [reranker](#reranking) if enabled. Returns `retrieval_k` chunks per iteration (`rerank_top_n` when reranking). Each chunk keeps its `source`, `page` and `heading_path`, which label it in the prompt context (`[source: guide.md, Setup > Install]`) and become `QAResponse.citations`. Chunks accumulate across iterations (LangGraph `operator.add` reducer).
 
 If `filter_repo` is set, chunks are filtered by `source` metadata using `{"$contains": filter_repo}`.
 
@@ -700,7 +714,7 @@ When `file_extensions` is specified, only files matching those extensions are lo
 
 ### Chunking
 
-Documents are split using `TextSplitter` with configurable `chunk_size` and `chunk_overlap`. The splitter is language-aware for code files.
+Documents are split using `TextSplitter` with configurable `chunk_size` and `chunk_overlap` and the selected [chunking strategy](#chunking-strategies). The splitter is language-aware for code files.
 
 ### Batch Embedding
 
@@ -716,6 +730,122 @@ Each chunk stores metadata:
 - `source` — file path
 - `file_type` — file extension
 - `chunk_index` — position within the batch
+- `page` — page number (PDFs, 0-based), when known
+- `heading_path` — markdown heading path such as `"Install > From source"` (`chunking="markdown"`)
+- `mtime` — file modification time (incremental ingestion)
+
+---
+
+## Retrieval Modes
+
+`retrieval_mode` (or `AIFORGE_RETRIEVAL_MODE`) selects how chunks are found:
+
+| Mode | How it works | Query embedding |
+|------|--------------|-----------------|
+| `"vector"` (default) | Dense cosine similarity in the vector store. Unchanged behaviour. | Yes |
+| `"keyword"` | Okapi BM25 over chunk texts (`k1=1.5`, `b=0.75`). Good for exact identifiers, error codes and rare terms. | No |
+| `"hybrid"` | Both, each fetching `fetch_k` candidates, fused with Reciprocal Rank Fusion: `score(d) = Σ 1 / (RRF_K + rank(d))`. | Yes |
+
+```python
+qa = DocQA(collection="docs", retrieval_mode="hybrid", fetch_k=30)
+qa.ingest("./docs")
+answer = qa.ask("What does error E4012 mean?")
+
+# Inspect retrieval without running the agent
+for hit in qa.retrieve("E4012", top_k=3):
+    print(f"{hit['score']:.2f}", hit["metadata"]["source"])
+```
+
+**The keyword index.** The BM25 index is pure Python (no extra dependency)
+and lives in memory. It is not persisted separately: it is built from the
+vector store's own documents (`VectorStoreAdapter.list_all_documents()`) on
+the first keyword or hybrid query, and rebuilt after this instance writes to
+the store or whenever the store's chunk count changes (for example after
+another process ingests). The vector store stays the single source of truth,
+so the two indexes cannot drift apart across restarts. The tokenizer
+lower-cases text and splits on non-alphanumeric characters (so
+`auth_middleware` matches `auth` and `middleware`); there is no stemming.
+
+**Backends.** Chroma (default), pgvector, Qdrant and Pinecone implement
+`list_all_documents()`. A custom backend that does not falls back to vector
+retrieval with a `retrieval.keyword_unsupported` warning. Metadata filters
+(`filter_repo`, or `filter=` on `retrieve()`) are applied to keyword hits
+locally; they support field equality, `$eq $ne $gt $gte $lt $lte $in $nin
+$contains`, `$and` and `$or`. A filter using any other operator runs that
+query in vector mode with a `retrieval.filter_unsupported` warning.
+
+**Scores.** `hit["score"]` is always in `[0, 1]`: cosine similarity in vector
+mode, BM25 relative to the best hit in keyword mode, and the RRF score
+relative to the best possible (ranked first by both) in hybrid mode.
+
+---
+
+## Reranking
+
+With `rerank=True` (or `AIFORGE_RERANK=true`) each retrieval fetches
+`fetch_k` candidates, reranks them and keeps the best `rerank_top_n`
+(default `retrieval_k`):
+
+```python
+qa = DocQA(collection="docs", retrieval_mode="hybrid", rerank=True, fetch_k=25, rerank_top_n=6)
+```
+
+The default `LLMReranker` scores every candidate in **one** LLM call using the
+provider's native structured output (`response_format` with
+`{"scores": [{"index": i, "score": 0.0-1.0}, ...]}`); providers without
+native structured output are asked for the same JSON in text. If the call
+fails or returns unusable output, the original retrieval order is kept and a
+`rerank.llm_failed` warning is logged. Its tokens are included in
+`QAResponse.input_tokens` / `output_tokens` and cost tracking.
+
+**Custom rerankers.** Anything with a
+`rerank(query, candidates, top_n) -> list[dict]` method satisfies the
+`aiforge.core.rerank.Reranker` protocol. `ScoreFunctionReranker` wraps a
+`(query, texts) -> scores` function, which makes a cross-encoder a one-liner:
+
+```python
+from sentence_transformers import CrossEncoder
+from aiforge.core.rerank import ScoreFunctionReranker
+
+ce = CrossEncoder("cross-encoder/ms-marco-MiniLM-L-6-v2")
+qa = DocQA(
+    collection="docs",
+    reranker=ScoreFunctionReranker(lambda q, docs: ce.predict([(q, d) for d in docs]).tolist()),
+)
+```
+
+Passing `reranker=` enables reranking. A custom reranker that raises is
+logged and the original order is kept. Reranked chunks carry
+`rerank_score`, which is copied to `Citation.rerank_score`.
+
+---
+
+## Chunking Strategies
+
+| `chunking` | Sizing | Behaviour |
+|------------|--------|-----------|
+| `"recursive"` (default) | characters: 1000/200 for code, 1200/200 for prose | Language-aware separators for code; paragraph → line → sentence for prose. Unchanged. |
+| `"markdown"` | characters, as `recursive` | `.md` / `.markdown` files are split on headings first, so no chunk spans two sections, then oversized sections are split recursively. Each chunk gets `heading_path` metadata (`"Guide > Install > Linux"`). Headings inside code fences are ignored. Other files use `recursive`. |
+| `"token"` | tiktoken tokens (`cl100k_base`): 400/60 | Same separators as `recursive`, but sized in tokens so chunks fit embedding-model limits regardless of language. |
+
+Overlap defaults: when you set `chunk_size` but not `chunk_overlap`, the
+overlap is the smaller of the strategy default and `chunk_size // 4`, so
+small chunk sizes stay valid. An explicit `chunk_overlap=0` now means no
+overlap.
+
+`TextSplitter` can also be used directly, including with a custom token
+counter (for example a Hugging Face tokenizer):
+
+```python
+from aiforge.core.text_splitter import TextSplitter
+
+splitter = TextSplitter(chunk_size=256, strategy="token",
+                        token_counter=lambda s: len(hf_tokenizer.encode(s)))
+chunks = splitter.split(documents)
+```
+
+tiktoken downloads each encoding once and caches it; on offline machines,
+pre-populate `TIKTOKEN_CACHE_DIR` or pass `token_counter=`.
 
 ---
 

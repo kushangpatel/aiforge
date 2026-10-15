@@ -21,6 +21,7 @@ Commands:
     aiforge config      — show resolved configuration
     aiforge models      — list models & estimate costs
     aiforge registry    — explore registered components
+    aiforge eval        — evaluate modules against test datasets
 """
 
 from __future__ import annotations
@@ -34,6 +35,7 @@ from rich.console import Console
 from rich.table import Table
 
 from aiforge.cli.commands_chat import chat_app
+from aiforge.cli.commands_eval import eval_app
 from aiforge.cli.commands_info import config_app, models_app, registry_app
 from aiforge.cli.commands_modules import (
     classify_app,
@@ -71,6 +73,7 @@ app.add_typer(chat_app, name="chat", help="Interactive AI chat agent.")
 app.add_typer(config_app, name="config", help="Show resolved configuration.")
 app.add_typer(models_app, name="models", help="List models & estimate costs.")
 app.add_typer(registry_app, name="registry", help="Explore registered components.")
+app.add_typer(eval_app, name="eval", help="Evaluate modules against test datasets.")
 
 
 @app.command()
@@ -96,7 +99,7 @@ def serve(
     try:
         import uvicorn
     except ImportError:
-        console.print('[red]uvicorn not installed.[/red] Run: pip install "aiforge[server]"')
+        console.print('[red]uvicorn not installed.[/red] Run: pip install "aiforge-kit[server]"')
         raise typer.Exit(1) from None
 
     console.print(f"[cyan]Starting AIForge API server on http://{host}:{port}[/cyan]")
@@ -121,7 +124,9 @@ def playground(
     try:
         import streamlit  # noqa: F401
     except ImportError:
-        console.print('[red]Streamlit not installed.[/red] Run: pip install "aiforge[playground]"')
+        console.print(
+            '[red]Streamlit not installed.[/red] Run: pip install "aiforge-kit[playground]"'
+        )
         raise typer.Exit(1) from None
 
     playground_path = Path(__file__).parent.parent / "playground" / "app.py"

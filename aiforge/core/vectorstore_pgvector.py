@@ -171,6 +171,27 @@ class PgVectorStore(VectorStoreAdapter):
             rows = cur.fetchall()
         return [json.loads(r[0]) if isinstance(r[0], str) else (r[0] or {}) for r in rows]
 
+    def list_all_documents(self) -> list[dict[str, Any]]:
+        """Return id, text and metadata for every row in this collection."""
+        import json
+
+        from psycopg import sql as pgsql
+
+        stmt = pgsql.SQL("SELECT id, text, metadata FROM {table}").format(
+            table=pgsql.Identifier(self._collection_name)
+        )
+        with self._conn.cursor() as cur:
+            cur.execute(stmt)
+            rows = cur.fetchall()
+        return [
+            {
+                "id": r[0],
+                "text": r[1] or "",
+                "metadata": json.loads(r[2]) if isinstance(r[2], str) else (r[2] or {}),
+            }
+            for r in rows
+        ]
+
     def list_collections(self) -> list[str]:
         sql = """
             SELECT table_name FROM information_schema.tables

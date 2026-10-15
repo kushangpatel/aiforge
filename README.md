@@ -15,8 +15,11 @@
 | Feature | Description |
 |---------|-------------|
 | **10 AI Modules** | Summarize, DocQA (RAG), Extract, Classify, Search, Generate, Chat, Moderate, Translate, Vision |
-| **Provider-Agnostic** | Swap OpenAI → Anthropic → Ollama (local) by changing 1 config value |
+| **Provider-Agnostic** | Swap OpenAI, Anthropic, Gemini, Bedrock, Mistral, Azure or Ollama (local) by changing 1 config value |
 | **Production-Ready** | Retry, rate limiting, streaming, cost tracking out of the box |
+| **Evals** | Score module outputs against test sets and gate CI on regressions (`aiforge eval run`) |
+| **Guardrails** | PII and secret redaction, prompt-injection checks, output validation around any module |
+| **Hybrid RAG** | Keyword + vector retrieval, reranking and heading-aware chunking for DocQA and Search |
 | **Composable Pipelines** | Chain modules into workflows (e.g., extract → classify → summarize) |
 | **Plugin System** | Extend with custom modules, providers, and vector stores via a unified registry |
 | **Built-in Observability** | OpenTelemetry + LangSmith tracing, structured logging, cost tracking |
@@ -104,7 +107,11 @@ aiforge serve
 ## Installation Options
 
 ```bash
-# Core + OpenAI provider (default)
+# From PyPI (0.2.0 and later)
+pip install aiforge-kit
+pip install "aiforge-kit[anthropic,mcp]"
+
+# Core + OpenAI provider (default), from a clone
 pip install -r requirements.txt
 
 # Or install as an editable package for development

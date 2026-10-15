@@ -9,7 +9,7 @@
 The summarize module is included with the base `aiforge` install. No extras required.
 
 ```bash
-pip install aiforge
+pip install aiforge-kit
 ```
 
 ---

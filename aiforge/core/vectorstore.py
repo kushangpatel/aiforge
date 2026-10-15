@@ -70,6 +70,16 @@ class VectorStoreAdapter(ABC):
         return at least one entry per unique source path.
         """
 
+    def list_all_documents(self) -> list[dict[str, Any]]:
+        """Return ``{"id", "text", "metadata"}`` for every document in the collection.
+
+        Used to (re)build the in-memory BM25 index for keyword and hybrid
+        retrieval (see :mod:`aiforge.core.retrieval`).  Optional: the default
+        raises :class:`NotImplementedError`, in which case those modes fall
+        back to vector retrieval with a logged warning.
+        """
+        raise NotImplementedError(f"{type(self).__name__} does not support list_all_documents()")
+
     @abstractmethod
     def list_collections(self) -> list[str]:
         """Return names of all existing collections."""
@@ -205,6 +215,16 @@ class ChromaVectorStore(VectorStoreAdapter):
         """Return metadata for every document in this collection."""
         results = self._collection.get(include=["metadatas"])
         return [dict(m) for m in results["metadatas"] or []]
+
+    def list_all_documents(self) -> list[dict[str, Any]]:
+        """Return id, text and metadata for every document in this collection."""
+        results = self._collection.get(include=["documents", "metadatas"])
+        texts = results["documents"] or []
+        metas = results["metadatas"] or []
+        return [
+            {"id": doc_id, "text": text or "", "metadata": dict(meta or {})}
+            for doc_id, text, meta in zip(results["ids"], texts, metas, strict=False)
+        ]
 
     def list_collections(self) -> list[str]:
         return [c.name for c in self._client.list_collections()]

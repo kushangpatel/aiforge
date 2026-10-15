@@ -25,6 +25,7 @@ from typing import Any
 
 from aiforge.core.prompt_override import resolve_prompt
 from aiforge.core.types import BaseModule
+from aiforge.guardrails.pii import PII_GROUPS, PII_TYPES, PIIDetector
 from aiforge.modules.moderate.prompts import (
     INJECTION_SYSTEM,
     INJECTION_USER,
@@ -83,7 +84,11 @@ _REDACT: dict[str, str] = {
 }
 
 _VALID_CHECKS = frozenset({"pii", "toxicity", "prompt_injection"})
-_VALID_PII_TYPES = frozenset({"email", "phone", "ssn", "credit_card"})
+#: The original regex detectors, kept as-is for backward compatibility.
+_LEGACY_PII_TYPES = frozenset({"email", "phone", "ssn", "credit_card"})
+#: Everything else (IBAN, IP, secrets, ...) and the groups "pii" / "secrets" / "all"
+#: come from :class:`aiforge.guardrails.PIIDetector`.
+_VALID_PII_TYPES = _LEGACY_PII_TYPES | PII_TYPES | frozenset(PII_GROUPS)
 
 
 # ---------------------------------------------------------------------------
@@ -153,7 +158,7 @@ def _apply_redactions(text: str, flags: list[ModerationFlag]) -> str:
     Deduplicates identical spans so each unique value is processed once
     (str.replace replaces all occurrences by itself).
     """
-    pii = [f for f in flags if f.subtype in _REDACT and f.span]
+    pii = [f for f in flags if f.type == "pii" and f.subtype and f.span]
     # Longest match first so shorter overlapping spans don't leave remnants
     # Deduplicate by span value to avoid redundant replace() calls
     seen: set[str] = set()
@@ -163,7 +168,7 @@ def _apply_redactions(text: str, flags: list[ModerationFlag]) -> str:
             seen.add(f.span)  # type: ignore[arg-type]
             unique_pii.append(f)
     for flag in unique_pii:
-        placeholder = _REDACT.get(flag.subtype or "", "[REDACTED]")
+        placeholder = _REDACT.get(flag.subtype or "", f"[{(flag.subtype or 'redacted').upper()}]")
         text = text.replace(flag.span, placeholder)  # type: ignore[arg-type]
     return text
 
@@ -181,8 +186,10 @@ class Moderator(BaseModule):
                    ``["pii", "toxicity", "prompt_injection"]``.
                    Defaults to all three.
         pii_types: PII sub-types to detect when ``"pii"`` is enabled.
-                   Subset of ``["email", "phone", "ssn", "credit_card"]``.
-                   Defaults to all four.
+                   ``"email"``, ``"phone"``, ``"ssn"``, ``"credit_card"`` (the
+                   default four) plus any :data:`aiforge.guardrails.PII_TYPES`
+                   entry (``"iban"``, ``"ip_address"``, ``"aws_access_key"``, ...)
+                   or group (``"secrets"``, ``"pii"``, ``"all"``).
         **kwargs:  Forwarded to :class:`~aiforge.core.types.BaseModule`.
     """
 
@@ -360,18 +367,34 @@ class Moderator(BaseModule):
     def _run_pii(self, text: str) -> list[ModerationFlag]:
         """Run enabled regex PII detectors with position-based overlap suppression.
 
-        Detectors run in priority order (email → SSN → credit_card → phone).
+        Extended types (via :class:`~aiforge.guardrails.PIIDetector`) run first,
+        then the legacy detectors in priority order (email → SSN → credit_card → phone).
         Phone runs last and uses positional overlap checking against previously
         matched spans so credit card / SSN digit sequences are never double-flagged.
         """
         flags: list[ModerationFlag] = []
         # Track (start, end) character positions of already-matched spans
         occupied: list[tuple[int, int]] = []
+        requested: set[str] = set()
+        for t in self.pii_types:
+            requested |= PII_GROUPS.get(t, {t})
+        legacy = requested & _LEGACY_PII_TYPES
+        extra = requested - _LEGACY_PII_TYPES
 
         def _overlaps(start: int, end: int) -> bool:
             return any(start < e and end > s for s, e in occupied)
 
-        if "email" in self.pii_types:
+        if extra:
+            # Extended types run first so a secret, IBAN or IP that contains
+            # digit runs is never re-flagged by the legacy phone / card regexes.
+            for e in PIIDetector(sorted(extra)).detect(text):
+                if not _overlaps(e.start, e.end):
+                    flags.append(
+                        ModerationFlag(type="pii", subtype=e.type, span=e.value, confidence=1.0)
+                    )
+                    occupied.append((e.start, e.end))
+
+        if "email" in legacy:
             for m in _EMAIL_RE.finditer(text):
                 if not _overlaps(m.start(), m.end()):
                     flags.append(
@@ -379,7 +402,7 @@ class Moderator(BaseModule):
                     )
                     occupied.append((m.start(), m.end()))
 
-        if "ssn" in self.pii_types:
+        if "ssn" in legacy:
             for m in _SSN_RE.finditer(text):
                 if not _overlaps(m.start(), m.end()):
                     flags.append(
@@ -387,7 +410,7 @@ class Moderator(BaseModule):
                     )
                     occupied.append((m.start(), m.end()))
 
-        if "credit_card" in self.pii_types:
+        if "credit_card" in legacy:
             for m in _CARD_RE.finditer(text):
                 if _luhn_ok(m.group()) and not _overlaps(m.start(), m.end()):
                     flags.append(
@@ -400,7 +423,7 @@ class Moderator(BaseModule):
                     )
                     occupied.append((m.start(), m.end()))
 
-        if "phone" in self.pii_types:
+        if "phone" in legacy:
             for m in _PHONE_RE.finditer(text):
                 span = m.group().strip()
                 digits = re.sub(r"\D", "", span)

@@ -54,7 +54,7 @@ def retry_llm_call(
     Retries on :exc:`RateLimitError`, :exc:`APITimeoutError`, and
     :exc:`APIConnectionError` with exponential backoff.
     """
-    return retry(  # type: ignore[return-value]
+    return retry(  # type: ignore[return-value, unused-ignore]  # stub differs by tenacity release
         stop=stop_after_attempt(max_attempts),
         wait=_backoff(min_wait, max_wait),
         retry=retry_if_exception_type(_LLM_RETRYABLE),
@@ -69,7 +69,7 @@ def retry_embedding_call(
     max_wait: float = 8.0,
 ) -> Callable[[F], F]:
     """Decorator factory — wraps an embedding call with retry logic."""
-    return retry(  # type: ignore[return-value]
+    return retry(  # type: ignore[return-value, unused-ignore]  # stub differs by tenacity release
         stop=stop_after_attempt(max_attempts),
         wait=_backoff(min_wait, max_wait),
         retry=retry_if_exception_type(_LLM_RETRYABLE),

@@ -1,0 +1,137 @@
+name: Release
+
+# Pushing a tag vX.Y.Z publishes that version to PyPI and creates a GitHub
+# Release from its CHANGELOG.md section. Running the workflow by hand
+# (workflow_dispatch) publishes the selected branch to TestPyPI instead.
+#
+# Publishing uses PyPI Trusted Publishing (OIDC): no API token is stored in
+# the repository. See BUILD_AND_PUBLISH.md for the one-time setup on pypi.org
+# and test.pypi.org.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build and check
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+
+      - name: Read package version
+        id: version
+        run: echo "version=$(python3 scripts/release_check.py version)" >> "$GITHUB_OUTPUT"
+
+      - name: Tag matches package version
+        if: github.ref_type == 'tag'
+        run: python3 scripts/release_check.py check-tag "$GITHUB_REF_NAME"
+
+      - name: CHANGELOG has a section for this version
+        run: python3 scripts/release_check.py notes "${{ steps.version.outputs.version }}" > release-notes.md
+
+      - name: Build sdist and wheel
+        run: uv build
+
+      - name: Check metadata
+        run: uvx twine check --strict dist/*
+
+      - name: Smoke-install the wheel
+        run: |
+          uv venv "$RUNNER_TEMP/wheel-venv"
+          uv pip install --python "$RUNNER_TEMP/wheel-venv/bin/python" dist/*.whl
+          cd "$RUNNER_TEMP"
+          "$RUNNER_TEMP/wheel-venv/bin/python" -I "$GITHUB_WORKSPACE/scripts/smoke_wheel.py"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-notes
+          path: release-notes.md
+
+  publish-pypi:
+    name: Publish to PyPI
+    if: github.event_name == 'push' && github.ref_type == 'tag'
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/project/aiforge-kit/${{ needs.build.outputs.version }}/
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - uses: pypa/gh-action-pypi-publish@release/v1
+
+  publish-testpypi:
+    name: Publish to TestPyPI
+    if: github.event_name == 'workflow_dispatch'
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: testpypi
+      url: https://test.pypi.org/project/aiforge-kit/${{ needs.build.outputs.version }}/
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/
+          # A version can be uploaded only once; re-running is a no-op.
+          skip-existing: true
+
+  github-release:
+    name: Create GitHub Release
+    needs: [build, publish-pypi]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-notes
+
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.build.outputs.version }}
+        run: |
+          prerelease=""
+          if [[ "$VERSION" =~ (a|b|rc|dev)[0-9]+$ ]]; then prerelease="--prerelease"; fi
+          gh release create "$GITHUB_REF_NAME" dist/* \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "AI Forge $VERSION" \
+            --notes-file release-notes.md \
+            --verify-tag $prerelease

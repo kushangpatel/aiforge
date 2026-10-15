@@ -49,7 +49,13 @@ class SearchHit(BaseModel):
     """Document text."""
 
     score: float = Field(ge=0.0, le=1.0)
-    """Cosine similarity in [0, 1].  Derived as ``1.0 - cosine_distance``."""
+    """Retrieval score in [0, 1].  In ``vector`` mode this is cosine similarity
+    (``1.0 - cosine_distance``); in ``hybrid`` / ``keyword`` mode it is the
+    fused RRF or BM25 score relative to the best possible / best hit."""
+
+    rerank_score: float | None = None
+    """Reranker relevance score (any scale for custom rerankers; 0-1 for the
+    LLM reranker).  Only set when reranking is enabled."""
 
     metadata: dict[str, Any] = Field(default_factory=dict)
 

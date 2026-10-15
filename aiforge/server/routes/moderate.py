@@ -7,10 +7,11 @@ from typing import Any
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, field_validator
 
+from aiforge.modules.moderate.module import _VALID_PII_TYPES
+
 router = APIRouter(prefix="/moderate", tags=["moderate"])
 
 _VALID_CHECKS = frozenset({"pii", "toxicity", "prompt_injection"})
-_VALID_PII_TYPES = frozenset({"email", "phone", "ssn", "credit_card"})
 
 
 class _FlagOut(BaseModel):

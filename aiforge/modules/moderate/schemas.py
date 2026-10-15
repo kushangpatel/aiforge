@@ -15,7 +15,7 @@ class ModerationFlag(BaseModel):
     )
     subtype: str | None = Field(
         default=None,
-        description="For PII: 'email' | 'phone' | 'ssn' | 'credit_card'",
+        description="For PII: 'email' | 'phone' | 'ssn' | 'credit_card' | any guardrails PII type",
     )
     span: str | None = Field(
         default=None,

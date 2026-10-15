@@ -45,7 +45,7 @@ Context:
 {context}
 
 Rules:
-- Cite sources as [filename:line_range] inline
+- Cite sources inline using the [source: ...] label shown above each context passage
 - Be specific and detailed
 - If information is incomplete, acknowledge what's missing
 - Do not fabricate information not present in the context

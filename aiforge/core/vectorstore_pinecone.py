@@ -152,6 +152,28 @@ class PineconeVectorStore(VectorStoreAdapter):
                     all_metadata.append(meta)
         return all_metadata
 
+    def list_all_documents(self) -> list[dict[str, Any]]:
+        """Return id, text and metadata for every vector in this namespace.
+
+        Pages ids with ``list()`` and fetches them in batches, like
+        :meth:`list_all_metadata`; text comes from the reserved ``_text`` key.
+        """
+        docs: list[dict[str, Any]] = []
+        batch_size = 1000
+        for id_page in self._index.list(namespace=self._namespace):
+            items: Any = getattr(id_page, "vectors", id_page)
+            ids = [item if isinstance(item, str) else item.id for item in items]
+            ids = [i for i in ids if i]
+            for i in range(0, len(ids), batch_size):
+                fetch_result = self._index.fetch(
+                    ids=ids[i : i + batch_size], namespace=self._namespace
+                )
+                for vec_id, vec in fetch_result.vectors.items():
+                    meta = dict(vec.metadata or {})
+                    text = meta.pop("_text", "")
+                    docs.append({"id": str(vec_id), "text": text, "metadata": meta})
+        return docs
+
     def list_collections(self) -> list[str]:
         stats = self._index.describe_index_stats()
         return list(stats.get("namespaces", {}).keys())

@@ -10,6 +10,7 @@ Unknown models emit a WARNING and return cost=0.
 from __future__ import annotations
 
 import logging
+import re
 from typing import Any
 
 _logger = logging.getLogger(__name__)
@@ -17,6 +18,12 @@ _logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # Default pricing  (USD / 1M tokens)
 # ---------------------------------------------------------------------------
+
+
+def _cached(input: float, output: float, cache_read: float, cache_write: float) -> dict[str, float]:
+    """A pricing entry with explicit prompt-cache read and write prices."""
+    return {"input": input, "output": output, "cache_read": cache_read, "cache_write": cache_write}
+
 
 PRICING: dict[str, dict[str, float]] = {
     # OpenAI GPT-4 family (gpt-4-turbo, gpt-3.5-turbo, o1 and o3-mini shut down
@@ -69,6 +76,58 @@ PRICING: dict[str, dict[str, float]] = {
     "voyage-3-lite": {"input": 0.02, "output": 0.0},
     "voyage-large-2": {"input": 0.12, "output": 0.0},
     "voyage-code-2": {"input": 0.12, "output": 0.0},
+    # Google Gemini (Gemini Developer API, Standard tier, checked 2026-10-15:
+    # https://ai.google.dev/gemini-api/docs/pricing). Pro models are listed at
+    # the <=200K-token prompt rate; longer prompts cost more.
+    # gemini-4-argon rises to $4 / $20 (cache $0.20) on 2026-12-01, and
+    # gemini-3.8-flash / 3.6-flash to $1.50 / $7.50 (cache $0.15) on 2027-01-01.
+    "gemini-4-argon": {"input": 2.00, "output": 10.00, "cache_read": 0.10},
+    "gemini-3.8-flash": {"input": 0.75, "output": 3.75, "cache_read": 0.075},
+    "gemini-3.6-flash": {"input": 0.75, "output": 3.75, "cache_read": 0.075},
+    "gemini-3.5-flash-lite": {"input": 0.30, "output": 2.50, "cache_read": 0.03},
+    "gemini-3.1-flash-lite": {"input": 0.25, "output": 1.50, "cache_read": 0.025},
+    "gemini-3.1-pro-preview": {"input": 2.00, "output": 12.00, "cache_read": 0.20},
+    "gemini-2.5-pro": {"input": 1.25, "output": 10.00, "cache_read": 0.125},
+    "gemini-2.5-flash": {"input": 0.30, "output": 2.50, "cache_read": 0.03},
+    "gemini-2.5-flash-lite": {"input": 0.10, "output": 0.40, "cache_read": 0.01},
+    "gemini-embedding-2": {"input": 0.20, "output": 0.0},
+    # Amazon Bedrock, US East (N. Virginia) on-demand, checked 2026-10-15 via the
+    # AWS Price List API. Keys are Bedrock model IDs without the version suffix;
+    # geo profiles (us., eu., …) and in-region IDs share the plain key, and
+    # "global." profiles have their own (cheaper) key. See _bedrock_candidates().
+    "global.anthropic.claude-fable-5-1": _cached(10.00, 50.00, 0.25, 12.50),
+    "anthropic.claude-fable-5-1": _cached(11.00, 55.00, 0.275, 13.75),
+    "global.anthropic.claude-opus-5-5": _cached(4.00, 20.00, 0.20, 5.00),
+    "anthropic.claude-opus-5-5": _cached(4.40, 22.00, 0.22, 5.50),
+    "global.anthropic.claude-sonnet-5-5": _cached(2.00, 10.00, 0.10, 2.50),
+    "anthropic.claude-sonnet-5-5": _cached(2.20, 11.00, 0.11, 2.75),
+    # Haiku 5.5: rate for prompts up to 100K tokens (5x beyond).
+    "global.anthropic.claude-haiku-5-5": _cached(0.10, 0.50, 0.01, 0.125),
+    "anthropic.claude-haiku-5-5": _cached(0.11, 0.55, 0.011, 0.1375),
+    "global.anthropic.claude-sonnet-4-6": _cached(3.00, 15.00, 0.30, 3.75),
+    "anthropic.claude-sonnet-4-6": _cached(3.30, 16.50, 0.33, 4.125),
+    "global.anthropic.claude-haiku-4-5": _cached(1.00, 5.00, 0.10, 1.25),
+    "anthropic.claude-haiku-4-5": _cached(1.10, 5.50, 0.11, 1.375),
+    # Amazon Nova: cache writes are not charged.
+    "global.amazon.nova-2-lite-v1": _cached(0.30, 2.50, 0.075, 0.0),
+    "amazon.nova-2-lite-v1": _cached(0.33, 2.75, 0.0825, 0.0),
+    "amazon.nova-pro-v1": _cached(0.80, 3.20, 0.20, 0.0),
+    "amazon.nova-lite-v1": _cached(0.06, 0.24, 0.015, 0.0),
+    "amazon.nova-micro-v1": _cached(0.035, 0.14, 0.00875, 0.0),
+    "amazon.titan-embed-text-v2": {"input": 0.02, "output": 0.0},
+    "amazon.titan-embed-text-v1": {"input": 0.10, "output": 0.0},
+    # Mistral AI (https://docs.mistral.ai/inference/pricing, checked 2026-10-15).
+    # Cached input is billed at 10% of the input price.
+    # Mistral Large 4 (public preview) at its sale price; list is $1.36 / $4.18.
+    "mistral-large-4": {"input": 0.68, "output": 2.09, "cache_read": 0.07},
+    "mistral-large-2512": {"input": 0.50, "output": 1.50, "cache_read": 0.05},
+    "mistral-medium-3-5": {"input": 1.50, "output": 7.50, "cache_read": 0.15},
+    "mistral-small-2603": {"input": 0.15, "output": 0.60, "cache_read": 0.015},
+    "codestral-2508": {"input": 0.30, "output": 0.90, "cache_read": 0.03},
+    "mistral-embed": {"input": 0.10, "output": 0.0},
+    "mistral-embed-2312": {"input": 0.10, "output": 0.0},
+    "codestral-embed": {"input": 0.15, "output": 0.0},
+    "codestral-embed-2505": {"input": 0.15, "output": 0.0},
     # Ollama / local (no cost)
     "llama3": {"input": 0.0, "output": 0.0},
     "llama3.1": {"input": 0.0, "output": 0.0},
@@ -125,6 +184,37 @@ MODEL_CONTEXT_WINDOWS: dict[str, int] = {
     "claude-3-opus": 200_000,
     "claude-opus-4": 200_000,
     "claude-sonnet-4": 200_000,
+    "gemini-4-argon": 1_048_576,
+    "gemini-3.8-flash": 1_048_576,
+    "gemini-3.6-flash": 1_048_576,
+    "gemini-3.5-flash-lite": 1_048_576,
+    "gemini-3.1-flash-lite": 1_048_576,
+    "gemini-3.1-pro-preview": 1_048_576,
+    "gemini-2.5-pro": 1_048_576,
+    "gemini-2.5-flash": 1_048_576,
+    "gemini-2.5-flash-lite": 1_048_576,
+    "anthropic.claude-fable-5-1": 1_000_000,
+    "anthropic.claude-opus-5-5": 1_000_000,
+    "anthropic.claude-sonnet-5-5": 1_000_000,
+    "anthropic.claude-haiku-5-5": 1_000_000,
+    "anthropic.claude-sonnet-4-6": 1_000_000,
+    "anthropic.claude-haiku-4-5": 200_000,
+    "amazon.nova-2-lite-v1": 1_000_000,
+    "amazon.nova-pro-v1": 300_000,
+    "amazon.nova-lite-v1": 300_000,
+    "amazon.nova-micro-v1": 128_000,
+    "mistral-large-4": 1_000_000,
+    "mistral-large-2512": 256_000,
+    "mistral-medium-3-5": 256_000,
+    "mistral-small-2603": 256_000,
+    "codestral-2508": 128_000,
+    "mistral-embed": 8_192,
+    "mistral-embed-2312": 8_192,
+    "codestral-embed": 8_192,
+    "codestral-embed-2505": 8_192,
+    "gemini-embedding-2": 8_192,
+    "gemini-embedding-001": 2_048,
+    "amazon.titan-embed-text-v2": 8_192,
     "llama3": 8_192,
     "llama3.1": 131_072,
     "llama3.2": 131_072,
@@ -155,19 +245,47 @@ def apply_context_window_overrides(overrides: dict[str, int]) -> None:
     _context_window_overrides.update(overrides)
 
 
+_BEDROCK_GEO_PREFIXES = frozenset({"us", "us-gov", "eu", "apac", "jp", "au", "ca", "in"})
+
+
+def _bedrock_candidates(model: str) -> list[str]:
+    """Lookup keys for an Amazon Bedrock model or inference-profile ID.
+
+    ``us.anthropic.claude-haiku-4-5-20251001-v1:0`` → ``anthropic.claude-haiku-4-5``;
+    ``global.amazon.nova-2-lite-v1:0`` → ``global.amazon.nova-2-lite-v1`` then
+    ``amazon.nova-2-lite-v1``. Non-Bedrock names come back unchanged.
+    """
+    name = re.sub(r":\d+$", "", model)  # ":0" version suffix
+    name = re.sub(r"-\d{8}-v\d+$", "", name)  # "-20251001-v1" snapshot suffix
+    prefix, dot, rest = name.partition(".")
+    if dot and prefix in _BEDROCK_GEO_PREFIXES:
+        return [rest]
+    if dot and prefix == "global":
+        return [name, rest]
+    return [name]
+
+
+def _lookup(model: str, tables: tuple[dict[str, Any], ...]) -> Any:
+    candidates = [model, *_bedrock_candidates(model)]
+    for table in tables:
+        for name in candidates:
+            if name in table:
+                return table[name]
+        # Fuzzy match: strip trailing version suffix e.g. "-20241022"
+        base = model.rsplit("-", 1)[0] if "-" in model else model
+        if base in table:
+            return table[base]
+    return None
+
+
 def get_model_pricing(model: str) -> dict[str, float] | None:
     """Return pricing dict for *model*, checking overrides first.
 
     Returns ``None`` and logs a WARNING if the model is unknown.
     """
-    # Normalise model name (strip date-suffixes for lookup flexibility)
-    for table in (_pricing_overrides, PRICING):
-        if model in table:
-            return table[model]
-        # Fuzzy match: strip trailing version suffix e.g. "-20241022"
-        base = model.rsplit("-", 1)[0] if "-" in model else model
-        if base in table:
-            return table[base]
+    found: dict[str, float] | None = _lookup(model, (_pricing_overrides, PRICING))
+    if found is not None:
+        return found
 
     _logger.warning("Unknown model %r — cost will be reported as $0.00", model)
     return None
@@ -181,7 +299,7 @@ def _cache_multipliers(model: str) -> tuple[float, float]:
     no write surcharge. A model's pricing entry can override either with
     explicit ``cache_read`` / ``cache_write`` prices.
     """
-    if model.lower().split("/")[-1].startswith("claude"):
+    if model.lower().split("/")[-1].split("anthropic.", 1)[-1].startswith("claude"):
         return 0.1, 1.25
     return 0.5, 1.0
 
@@ -216,10 +334,5 @@ def calculate_cost(
 
 def get_context_window(model: str) -> int:
     """Return the context window (max tokens) for *model*, checking overrides first."""
-    for table in (_context_window_overrides, MODEL_CONTEXT_WINDOWS):
-        if model in table:
-            return table[model]
-        base = model.rsplit("-", 1)[0] if "-" in model else model
-        if base in table:
-            return table[base]
-    return _DEFAULT_CONTEXT_WINDOW
+    found: int | None = _lookup(model, (_context_window_overrides, MODEL_CONTEXT_WINDOWS))
+    return found if found is not None else _DEFAULT_CONTEXT_WINDOW

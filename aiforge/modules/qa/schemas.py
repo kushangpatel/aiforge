@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import Field
+from pydantic import BaseModel, Field
 
 from aiforge.core.types import ModuleResponse
 
@@ -37,11 +37,39 @@ class IngestResponse(ModuleResponse):
         )
 
 
+class Citation(BaseModel):
+    """Where a retrieved chunk came from, for citing it in an answer."""
+
+    source: str
+    """File path or URL the chunk was loaded from."""
+    page: int | str | None = None
+    """Page number (PDFs: 0-based int as stored by the loader; custom loaders may use labels)."""
+    heading_path: str | None = None
+    """Markdown heading path, e.g. ``"Install > From source"`` (markdown chunking)."""
+    chunk_index: int | None = None
+    """Index of the chunk within its ingest batch."""
+    score: float | None = None
+    """Retrieval score in ``[0, 1]`` (meaning depends on the retrieval mode)."""
+    rerank_score: float | None = None
+    """Reranker relevance score, when reranking is enabled."""
+
+    def label(self) -> str:
+        """Human-readable label, e.g. ``"guide.pdf, page 3, Setup > Install"``."""
+        parts = [self.source]
+        if self.page is not None:
+            parts.append(f"page {self.page}")
+        if self.heading_path:
+            parts.append(self.heading_path)
+        return ", ".join(parts)
+
+
 class QAResponse(ModuleResponse):
     """Response from DocQA.ask() / aask()."""
 
     text: str = ""
     sources: list[str] = Field(default_factory=list)
+    citations: list[Citation] = Field(default_factory=list)
+    """One entry per distinct retrieved chunk, with page / heading metadata."""
     confidence: float = Field(default=0.0, ge=0.0, le=1.0)
     iterations: int = 0
     trace: list[dict[str, Any]] | None = None

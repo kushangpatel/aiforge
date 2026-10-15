@@ -72,7 +72,7 @@ The `aiforge` command is available after installing the package:
 ```bash
 pip install -e "."
 # or
-pip install aiforge
+pip install aiforge-kit
 ```
 
 Verify the installation:
@@ -85,8 +85,8 @@ Some commands require optional extras:
 
 | Command | Required Extra | Install |
 |---------|---------------|---------|
-| `aiforge serve` | `server` | `pip install "aiforge[server]"` |
-| `aiforge playground` | `playground` | `pip install "aiforge[playground]"` |
+| `aiforge serve` | `server` | `pip install "aiforge-kit[server]"` |
+| `aiforge playground` | `playground` | `pip install "aiforge-kit[playground]"` |
 | All other commands | *(none)* | — |
 
 ---
@@ -171,7 +171,7 @@ Start the FastAPI REST API server.
 aiforge serve [--host HOST] [--port PORT] [--reload]
 ```
 
-Requires the `server` extra (`pip install "aiforge[server]"`).
+Requires the `server` extra (`pip install "aiforge-kit[server]"`).
 
 **Options:**
 
@@ -248,7 +248,7 @@ Launch the Streamlit interactive playground UI.
 aiforge playground [--port PORT]
 ```
 
-Requires the `playground` extra (`pip install "aiforge[playground]"`).
+Requires the `playground` extra (`pip install "aiforge-kit[playground]"`).
 
 **Options:**
 
@@ -640,6 +640,29 @@ aiforge chat
 | `/reset` | Clear conversation history |
 | `/quit` or `/exit` | Exit the chat |
 | `Ctrl+C` | Exit the chat |
+
+---
+
+## Evaluation Commands
+
+### aiforge eval run
+
+Run a module or a Python callable over a dataset, score each output and
+print a report. It exits non-zero when a threshold is missed or the run
+regressed against a baseline, so it can gate CI.
+
+```bash
+aiforge eval run cases.jsonl --module classify \
+  --module-args '{"labels": ["billing", "bug", "feature_request"]}' \
+  --scorer label_match --min-pass-rate 0.9 \
+  --output report.json --baseline main-report.json
+```
+
+### aiforge eval compare
+
+Compare two saved reports and flag per-scorer regressions.
+
+See [Evaluations](evals.md) for scorers, datasets and exit codes.
 
 ---
 
@@ -1086,8 +1109,8 @@ container restarts.
 | Symptom | Cause | Fix |
 |---------|-------|-----|
 | `command not found: aiforge` | Package not installed or venv not activated | `pip install -e "."` and activate your virtual environment |
-| `uvicorn not installed` when running `serve` | Missing server extra | `pip install "aiforge[server]"` |
-| `Streamlit not installed` when running `playground` | Missing playground extra | `pip install "aiforge[playground]"` |
+| `uvicorn not installed` when running `serve` | Missing server extra | `pip install "aiforge-kit[server]"` |
+| `Streamlit not installed` when running `playground` | Missing playground extra | `pip install "aiforge-kit[playground]"` |
 | `aiforge init` skips files silently | Files already exist | Use `aiforge init --force` to overwrite |
 | `aiforge migrate` prints "No action specified" | No flag provided | Add `--all`, `--status`, `--collection`, or `--delete` |
 | Module command hangs waiting for input | No `--text`/`--file` and stdin is a terminal | Provide `--text` or `--file`, or pipe input |

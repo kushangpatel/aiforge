@@ -30,7 +30,7 @@ system prompt and are executed through the same LangGraph tool loop.
 ## Installation
 
 ```bash
-pip install 'aiforge[mcp]'
+pip install 'aiforge-kit[mcp]'
 ```
 
 ## Configuration
@@ -181,7 +181,7 @@ Popular servers:
 ## Troubleshooting
 
 **"MCP support requires the 'mcp' package"**
-:   Install with `pip install 'aiforge[mcp]'`
+:   Install with `pip install 'aiforge-kit[mcp]'`
 
 **Server connection timeout**
 :   Increase the `timeout` field or check if the MCP server command is installed

@@ -58,6 +58,25 @@ class ConfigError(AIForgeError):
     """Invalid or missing configuration."""
 
 
+class GuardrailViolation(AIForgeError):
+    """A guardrail blocked an input or output.
+
+    Attributes:
+        stage:  ``"input"`` or ``"output"``.
+        result: The :class:`~aiforge.guardrails.GuardResult` that blocked.
+    """
+
+    def __init__(self, message: str, *, stage: str = "input", result: Any = None) -> None:
+        super().__init__(message)
+        self.stage = stage
+        self.result = result
+
+    @property
+    def violations(self) -> list[Any]:
+        """The violations on :attr:`result` (empty if there is none)."""
+        return list(getattr(self.result, "violations", []) or [])
+
+
 # ---------------------------------------------------------------------------
 # Shared result types
 # ---------------------------------------------------------------------------

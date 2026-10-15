@@ -152,7 +152,7 @@ class ChatAgent(BaseModule):
         except ImportError as exc:
             raise ImportError(
                 "MCP support requires the 'mcp' package. "
-                "Install it with: pip install 'aiforge[mcp]'"
+                "Install it with: pip install 'aiforge-kit[mcp]'"
             ) from exc
 
         configs = [MCPServerConfig(**s) for s in raw_servers]

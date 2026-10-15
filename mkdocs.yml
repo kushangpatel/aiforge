@@ -68,11 +68,13 @@ nav:
       - Chat Agent: modules/chat.md
   - Infrastructure:
       - Pipelines: pipelines.md
+      - Guardrails: guardrails.md
       - Cost Tracking: cost-tracking.md
       - API Server: api-server.md
       - API Authentication: api-auth.md
       - Playground: playground.md
       - MCP Integration: mcp.md
+      - Evaluations: evals.md
   - Architecture: architecture.md
   - CLI Reference: cli.md
 

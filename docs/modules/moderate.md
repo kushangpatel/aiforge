@@ -9,7 +9,7 @@
 The moderate module is included with the base `aiforge` install. No extras required.
 
 ```bash
-pip install aiforge
+pip install aiforge-kit
 ```
 
 ---
@@ -61,7 +61,7 @@ Moderator(
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `checks` | `list[str] \| None` | `None` | Which safety checks to run. Subset of `["pii", "toxicity", "prompt_injection"]`. Defaults to all three if `None`. |
-| `pii_types` | `list[str] \| None` | `None` | PII sub-types to detect. Subset of `["email", "phone", "ssn", "credit_card"]`. Defaults to all four if `None`. |
+| `pii_types` | `list[str] \| None` | `None` | PII sub-types to detect. Defaults to `["email", "phone", "ssn", "credit_card"]`; also accepts any [guardrails](../guardrails.md#pii-detection-and-redaction) type (`iban`, `ip_address`, secrets…) or group (`secrets`, `pii`, `all`). |
 | `system_prompt` | `str \| None` | `None` | Override the default system prompt for LLM-based checks. See [Prompt Resolution](#prompt-resolution). |
 | `quality` | `str \| None` | `None` | Quality tier for model routing: `"high"`, `"medium"`, or `"low"`. |
 | `provider` | `str \| None` | `None` | LLM provider name (`"openai"`, `"anthropic"`, etc.). Falls back to `settings.PROVIDER`. |
@@ -71,7 +71,7 @@ Moderator(
 
 The constructor raises `ValueError` for:
 - Unknown check names (not in `{"pii", "toxicity", "prompt_injection"}`)
-- Unknown PII types (not in `{"email", "phone", "ssn", "credit_card"}`)
+- Unknown PII types (not one of the four above or a guardrails PII type / group)
 
 ### Examples
 

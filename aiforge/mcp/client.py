@@ -82,7 +82,7 @@ class MCPClientManager:
         except ImportError as exc:
             raise ImportError(
                 "MCP support requires the 'mcp' package. "
-                "Install it with: pip install 'aiforge[mcp]'"
+                "Install it with: pip install 'aiforge-kit[mcp]'"
             ) from exc
 
         for cfg in self._configs:

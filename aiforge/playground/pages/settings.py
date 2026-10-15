@@ -186,6 +186,8 @@ try:
             "Anthropic": s.ANTHROPIC_API_KEY,
             "Voyage AI": s.VOYAGE_API_KEY,
             "Azure OpenAI": s.AZURE_OPENAI_API_KEY,
+            "Google Gemini": s.GOOGLE_API_KEY,
+            "Mistral": s.MISTRAL_API_KEY,
             "Pinecone": s.PINECONE_API_KEY,
             "Qdrant": s.QDRANT_API_KEY,
             "LangSmith": s.LANGSMITH_API_KEY,

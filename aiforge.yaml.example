@@ -7,7 +7,10 @@
 # Provider & model
 # ---------------------------------------------------------------------------
 
-# LLM provider to use. Options: openai | anthropic | ollama | azure
+# LLM provider to use.
+# Options: openai | anthropic | ollama | azure | gemini | bedrock | mistral
+# gemini, bedrock and mistral pick their own default model and embedding
+# model when `model` / `embedding_model` are not set.
 provider: openai
 
 # Default LLM model name for the chosen provider.
@@ -15,14 +18,18 @@ provider: openai
 # anthropic examples: claude-opus-4, claude-sonnet-4, claude-3-5-haiku-20241022
 # ollama examples   : llama3.3, mistral-nemo, phi-4, gemma2, qwen2.5
 # azure             : your deployment name (e.g. my-gpt4o)
+# gemini examples   : gemini-3.8-flash (default), gemini-3.5-flash-lite, gemini-4-argon
+# bedrock examples  : global.anthropic.claude-sonnet-5-5 (default), us.amazon.nova-pro-v1:0
+# mistral examples  : mistral-medium-3-5 (default), mistral-small-2603, codestral-2508
 model: gpt-4o
 
 # Sampling temperature (0.0 – 2.0). Lower = more deterministic.
 temperature: 0.0
 
 # Anthropic prompt caching: "system" caches tools + system prompt, "auto"
-# also caches the conversation so far, "off" disables. OpenAI caches
-# automatically. Cached tokens are priced at the discounted rate.
+# also caches the conversation so far, "off" disables. Bedrock (Claude,
+# Nova) uses the same modes. OpenAI, Gemini and Mistral cache automatically.
+# Cached tokens are priced at the discounted rate.
 # prompt_cache: system
 
 # Hard token cap per LLM response. Omit (or set to null) to use model default.
@@ -33,6 +40,9 @@ temperature: 0.0
 # anthropic : voyage-3 | voyage-3-lite | voyage-large-2 | voyage-code-2
 # ollama    : nomic-embed-text | mxbai-embed-large | all-minilm
 # azure     : text-embedding-3-small | text-embedding-3-large | text-embedding-ada-002
+# gemini    : gemini-embedding-2 | gemini-embedding-001
+# bedrock   : amazon.titan-embed-text-v2:0 | amazon.titan-embed-text-v1
+# mistral   : mistral-embed | codestral-embed
 embedding_model: text-embedding-3-small
 
 # ---------------------------------------------------------------------------
@@ -48,6 +58,15 @@ embedding_model: text-embedding-3-small
 # azure_openai_endpoint: https://<resource>.openai.azure.com/
 # azure_openai_deployment: my-gpt4o
 # azure_openai_api_version: "2024-02-01"
+
+# Google Gemini (Gemini Developer API) and Mistral
+# google_api_key: ...
+# mistral_api_key: ...
+
+# Amazon Bedrock: credentials come from the standard AWS chain (env vars,
+# ~/.aws/credentials, SSO, IAM role) and are never stored by AIForge.
+# aws_region: us-east-1            # defaults to the AWS default region
+# aws_profile: my-profile          # optional named profile
 
 # ---------------------------------------------------------------------------
 # Ollama  (only relevant when provider=ollama)
@@ -249,7 +268,7 @@ api_port: 8000
 
 # External tool servers that ChatAgent can connect to.
 # Each entry maps to an MCPServerConfig (see aiforge/mcp/config.py).
-# Requires: pip install 'aiforge[mcp]'
+# Requires: pip install 'aiforge-kit[mcp]'
 #
 # mcp_servers:
 #   - name: jira
