@@ -20,6 +20,7 @@ direct constructor arguments — with a clear, deterministic priority order.
   - [Ollama](#ollama)
   - [Azure OpenAI](#azure-openai)
   - [Vector Store](#vector-store)
+  - [Retrieval & Chunking](#retrieval--chunking)
   - [Rate Limiting](#rate-limiting)
   - [Cost Tracking](#cost-tracking)
   - [Request Cache](#request-cache)
@@ -323,6 +324,31 @@ AIFORGE_AZURE_OPENAI_ENDPOINT=https://my-resource.openai.azure.com/
 
 See [Vector Store Backends](#vector-store-backends) below for setup details.
 
+### Retrieval & Chunking
+
+Defaults for [`DocQA`](modules/qa.md#retrieval-modes) and
+[`SemanticSearch`](modules/search.md#retrieval-modes). The matching constructor
+arguments (`retrieval_mode=`, `rerank=`, `rerank_top_n=`, `fetch_k=`,
+`chunking=`) override them per instance.
+
+| Field | Type | Default | Env Var | Description |
+|-------|------|---------|---------|-------------|
+| `RETRIEVAL_MODE` | `str` | `"vector"` | `AIFORGE_RETRIEVAL_MODE` | `vector` (dense only), `hybrid` (dense + BM25 fused with RRF) or `keyword` (BM25 only) |
+| `RRF_K` | `int` | `60` | `AIFORGE_RRF_K` | Reciprocal Rank Fusion damping constant for `hybrid` mode |
+| `RERANK` | `bool` | `False` | `AIFORGE_RERANK` | Rerank retrieved candidates (with the LLM reranker unless a custom one is passed) |
+| `RERANK_TOP_N` | `int \| None` | `None` | `AIFORGE_RERANK_TOP_N` | Hits kept after reranking; `None` keeps `retrieval_k` (DocQA) / `top_k` (SemanticSearch) |
+| `FETCH_K` | `int` | `20` | `AIFORGE_FETCH_K` | Candidates fetched from each retriever before fusion / reranking |
+| `CHUNKING` | `str` | `"recursive"` | `AIFORGE_CHUNKING` | DocQA chunking strategy: `recursive`, `markdown` (heading-aware) or `token` (tiktoken-sized) |
+
+```yaml
+# aiforge.yaml
+retrieval_mode: hybrid
+rerank: true
+rerank_top_n: 5
+fetch_k: 30
+chunking: markdown
+```
+
 ### Rate Limiting
 
 | Field | Type | Default | Env Var | Description |
@@ -610,6 +636,12 @@ Every field in `AIForgeSettings` maps to an `AIFORGE_`-prefixed environment vari
 | `AIFORGE_QDRANT_URL` | `str` | — | Qdrant server URL |
 | `AIFORGE_QDRANT_API_KEY` | `str` | — | Qdrant API key |
 | `AIFORGE_QDRANT_COLLECTION` | `str` | — | Qdrant collection name |
+| `AIFORGE_RETRIEVAL_MODE` | `str` | `vector` | `vector`, `hybrid` or `keyword` |
+| `AIFORGE_RRF_K` | `int` | `60` | RRF damping constant (hybrid mode) |
+| `AIFORGE_RERANK` | `bool` | `false` | Rerank retrieved candidates |
+| `AIFORGE_RERANK_TOP_N` | `int` | — | Hits kept after reranking |
+| `AIFORGE_FETCH_K` | `int` | `20` | Candidates fetched before fusion / reranking |
+| `AIFORGE_CHUNKING` | `str` | `recursive` | `recursive`, `markdown` or `token` |
 | `AIFORGE_RATE_LIMIT_RPM` | `int` | `500` | Requests per minute |
 | `AIFORGE_RATE_LIMIT_TPM` | `int` | `150000` | Tokens per minute |
 | `AIFORGE_COST_TRACKING_ENABLED` | `bool` | `true` | Enable cost tracking |

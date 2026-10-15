@@ -180,6 +180,16 @@ class AIForgeSettings(BaseSettings):
     QDRANT_COLLECTION: str | None = None
 
     # ------------------------------------------------------------------
+    # Retrieval (DocQA + SemanticSearch); constructor args override these
+    # ------------------------------------------------------------------
+    RETRIEVAL_MODE: Literal["vector", "hybrid", "keyword"] = "vector"
+    RRF_K: int = 60  # Reciprocal Rank Fusion damping constant (hybrid mode)
+    RERANK: bool = False  # Rerank retrieved candidates (LLMReranker by default)
+    RERANK_TOP_N: int | None = None  # Hits kept after reranking (None → retrieval_k / top_k)
+    FETCH_K: int = 20  # Candidates fetched per retriever before fusion / reranking
+    CHUNKING: Literal["recursive", "markdown", "token"] = "recursive"
+
+    # ------------------------------------------------------------------
     # Rate limiting
     # ------------------------------------------------------------------
     RATE_LIMIT_RPM: int = 500

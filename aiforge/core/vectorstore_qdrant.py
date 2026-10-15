@@ -182,6 +182,27 @@ class QdrantVectorStore(VectorStoreAdapter):
             offset = next_offset
         return all_metadata
 
+    def list_all_documents(self) -> list[dict[str, Any]]:
+        """Return id, text and metadata for every point in this collection."""
+        docs: list[dict[str, Any]] = []
+        offset = None
+        while True:
+            result, next_offset = self._client.scroll(
+                collection_name=self._collection_name,
+                offset=offset,
+                limit=1000,
+                with_payload=True,
+                with_vectors=False,
+            )
+            for point in result:
+                payload = dict(point.payload or {})
+                text = payload.pop("_text", "")
+                docs.append({"id": str(point.id), "text": text, "metadata": payload})
+            if next_offset is None:
+                break
+            offset = next_offset
+        return docs
+
     def list_collections(self) -> list[str]:
         return [c.name for c in self._client.get_collections().collections]
 

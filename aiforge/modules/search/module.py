@@ -42,7 +42,14 @@ from collections.abc import Sequence
 from typing import Any
 
 from aiforge.core.pricing import calculate_cost
-from aiforge.core.types import BaseModule
+from aiforge.core.rerank import LLMReranker, Reranker, apply_reranker
+from aiforge.core.retrieval import (
+    RetrievalMode,
+    Retriever,
+    retrieval_settings,
+    validate_retrieval_mode,
+)
+from aiforge.core.types import BaseModule, CompletionResult
 from aiforge.core.vectorstore import VectorStoreAdapter
 from aiforge.modules.search.schemas import (
     IndexResponse,
@@ -96,8 +103,27 @@ class SemanticSearch(BaseModule):
         store:        Optional pre-built :class:`VectorStoreAdapter`.
                       Primarily useful for dependency injection in tests —
                       pass a mock here instead of hitting a real DB.
+        retrieval_mode: ``"vector"``, ``"hybrid"`` or ``"keyword"``
+                      (default: ``AIFORGE_RETRIEVAL_MODE``, ``"vector"``).
+        rerank:       Rerank candidates before returning them (default:
+                      ``AIFORGE_RERANK``; ``True`` when *reranker* is given).
+        rerank_top_n: Hits kept after reranking when a query passes no
+                      ``top_k`` (default: *top_k*).
+        fetch_k:      Candidates fetched before fusion / reranking
+                      (default: ``AIFORGE_FETCH_K``, 20).
+        reranker:     Custom :class:`~aiforge.core.rerank.Reranker`; defaults
+                      to an :class:`~aiforge.core.rerank.LLMReranker`.
         **kwargs:     Forwarded to :class:`~aiforge.core.types.BaseModule`.
     """
+
+    # Class-level defaults keep instances built without __init__ (tests) working.
+    retrieval_mode: str = "vector"
+    rerank: bool = False
+    rerank_top_n: int | None = None
+    fetch_k: int = 20
+    rrf_k: int = 60
+    reranker: Reranker | None = None
+    _retriever: Retriever | None = None
 
     def __init__(
         self,
@@ -105,6 +131,12 @@ class SemanticSearch(BaseModule):
         persist_dir: str = "./aiforge_data",
         top_k: int = 5,
         store: VectorStoreAdapter | None = None,
+        *,
+        retrieval_mode: str | None = None,
+        rerank: bool | None = None,
+        rerank_top_n: int | None = None,
+        fetch_k: int | None = None,
+        reranker: Reranker | None = None,
         **kwargs: Any,
     ) -> None:
         super().__init__(**kwargs)
@@ -114,9 +146,20 @@ class SemanticSearch(BaseModule):
         if top_k < 1 or top_k > _TOP_K_MAX:
             raise ValueError(f"top_k must be between 1 and {_TOP_K_MAX}")
 
+        cfg = retrieval_settings(self)
         self.collection_name: str = stripped
         self.persist_dir: str = persist_dir
         self.default_top_k: int = top_k
+        self.retrieval_mode = validate_retrieval_mode(retrieval_mode or cfg.RETRIEVAL_MODE)
+        self.reranker = reranker
+        self.rerank = rerank if rerank is not None else (reranker is not None or cfg.RERANK)
+        self.rerank_top_n = rerank_top_n if rerank_top_n is not None else cfg.RERANK_TOP_N
+        self.fetch_k = fetch_k if fetch_k is not None else cfg.FETCH_K
+        self.rrf_k = cfg.RRF_K
+        if self.rerank_top_n is not None and not 1 <= self.rerank_top_n <= _TOP_K_MAX:
+            raise ValueError(f"rerank_top_n must be between 1 and {_TOP_K_MAX}")
+        if self.fetch_k < 1:
+            raise ValueError("fetch_k must be >= 1")
         self._store: VectorStoreAdapter = store or self._build_store()
 
     # ------------------------------------------------------------------
@@ -175,6 +218,7 @@ class SemanticSearch(BaseModule):
                 ids=[d.id for d in batch],
             )
 
+        self._invalidate_keyword_index()
         stats = self._store.collection_stats(self.collection_name)
         cost = calculate_cost(
             embedding_model,
@@ -229,6 +273,7 @@ class SemanticSearch(BaseModule):
                 ids=[d.id for d in batch],
             )
 
+        self._invalidate_keyword_index()
         stats = self._store.collection_stats(self.collection_name)
         cost = calculate_cost(
             embedding_model,
@@ -335,59 +380,39 @@ class SemanticSearch(BaseModule):
             ValueError: if *query* is empty or whitespace-only, or if
                         *top_k* is out of range.
         """
-        if not query or not query.strip():
-            raise ValueError("query must not be empty or whitespace-only")
-        k = top_k if top_k is not None else self.default_top_k
-        if k < 1 or k > _TOP_K_MAX:
-            raise ValueError(f"top_k must be between 1 and {_TOP_K_MAX}")
-
+        k = self._validate_query(query, top_k)
         t0 = time.perf_counter()
-        try:
-            embedding = self.embedding_provider.embed_query(query)
-        except Exception as exc:
-            self.logger.error(
-                "search.query.embedding_failed",
-                error=str(exc),
-                query_head=query[:100],
-            )
-            raise
-        embedding_model = self.embedding_provider.model_name
-        token_count = _estimate_tokens([query])
-        cost = calculate_cost(
-            embedding_model,
-            token_count,
-            0,  # Embeddings have no output token cost
-        )
+        mode = self._get_retriever().effective_mode(filter)
 
-        raw_hits = self._store.query(
-            embedding=embedding,
-            top_k=k,
-            filter=filter,
-            include_embeddings=include_embeddings,
+        embedding: list[float] | None = None
+        embedding_model = ""
+        token_count = 0
+        if mode != "keyword":
+            try:
+                embedding = self.embedding_provider.embed_query(query)
+            except Exception as exc:
+                self.logger.error(
+                    "search.query.embedding_failed",
+                    error=str(exc),
+                    query_head=query[:100],
+                )
+                raise
+            embedding_model = self.embedding_provider.model_name
+            token_count = _estimate_tokens([query])
+
+        raw_hits, rerank_result = self._retrieve_hits(
+            query, k, mode, embedding, filter, include_embeddings
         )
         total = self._store.collection_stats(self.collection_name).get("chunks", 0)
-
-        # NOTE: ``1.0 - distance`` assumes cosine distance (range 0-2, typically 0-1).
-        # Other metrics (L2, inner-product) need a different conversion.
-        hits = [
-            SearchHit(
-                id=h["id"],
-                text=h["text"],
-                score=max(0.0, min(1.0, 1.0 - h["distance"])),
-                metadata=h.get("metadata", {}),
-                embeddings=h.get("embeddings") if include_embeddings else None,
-            )
-            for h in raw_hits
-        ]
-
-        return SearchResponse(
-            hits=hits,
-            query=query,
-            total_searched=total,
-            cost=cost,
-            input_tokens=token_count,
-            model=embedding_model,
-            latency_ms=(time.perf_counter() - t0) * 1000,
+        return self._build_response(
+            query,
+            raw_hits,
+            total,
+            include_embeddings,
+            embedding_model,
+            token_count,
+            rerank_result,
+            t0,
         )
 
     async def aquery(
@@ -399,66 +424,46 @@ class SemanticSearch(BaseModule):
         include_embeddings: bool = False,
     ) -> SearchResponse:
         """Async version of :meth:`query`."""
-        if not query or not query.strip():
-            raise ValueError("query must not be empty or whitespace-only")
-        k = top_k if top_k is not None else self.default_top_k
-        if k < 1 or k > _TOP_K_MAX:
-            raise ValueError(f"top_k must be between 1 and {_TOP_K_MAX}")
-
+        k = self._validate_query(query, top_k)
         t0 = time.perf_counter()
-        try:
-            embedding = await self.embedding_provider.embed_query_async(query)
-        except Exception as exc:
-            self.logger.error(
-                "search.aquery.embedding_failed",
-                error=str(exc),
-                query_head=query[:100],
-            )
-            raise
-        embedding_model = self.embedding_provider.model_name
-        token_count = _estimate_tokens([query])
-        cost = calculate_cost(
-            embedding_model,
-            token_count,
-            0,  # Embeddings have no output token cost
-        )
-
         # Run sync store operations in a thread pool to avoid blocking the loop.
         loop = asyncio.get_running_loop()
-        raw_hits = await loop.run_in_executor(
+        retriever = self._get_retriever()
+        mode = await loop.run_in_executor(None, retriever.effective_mode, filter)
+
+        embedding: list[float] | None = None
+        embedding_model = ""
+        token_count = 0
+        if mode != "keyword":
+            try:
+                embedding = await self.embedding_provider.embed_query_async(query)
+            except Exception as exc:
+                self.logger.error(
+                    "search.aquery.embedding_failed",
+                    error=str(exc),
+                    query_head=query[:100],
+                )
+                raise
+            embedding_model = self.embedding_provider.model_name
+            token_count = _estimate_tokens([query])
+
+        raw_hits, rerank_result = await loop.run_in_executor(
             None,
-            lambda: self._store.query(
-                embedding=embedding,
-                top_k=k,
-                filter=filter,
-                include_embeddings=include_embeddings,
-            ),
+            lambda: self._retrieve_hits(query, k, mode, embedding, filter, include_embeddings),
         )
         total = await loop.run_in_executor(
             None,
             lambda: self._store.collection_stats(self.collection_name).get("chunks", 0),
         )
-
-        # NOTE: ``1.0 - distance`` assumes cosine distance (range 0-2, typically 0-1).
-        hits = [
-            SearchHit(
-                id=h["id"],
-                text=h["text"],
-                score=max(0.0, min(1.0, 1.0 - h["distance"])),
-                metadata=h.get("metadata", {}),
-                embeddings=h.get("embeddings") if include_embeddings else None,
-            )
-            for h in raw_hits
-        ]
-
-        return SearchResponse(
-            hits=hits,
-            query=query,
-            total_searched=total,
-            cost=cost,
-            input_tokens=token_count,
-            model=embedding_model,
-            latency_ms=(time.perf_counter() - t0) * 1000,
+        return self._build_response(
+            query,
+            raw_hits,
+            total,
+            include_embeddings,
+            embedding_model,
+            token_count,
+            rerank_result,
+            t0,
         )
 
     # ------------------------------------------------------------------
@@ -492,10 +497,124 @@ class SemanticSearch(BaseModule):
         self._store.delete_collection(
             collection if collection is not None else self.collection_name
         )
+        self._invalidate_keyword_index()
 
     # ------------------------------------------------------------------
     # Private helpers
     # ------------------------------------------------------------------
+
+    def _validate_query(self, query: str, top_k: int | None) -> int:
+        """Validate *query* / *top_k* and return the number of hits to return."""
+        if not query or not query.strip():
+            raise ValueError("query must not be empty or whitespace-only")
+        if top_k is not None:
+            k = top_k
+        elif self.rerank and self.rerank_top_n is not None:
+            k = self.rerank_top_n
+        else:
+            k = self.default_top_k
+        if k < 1 or k > _TOP_K_MAX:
+            raise ValueError(f"top_k must be between 1 and {_TOP_K_MAX}")
+        return k
+
+    def _retrieve_hits(
+        self,
+        query: str,
+        k: int,
+        mode: RetrievalMode,
+        embedding: list[float] | None,
+        filter: dict[str, Any] | None,
+        include_embeddings: bool,
+    ) -> tuple[list[dict[str, Any]], CompletionResult | None]:
+        """Run retrieval (and reranking) synchronously; return raw hits + reranker call."""
+        reranker = self._active_reranker()
+        if mode == "vector" and reranker is None:
+            # Unchanged default path: a single similarity query.
+            assert embedding is not None
+            hits = self._store.query(
+                embedding=embedding,
+                top_k=k,
+                filter=filter,
+                include_embeddings=include_embeddings,
+            )
+            return hits, None
+
+        candidate_k = max(k, self.fetch_k)
+        hits = self._get_retriever().retrieve(
+            query,
+            top_k=candidate_k if reranker is not None else k,
+            embedding=embedding,
+            filter=filter,
+            include_embeddings=include_embeddings,
+            candidate_k=candidate_k,
+            mode=mode,
+        )
+        if reranker is None:
+            return hits, None
+        return apply_reranker(reranker, query, hits, k)
+
+    @staticmethod
+    def _build_response(
+        query: str,
+        raw_hits: list[dict[str, Any]],
+        total: int,
+        include_embeddings: bool,
+        embedding_model: str,
+        token_count: int,
+        rerank_result: CompletionResult | None,
+        t0: float,
+    ) -> SearchResponse:
+        # NOTE: in vector mode ``1.0 - distance`` assumes cosine distance (range
+        # 0-2, typically 0-1); hybrid / keyword hits carry a ready-made ``score``.
+        hits = [
+            SearchHit(
+                id=h["id"],
+                text=h["text"],
+                score=(h["score"] if "score" in h else max(0.0, min(1.0, 1.0 - h["distance"]))),
+                metadata=h.get("metadata", {}),
+                embeddings=h.get("embeddings") if include_embeddings else None,
+                rerank_score=h.get("rerank_score"),
+            )
+            for h in raw_hits
+        ]
+        cost = calculate_cost(embedding_model, token_count, 0) if embedding_model else 0.0
+        output_tokens = 0
+        if rerank_result is not None:
+            cost += rerank_result.cost
+            token_count += rerank_result.input_tokens
+            output_tokens = rerank_result.output_tokens
+
+        return SearchResponse(
+            hits=hits,
+            query=query,
+            total_searched=total,
+            cost=cost,
+            input_tokens=token_count,
+            output_tokens=output_tokens,
+            model=embedding_model,
+            latency_ms=(time.perf_counter() - t0) * 1000,
+        )
+
+    def _active_reranker(self) -> Reranker | None:
+        if not self.rerank:
+            return None
+        if self.reranker is None:
+            self.reranker = LLMReranker(self)
+        return self.reranker
+
+    def _get_retriever(self) -> Retriever:
+        if self._retriever is None or self._retriever.store is not self._store:
+            self._retriever = Retriever(
+                self._store,
+                self.collection_name,
+                mode=self.retrieval_mode,
+                rrf_k=self.rrf_k,
+            )
+        return self._retriever
+
+    def _invalidate_keyword_index(self) -> None:
+        if self._retriever is not None:
+            self._retriever.invalidate()
 
     def _build_store(self) -> VectorStoreAdapter:
         from aiforge.core.vectorstore_factory import build_vectorstore

@@ -33,9 +33,12 @@ from typing import Any
 
 from aiforge.core.pricing import calculate_cost
 from aiforge.core.prompt_override import resolve_prompt
+from aiforge.core.rerank import LLMReranker, Reranker, apply_reranker
+from aiforge.core.retrieval import Retriever, retrieval_settings, validate_retrieval_mode
+from aiforge.core.text_splitter import validate_chunking
 from aiforge.core.types import AIForgeError, BaseModule, CompletionResult
 from aiforge.core.vectorstore import VectorStoreAdapter
-from aiforge.modules.qa.schemas import IngestResponse, QAResponse
+from aiforge.modules.qa.schemas import Citation, IngestResponse, QAResponse
 
 
 def _estimate_tokens(texts: list[str]) -> int:
@@ -54,8 +57,30 @@ class DocQA(BaseModule):
         retrieval_k:   Number of chunks to retrieve per agent iteration.
         max_iterations: Maximum agentic refinement loops before responding.
         store:         Optional pre-built :class:`VectorStoreAdapter` (for DI/testing).
+        chunking:      ``"recursive"``, ``"markdown"`` or ``"token"``
+                       (default: ``AIFORGE_CHUNKING``, ``"recursive"``).
+        retrieval_mode: ``"vector"``, ``"hybrid"`` or ``"keyword"``
+                       (default: ``AIFORGE_RETRIEVAL_MODE``, ``"vector"``).
+        rerank:        Rerank retrieved candidates (default: ``AIFORGE_RERANK``;
+                       ``True`` when *reranker* is given).
+        rerank_top_n:  Chunks kept after reranking (default: *retrieval_k*).
+        fetch_k:       Candidates fetched before fusion / reranking
+                       (default: ``AIFORGE_FETCH_K``, 20).
+        reranker:      Custom :class:`~aiforge.core.rerank.Reranker`; defaults
+                       to an :class:`~aiforge.core.rerank.LLMReranker` on this
+                       module's provider.
         **kwargs:      Forwarded to :class:`~aiforge.core.types.BaseModule`.
     """
+
+    # Class-level defaults keep instances built without __init__ (tests) working.
+    chunking: str = "recursive"
+    retrieval_mode: str = "vector"
+    rerank: bool = False
+    rerank_top_n: int | None = None
+    fetch_k: int = 20
+    rrf_k: int = 60
+    reranker: Reranker | None = None
+    _retriever: Retriever | None = None
 
     def __init__(
         self,
@@ -67,6 +92,13 @@ class DocQA(BaseModule):
         max_iterations: int = 3,
         store: VectorStoreAdapter | None = None,
         system_prompt: str | None = None,
+        *,
+        chunking: str | None = None,
+        retrieval_mode: str | None = None,
+        rerank: bool | None = None,
+        rerank_top_n: int | None = None,
+        fetch_k: int | None = None,
+        reranker: Reranker | None = None,
         **kwargs: Any,
     ) -> None:
         super().__init__(**kwargs)
@@ -77,6 +109,19 @@ class DocQA(BaseModule):
             raise ValueError("retrieval_k must be >= 1")
         if max_iterations < 1:
             raise ValueError("max_iterations must be >= 1")
+
+        cfg = retrieval_settings(self)
+        self.chunking = validate_chunking(chunking or cfg.CHUNKING)
+        self.retrieval_mode = validate_retrieval_mode(retrieval_mode or cfg.RETRIEVAL_MODE)
+        self.reranker = reranker
+        self.rerank = rerank if rerank is not None else (reranker is not None or cfg.RERANK)
+        self.rerank_top_n = rerank_top_n if rerank_top_n is not None else cfg.RERANK_TOP_N
+        self.fetch_k = fetch_k if fetch_k is not None else cfg.FETCH_K
+        self.rrf_k = cfg.RRF_K
+        if self.rerank_top_n is not None and self.rerank_top_n < 1:
+            raise ValueError("rerank_top_n must be >= 1")
+        if self.fetch_k < 1:
+            raise ValueError("fetch_k must be >= 1")
 
         self.collection: str = stripped
         self.persist_dir: str = persist_dir
@@ -132,6 +177,7 @@ class DocQA(BaseModule):
         splitter = TextSplitter(
             chunk_size=self.chunk_size,
             chunk_overlap=self.chunk_overlap,
+            strategy=self.chunking,
         )
         chunks = splitter.split(documents)
 
@@ -195,6 +241,7 @@ class DocQA(BaseModule):
         splitter = TextSplitter(
             chunk_size=self.chunk_size,
             chunk_overlap=self.chunk_overlap,
+            strategy=self.chunking,
         )
         chunks = splitter.split(documents)
 
@@ -287,6 +334,8 @@ class DocQA(BaseModule):
         chunks_deleted = 0
         for path in updated | deleted:
             chunks_deleted += self._store.delete_by_source(path)
+        if updated or deleted:
+            self._invalidate_keyword_index()
 
         # 5. Re-embed modified + new files
         files_to_index = added | updated
@@ -304,6 +353,7 @@ class DocQA(BaseModule):
             splitter = TextSplitter(
                 chunk_size=self.chunk_size,
                 chunk_overlap=self.chunk_overlap,
+                strategy=self.chunking,
             )
             chunks = splitter.split(docs_to_index)
 
@@ -399,13 +449,15 @@ class DocQA(BaseModule):
         if coll_stats.get("chunks", 0) == 0:
             raise AIForgeError(f"No documents ingested in collection '{self.collection}'")
 
+        rerank_usage: list[CompletionResult] = []
         graph = build_qa_graph(
             llm_fn=self._make_llm_fn(system_prompt=system_prompt),
-            retrieve_fn=self._make_retrieve_fn(),
-            retrieval_k=self.retrieval_k,
+            retrieve_fn=self._make_retrieve_fn(rerank_usage),
+            retrieval_k=self._final_k(),
         )
 
         final = graph.invoke(self._initial_state(query, filter_repo))
+        self._add_usage(final, rerank_usage)
         return self._build_response(final, include_trace, t0)
 
     async def aask(
@@ -428,13 +480,15 @@ class DocQA(BaseModule):
         if coll_stats.get("chunks", 0) == 0:
             raise AIForgeError(f"No documents ingested in collection '{self.collection}'")
 
+        rerank_usage: list[CompletionResult] = []
         graph = build_qa_graph(
             llm_fn=self._make_llm_fn(system_prompt=system_prompt),
-            retrieve_fn=self._make_retrieve_fn(),
-            retrieval_k=self.retrieval_k,
+            retrieve_fn=self._make_retrieve_fn(rerank_usage),
+            retrieval_k=self._final_k(),
         )
 
         final = await graph.ainvoke(self._initial_state(query, filter_repo))
+        self._add_usage(final, rerank_usage)
         return self._build_response(final, include_trace, t0)
 
     # ------------------------------------------------------------------
@@ -468,6 +522,7 @@ class DocQA(BaseModule):
     def delete_collection(self, collection: str | None = None) -> None:
         """Delete *collection* (defaults to this instance's collection)."""
         self._store.delete_collection(collection if collection is not None else self.collection)
+        self._invalidate_keyword_index()
 
     # ------------------------------------------------------------------
     # Private helpers
@@ -502,22 +557,107 @@ class DocQA(BaseModule):
 
         return _llm
 
-    def _make_retrieve_fn(self) -> Callable[..., list[dict[str, Any]]]:
-        """Return a ``(query, top_k, filter) → list[dict]`` closure."""
+    def _make_retrieve_fn(
+        self, rerank_usage: list[CompletionResult] | None = None
+    ) -> Callable[..., list[dict[str, Any]]]:
+        """Return a ``(query, top_k, filter) → list[dict]`` closure.
+
+        LLM reranker calls made by the closure are appended to *rerank_usage*
+        so their tokens can be added to the response totals.
+        """
 
         def _retrieve(
             query_text: str,
             top_k: int = 6,
             filter: dict[str, Any] | None = None,
         ) -> list[dict[str, Any]]:
-            embedding = self.embedding_provider.embed_query(query_text)
-            return self._store.query(
-                embedding=embedding,
-                top_k=top_k,
-                filter=filter,
-            )
+            return self.retrieve(query_text, top_k=top_k, filter=filter, _usage=rerank_usage)
 
         return _retrieve
+
+    def retrieve(
+        self,
+        query: str,
+        *,
+        top_k: int | None = None,
+        filter: dict[str, Any] | None = None,
+        _usage: list[CompletionResult] | None = None,
+    ) -> list[dict[str, Any]]:
+        """Retrieve the chunks most relevant to *query*, without calling the agent.
+
+        Runs the configured retrieval mode (vector / hybrid / keyword) and,
+        when enabled, the reranker.  Each hit is a dict with ``id``, ``text``,
+        ``metadata`` and ``score`` (plus ``rerank_score`` when reranked).
+
+        Args:
+            query:  Query text.
+            top_k:  Hits to return (default: ``rerank_top_n`` when reranking,
+                    else ``retrieval_k``).
+            filter: Metadata filter (Chroma ``where`` syntax).
+        """
+        k = top_k if top_k is not None else self._final_k()
+        retriever = self._get_retriever()
+        mode = retriever.effective_mode(filter)
+        reranker = self._active_reranker()
+
+        if mode == "vector" and reranker is None:
+            # Unchanged default path: a single similarity query.
+            hits = self._store.query(
+                embedding=self.embedding_provider.embed_query(query), top_k=k, filter=filter
+            )
+            for h in hits:
+                h.setdefault("score", max(0.0, min(1.0, 1.0 - float(h.get("distance", 1.0)))))
+            return hits
+
+        candidate_k = max(k, self.fetch_k)
+        hits = retriever.retrieve(
+            query,
+            top_k=candidate_k if reranker is not None else k,
+            embedding=self.embedding_provider.embed_query(query) if mode != "keyword" else None,
+            filter=filter,
+            candidate_k=candidate_k,
+            mode=mode,
+        )
+        if reranker is None:
+            return hits
+        reranked, result = apply_reranker(reranker, query, hits, k)
+        if result is not None and _usage is not None:
+            _usage.append(result)
+        return reranked
+
+    def _final_k(self) -> int:
+        """Chunks used per retrieval: ``rerank_top_n`` when reranking, else ``retrieval_k``."""
+        if self.rerank and self.rerank_top_n is not None:
+            return self.rerank_top_n
+        return self.retrieval_k
+
+    def _active_reranker(self) -> Reranker | None:
+        if not self.rerank:
+            return None
+        if self.reranker is None:
+            self.reranker = LLMReranker(self)
+        return self.reranker
+
+    def _get_retriever(self) -> Retriever:
+        if self._retriever is None or self._retriever.store is not self._store:
+            self._retriever = Retriever(
+                self._store,
+                self.collection,
+                mode=self.retrieval_mode,
+                rrf_k=self.rrf_k,
+            )
+        return self._retriever
+
+    def _invalidate_keyword_index(self) -> None:
+        if self._retriever is not None:
+            self._retriever.invalidate()
+
+    @staticmethod
+    def _add_usage(final: dict[str, Any], usage: list[CompletionResult]) -> None:
+        """Fold reranker LLM usage into the agent's token totals."""
+        for r in usage:
+            final["total_input_tokens"] += r.input_tokens
+            final["total_output_tokens"] += r.output_tokens
 
     def _initial_state(
         self,
@@ -535,6 +675,7 @@ class DocQA(BaseModule):
             "trace": [],
             "answer": "",
             "sources": [],
+            "citations": [],
             "confidence": 0.0,
             "decision": "",
             "total_input_tokens": 0,
@@ -557,6 +698,7 @@ class DocQA(BaseModule):
         return QAResponse(
             text=final["answer"],
             sources=final["sources"],
+            citations=[Citation(**c) for c in final.get("citations") or []],
             confidence=final["confidence"],
             iterations=final["iteration"],
             trace=final["trace"] if include_trace else None,
@@ -612,16 +754,7 @@ class DocQA(BaseModule):
             total_tokens += _estimate_tokens(texts)
             embedding_model = self.embedding_provider.model_name
 
-            metadatas = [
-                {
-                    "source": c.metadata.get("source", ""),
-                    "file_type": c.metadata.get("file_type", ""),
-                    "chunk_index": i + j,
-                    # mtime is present only when called from ingest_incremental
-                    **({"mtime": c.metadata["mtime"]} if "mtime" in c.metadata else {}),
-                }
-                for j, c in enumerate(batch)
-            ]
+            metadatas = [self._chunk_metadata(c, i + j) for j, c in enumerate(batch)]
             ids = [
                 self._stable_chunk_id(
                     c.metadata.get("source", ""),
@@ -638,6 +771,7 @@ class DocQA(BaseModule):
                 ids=ids,
             )
 
+        self._invalidate_keyword_index()
         cost = calculate_cost(embedding_model, total_tokens, 0)
         return len(chunks), cost, embedding_model
 
@@ -665,15 +799,7 @@ class DocQA(BaseModule):
             total_tokens += _estimate_tokens(texts)
             embedding_model = self.embedding_provider.model_name
 
-            metadatas = [
-                {
-                    "source": c.metadata.get("source", ""),
-                    "file_type": c.metadata.get("file_type", ""),
-                    "chunk_index": i + j,
-                    **({"mtime": c.metadata["mtime"]} if "mtime" in c.metadata else {}),
-                }
-                for j, c in enumerate(batch)
-            ]
+            metadatas = [self._chunk_metadata(c, i + j) for j, c in enumerate(batch)]
             ids = [
                 self._stable_chunk_id(
                     c.metadata.get("source", ""),
@@ -690,8 +816,25 @@ class DocQA(BaseModule):
                 ids=ids,
             )
 
+        self._invalidate_keyword_index()
         cost = calculate_cost(embedding_model, total_tokens, 0)
         return len(chunks), cost, embedding_model
+
+    # Chunk metadata keys copied into the store when present on a chunk.
+    _OPTIONAL_METADATA = ("mtime", "page", "heading_path")
+
+    @classmethod
+    def _chunk_metadata(cls, chunk: Any, chunk_index: int) -> dict[str, Any]:
+        """Store metadata for one chunk: source, type, index, plus page / heading / mtime."""
+        meta: dict[str, Any] = {
+            "source": chunk.metadata.get("source", ""),
+            "file_type": chunk.metadata.get("file_type", ""),
+            "chunk_index": chunk_index,
+        }
+        for key in cls._OPTIONAL_METADATA:
+            if chunk.metadata.get(key) is not None:
+                meta[key] = chunk.metadata[key]
+        return meta
 
     # ------------------------------------------------------------------
     # Incremental ingest helpers

@@ -49,11 +49,36 @@ class QAAgentState(TypedDict):
     trace: Annotated[list[dict[str, Any]], operator.add]
     answer: str
     sources: list[str]
+    citations: list[dict[str, Any]]
     confidence: float
     decision: str
     total_input_tokens: Annotated[int, operator.add]
     total_output_tokens: Annotated[int, operator.add]
     model: str
+
+
+# ---------------------------------------------------------------------------
+# Context helpers
+# ---------------------------------------------------------------------------
+
+
+def chunk_label(chunk: dict[str, Any]) -> str:
+    """Citation label for a retrieved chunk, e.g. ``guide.pdf, page 3, Setup > Install``."""
+    parts = [str(chunk.get("source") or "unknown")]
+    if chunk.get("page") is not None:
+        parts.append(f"page {chunk['page']}")
+    if chunk.get("heading_path"):
+        parts.append(str(chunk["heading_path"]))
+    return ", ".join(parts)
+
+
+def format_context(chunks: list[dict[str, Any]]) -> str:
+    """Join chunks into a prompt context, each preceded by its ``[source: …]`` label."""
+    return "\n\n---\n\n".join(f"[source: {chunk_label(c)}]\n{c['text']}" for c in chunks)
+
+
+def _citation_key(c: dict[str, Any]) -> tuple[Any, ...]:
+    return (c.get("source"), c.get("page"), c.get("heading_path"), c.get("chunk_index"))
 
 
 # ---------------------------------------------------------------------------
@@ -103,15 +128,36 @@ def build_qa_graph(
 
         new_chunks: list[dict[str, Any]] = []
         new_sources = list(state["sources"])
+        citations = list(state.get("citations") or [])
+        seen = {_citation_key(c) for c in citations}
         for h in hits:
-            src = h.get("metadata", {}).get("source", "unknown")
-            new_chunks.append({"text": h["text"], "source": src})
+            meta = h.get("metadata") or {}
+            src = meta.get("source", "unknown")
+            chunk = {
+                "text": h["text"],
+                "source": src,
+                "page": meta.get("page"),
+                "heading_path": meta.get("heading_path"),
+            }
+            new_chunks.append(chunk)
             if src not in new_sources:
                 new_sources.append(src)
+            citation = {
+                "source": src,
+                "page": meta.get("page"),
+                "heading_path": meta.get("heading_path"),
+                "chunk_index": meta.get("chunk_index"),
+                "score": h.get("score"),
+                "rerank_score": h.get("rerank_score"),
+            }
+            if _citation_key(citation) not in seen:
+                seen.add(_citation_key(citation))
+                citations.append(citation)
 
         return {
             "retrieved_chunks": new_chunks,
             "sources": new_sources,
+            "citations": citations,
             "iteration": state["iteration"] + 1,
             "trace": [
                 {
@@ -125,7 +171,7 @@ def build_qa_graph(
 
     def reason_node(state: QAAgentState) -> dict[str, Any]:
         recent = state["retrieved_chunks"][-retrieval_k:]
-        context = "\n\n---\n\n".join(c["text"] for c in recent) if recent else ""
+        context = format_context(recent) if recent else ""
 
         prompt = REASON_PROMPT.format(
             query=state["query"],
@@ -167,7 +213,7 @@ def build_qa_graph(
 
     def respond_node(state: QAAgentState) -> dict[str, Any]:
         context = (
-            "\n\n---\n\n".join(c["text"] for c in state["retrieved_chunks"])
+            format_context(state["retrieved_chunks"])
             if state["retrieved_chunks"]
             else "No relevant documents found."
         )

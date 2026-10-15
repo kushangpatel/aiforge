@@ -63,6 +63,12 @@ SemanticSearch(
     persist_dir: str = "./aiforge_data",
     top_k: int = 5,
     store: VectorStoreAdapter | None = None,
+    *,
+    retrieval_mode: str | None = None,   # "vector" | "hybrid" | "keyword"
+    rerank: bool | None = None,
+    rerank_top_n: int | None = None,
+    fetch_k: int | None = None,
+    reranker: Reranker | None = None,
     # Inherited from BaseModule:
     quality: str | None = None,
     provider: str | None = None,
@@ -78,6 +84,11 @@ SemanticSearch(
 | `persist_dir` | `str` | `"./aiforge_data"` | Data directory for ChromaDB persistence. Ignored by non-ChromaDB backends. |
 | `top_k` | `int` | `5` | Default number of results per query. Can be overridden per-call. Must be 1–100. |
 | `store` | `VectorStoreAdapter \| None` | `None` | Pre-built vector store adapter for dependency injection or testing. When `None`, a ChromaDB store is built automatically. |
+| `retrieval_mode` | `str \| None` | `None` → `AIFORGE_RETRIEVAL_MODE` (`"vector"`) | `"vector"`, `"hybrid"` or `"keyword"`. See [Retrieval Modes](#retrieval-modes). |
+| `rerank` | `bool \| None` | `None` → `AIFORGE_RERANK` (`False`) | Rerank candidates before returning them. Defaults to `True` when `reranker` is given. |
+| `rerank_top_n` | `int \| None` | `None` → `AIFORGE_RERANK_TOP_N` | Hits returned after reranking when a query passes no `top_k`. `None` keeps `top_k`. |
+| `fetch_k` | `int \| None` | `None` → `AIFORGE_FETCH_K` (`20`) | Candidates fetched per retriever before fusion / reranking. |
+| `reranker` | `Reranker \| None` | `None` | Custom reranker; defaults to `LLMReranker`. See [Reranking](#reranking). |
 | `quality` | `str \| None` | `None` | Quality tier for embedding model routing: `"high"`, `"medium"`, or `"low"`. |
 | `provider` | `str \| None` | `None` | Embedding provider name (`"openai"`, `"anthropic"`, etc.). Falls back to `settings.PROVIDER`. |
 | `**kwargs` | | | Any `AIForgeSettings` field as a keyword override, e.g. `EMBEDDING_MODEL="text-embedding-3-large"`. |
@@ -537,7 +548,8 @@ from aiforge import SearchHit
 |-------|------|-------------|
 | `id` | `str` | Document identifier. |
 | `text` | `str` | Document text content. |
-| `score` | `float` | Cosine similarity score in `[0.0, 1.0]`. Computed as `1.0 - cosine_distance`. Higher is more similar. |
+| `score` | `float` | Retrieval score in `[0.0, 1.0]`, higher is better. Cosine similarity (`1.0 - cosine_distance`) in vector mode; see [Retrieval Modes](#retrieval-modes) for hybrid / keyword. |
+| `rerank_score` | `float \| None` | Reranker relevance score. Only set when reranking is enabled (0–1 for `LLMReranker`, any scale for custom rerankers). |
 | `metadata` | `dict` | Document metadata (whatever was stored during indexing). |
 | `embeddings` | `list[float] \| None` | Raw embedding vector. Only populated when `include_embeddings=True` is passed to the query. |
 
@@ -612,6 +624,73 @@ Scores are computed as `1.0 - cosine_distance`, clamped to `[0.0, 1.0]`:
 
 > **Note:** This metric assumes cosine distance (ChromaDB default). Other distance metrics (L2, inner product) would need different conversion.
 
+In `hybrid` and `keyword` modes the score has a different meaning; see below.
+
+---
+
+## Retrieval Modes
+
+| Mode | How it works | Query embedding | `SearchHit.score` |
+|------|--------------|-----------------|-------------------|
+| `"vector"` (default) | Dense cosine similarity. Unchanged behaviour. | Yes | `1 - cosine_distance` |
+| `"keyword"` | Okapi BM25 over document texts (`k1=1.5`, `b=0.75`). | No (zero embedding cost) | BM25 relative to the best hit (best = `1.0`) |
+| `"hybrid"` | Both, each fetching `fetch_k` candidates, fused with Reciprocal Rank Fusion `Σ 1 / (RRF_K + rank)`. | Yes | RRF relative to the best possible (ranked first by both = `1.0`) |
+
+```python
+ss = SemanticSearch(collection="kb", retrieval_mode="hybrid")
+ss.index(docs)
+ss.query("error E4012 quota", top_k=5)   # exact code + semantic match
+```
+
+The BM25 index is pure Python and in memory. It is built from the vector
+store's own documents (`VectorStoreAdapter.list_all_documents()`) on the first
+keyword or hybrid query and rebuilt after `index()` / `delete_collection()` on
+this instance, or whenever the store's document count changes. Nothing extra
+is persisted; the vector store stays the source of truth. Chroma, pgvector,
+Qdrant and Pinecone support it; other backends fall back to vector retrieval
+with a `retrieval.keyword_unsupported` warning.
+
+Metadata filters work in every mode. For keyword hits they are evaluated
+locally and support field equality, `$eq $ne $gt $gte $lt $lte $in $nin
+$contains`, `$and` and `$or`; a filter with another operator runs that query in
+vector mode with a warning. In hybrid mode, `include_embeddings=True` fills
+`embeddings` only for hits the vector side returned.
+
+---
+
+## Reranking
+
+With `rerank=True` (or `AIFORGE_RERANK=true`), a query fetches
+`max(top_k, fetch_k)` candidates, reranks them and returns the best `top_k`
+(or `rerank_top_n` when the call passes no `top_k`). Each hit carries
+`rerank_score`.
+
+```python
+ss = SemanticSearch(collection="kb", retrieval_mode="hybrid", rerank=True, fetch_k=30)
+resp = ss.query("how do I rotate API keys?", top_k=5)
+print(resp.hits[0].rerank_score, resp.cost)   # cost includes the rerank call
+```
+
+The default `LLMReranker` makes **one** LLM call per query using the
+provider's native structured output (`{"scores": [{"index", "score"}]}`) and
+keeps the original order if the call fails. This is the one case where
+`SemanticSearch` calls an LLM; its tokens and cost are added to the
+`SearchResponse`.
+
+Plug in your own model with any object that has
+`rerank(query, candidates, top_n)`, or wrap a scoring function:
+
+```python
+from sentence_transformers import CrossEncoder
+from aiforge.core.rerank import ScoreFunctionReranker
+
+ce = CrossEncoder("cross-encoder/ms-marco-MiniLM-L-6-v2")
+ss = SemanticSearch(
+    collection="kb",
+    reranker=ScoreFunctionReranker(lambda q, docs: ce.predict([(q, d) for d in docs]).tolist()),
+)
+```
+
 ---
 
 ## Metadata Filtering
@@ -654,7 +733,7 @@ When using `index_files()`, IDs are generated deterministically from `file_path 
 
 ## No LLM Calls
 
-Unlike other AIForge modules, `SemanticSearch` makes **no LLM calls** — only embedding calls. This means:
+Unlike other AIForge modules, `SemanticSearch` makes **no LLM calls** — only embedding calls (unless you enable the LLM [reranker](#reranking)). This means:
 - Lower cost (embedding is ~10–100x cheaper than LLM completion)
 - Lower latency (embedding is ~50ms vs ~500ms+ for LLM)
 - No need for a completion model — only an embedding model is required
