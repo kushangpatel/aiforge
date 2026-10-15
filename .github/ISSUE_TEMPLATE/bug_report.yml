@@ -1,0 +1,42 @@
+name: Bug report
+description: Something in AI Forge does not work as documented.
+labels: ["bug"]
+body:
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps or code to reproduce
+      description: A minimal snippet or CLI command. Remove API keys and private data.
+      render: python
+    validations:
+      required: true
+  - type: textarea
+    id: traceback
+    attributes:
+      label: Error output
+      description: The full traceback or log, if there is one.
+      render: text
+  - type: input
+    id: version
+    attributes:
+      label: aiforge-kit version
+      description: Output of `pip show aiforge-kit`.
+    validations:
+      required: true
+  - type: input
+    id: provider
+    attributes:
+      label: Provider and model
+      placeholder: e.g. openai / gpt-4o-mini
+  - type: input
+    id: environment
+    attributes:
+      label: Python version and OS
+      placeholder: e.g. Python 3.12, Windows 11
