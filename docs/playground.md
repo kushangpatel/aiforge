@@ -126,10 +126,10 @@ The playground requires the `streamlit` extra:
 
 ```bash
 # Playground only
-pip install -e "aiforge[playground]"
+pip install -e "aiforge-kit[playground]"
 
 # Everything (playground + all vector stores + tracing + etc.)
-pip install -e "aiforge[all]"
+pip install -e "aiforge-kit[all]"
 ```
 
 Requires `streamlit>=1.40.0`.
@@ -627,7 +627,7 @@ all module executions.
 
 | Symptom | Cause | Fix |
 |---------|-------|-----|
-| `ModuleNotFoundError: streamlit` | Playground extra not installed | `pip install -e "aiforge[playground]"` |
+| `ModuleNotFoundError: streamlit` | Playground extra not installed | `pip install -e "aiforge-kit[playground]"` |
 | Port already in use | Another process on port 8501 | `aiforge playground --port 9000` or stop the other process |
 | API keys show 🔓 | Keys not configured | Set keys in `.env` or environment variables |
 | Chat tools don't appear | "Enable tools" unchecked | Check the "Enable built-in tools" checkbox in the sidebar |

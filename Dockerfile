@@ -3,12 +3,12 @@ FROM python:3.12-slim AS builder
 
 WORKDIR /build
 
-COPY pyproject.toml requirements.txt README.md ./
+COPY pyproject.toml requirements.txt README.md LICENSE ./
 COPY aiforge/ aiforge/
 
 RUN pip install --no-cache-dir build && \
     python -m build --wheel --outdir /build/dist && \
-    pip install --no-cache-dir "/build/dist/aiforge-0.1.0-py3-none-any.whl[server,agentic,docs,playground]"
+    pip install --no-cache-dir "$(ls /build/dist/aiforge_kit-*.whl)[server,agentic,docs,playground]"
 
 # ── Runtime stage ─────────────────────────────────────────
 FROM python:3.12-slim

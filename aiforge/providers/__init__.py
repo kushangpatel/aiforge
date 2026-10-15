@@ -77,7 +77,7 @@ def get_provider(settings: AIForgeSettings) -> LLMProvider:
         raise ConfigError(
             f"Provider {name!r} is not available. "
             f"Available: {available}. "
-            f'Install the matching extra, e.g. pip install "aiforge[{name}]"'
+            f'Install the matching extra, e.g. pip install "aiforge-kit[{name}]"'
         )
     llm_cls, _ = _REGISTRY[name]
     return llm_cls(settings)

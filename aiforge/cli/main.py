@@ -99,7 +99,7 @@ def serve(
     try:
         import uvicorn
     except ImportError:
-        console.print('[red]uvicorn not installed.[/red] Run: pip install "aiforge[server]"')
+        console.print('[red]uvicorn not installed.[/red] Run: pip install "aiforge-kit[server]"')
         raise typer.Exit(1) from None
 
     console.print(f"[cyan]Starting AIForge API server on http://{host}:{port}[/cyan]")
@@ -124,7 +124,7 @@ def playground(
     try:
         import streamlit  # noqa: F401
     except ImportError:
-        console.print('[red]Streamlit not installed.[/red] Run: pip install "aiforge[playground]"')
+        console.print('[red]Streamlit not installed.[/red] Run: pip install "aiforge-kit[playground]"')
         raise typer.Exit(1) from None
 
     playground_path = Path(__file__).parent.parent / "playground" / "app.py"

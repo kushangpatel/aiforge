@@ -4,7 +4,7 @@ requires = ["setuptools>=77.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "aiforge"
+name = "aiforge-kit"
 # The version lives in aiforge/__version__.py; setuptools reads it statically.
 dynamic = ["version"]
 description = "Plug-and-play AI toolkit for product teams"
@@ -96,7 +96,7 @@ dev = [
     "httpx>=0.27.0",
 ]
 all = [
-    "aiforge[anthropic,local,agentic,pinecone,qdrant,pgvector,server,playground,observability,docs,mcp,dev]",
+    "aiforge-kit[anthropic,local,agentic,pinecone,qdrant,pgvector,server,playground,observability,docs,mcp,dev]",
 ]
 
 [project.scripts]

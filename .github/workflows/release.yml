@@ -74,7 +74,7 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: pypi
-      url: https://pypi.org/project/aiforge/${{ needs.build.outputs.version }}/
+      url: https://pypi.org/project/aiforge-kit/${{ needs.build.outputs.version }}/
     permissions:
       id-token: write
     steps:
@@ -92,7 +92,7 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: testpypi
-      url: https://test.pypi.org/project/aiforge/${{ needs.build.outputs.version }}/
+      url: https://test.pypi.org/project/aiforge-kit/${{ needs.build.outputs.version }}/
     permissions:
       id-token: write
     steps:

@@ -80,8 +80,8 @@ imported when you actually use a provider.
 | Provider | Install Extra | LLM Models | Embedding Models | Local? | API Keys Required |
 |----------|--------------|-----------|-----------------|--------|-------------------|
 | **OpenAI** | *(included by default)* | gpt-4o, gpt-4o-mini, gpt-4-turbo, gpt-3.5-turbo, o1, o1-mini, o3-mini, o3 | text-embedding-3-small, text-embedding-3-large, text-embedding-ada-002 | No | `OPENAI_API_KEY` |
-| **Anthropic** | `pip install "aiforge[anthropicai]"` | claude-opus-5-5, claude-sonnet-5-5, claude-haiku-5-5, claude-fable-5-1 | voyage-3, voyage-3-lite, voyage-large-2, voyage-code-2 | No | `ANTHROPIC_API_KEY` + `VOYAGE_API_KEY` |
-| **Ollama** | `pip install "aiforge[local]"` | llama3, llama3.1, llama3.2, llama3.3, mistral, mistral-nemo, codellama, phi-3, phi-4, gemma2, qwen2.5 | nomic-embed-text, mxbai-embed-large, all-minilm | Yes | None |
+| **Anthropic** | `pip install "aiforge-kit[anthropicai]"` | claude-opus-5-5, claude-sonnet-5-5, claude-haiku-5-5, claude-fable-5-1 | voyage-3, voyage-3-lite, voyage-large-2, voyage-code-2 | No | `ANTHROPIC_API_KEY` + `VOYAGE_API_KEY` |
+| **Ollama** | `pip install "aiforge-kit[local]"` | llama3, llama3.1, llama3.2, llama3.3, mistral, mistral-nemo, codellama, phi-3, phi-4, gemma2, qwen2.5 | nomic-embed-text, mxbai-embed-large, all-minilm | Yes | None |
 | **Azure OpenAI** | *(shares langchain-openai)* | Same as OpenAI (via deployment names) | Same as OpenAI (via deployment names) | No | `AZURE_OPENAI_API_KEY` + `AZURE_OPENAI_ENDPOINT` |
 
 ---
@@ -181,7 +181,7 @@ temperature: 0.0
 Requires the `anthropicai` extra.
 
 ```bash
-pip install "aiforge[anthropicai]"
+pip install "aiforge-kit[anthropicai]"
 ```
 
 This installs `langchain-anthropic` (LLM) and `langchain-voyageai` (embeddings).
@@ -245,7 +245,7 @@ AIFORGE_VOYAGE_API_KEY=pa-...           # For embedding calls
 Zero-cost, fully offline inference. Requires a running Ollama server.
 
 ```bash
-pip install "aiforge[local]"
+pip install "aiforge-kit[local]"
 ```
 
 ### Ollama Prerequisites
@@ -873,11 +873,11 @@ configuration if local throughput is a bottleneck.
 **Install examples:**
 
 ```bash
-pip install aiforge                                      # Core + OpenAI + ChromaDB
-pip install "aiforge[anthropicai]"                       # + Anthropic + Voyage
-pip install "aiforge[local]"                             # + Ollama
-pip install "aiforge[anthropicai,pgvector,server]"       # Custom combo
-pip install "aiforge[all]"                               # Everything
+pip install aiforge-kit                                      # Core + OpenAI + ChromaDB
+pip install "aiforge-kit[anthropicai]"                       # + Anthropic + Voyage
+pip install "aiforge-kit[local]"                             # + Ollama
+pip install "aiforge-kit[anthropicai,pgvector,server]"       # Custom combo
+pip install "aiforge-kit[all]"                               # Everything
 ```
 
 ---
@@ -886,8 +886,8 @@ pip install "aiforge[all]"                               # Everything
 
 | Symptom | Cause | Fix |
 |---------|-------|-----|
-| `ConfigError: provider 'anthropic' not registered` | Missing dependency | `pip install "aiforge[anthropicai]"` |
-| `ConfigError: provider 'ollama' not registered` | Missing dependency | `pip install "aiforge[local]"` |
+| `ConfigError: provider 'anthropic' not registered` | Missing dependency | `pip install "aiforge-kit[anthropicai]"` |
+| `ConfigError: provider 'ollama' not registered` | Missing dependency | `pip install "aiforge-kit[local]"` |
 | `ConfigError: Embedding model '...' not available with provider '...'` | Provider/embedding mismatch | Set `EMBEDDING_MODEL` to a compatible model (see [Compatibility Map](#compatibility-map)) |
 | `ConfigError: AZURE_OPENAI_ENDPOINT is required` | Azure endpoint not set | Set `AIFORGE_AZURE_OPENAI_ENDPOINT` |
 | `APIConnectionError: Is the Ollama server running?` | Ollama not running | Start Ollama: `ollama serve` |

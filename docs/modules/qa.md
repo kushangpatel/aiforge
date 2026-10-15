@@ -9,7 +9,7 @@
 The QA module is included with the base `aiforge` install. ChromaDB is pulled in as a core dependency.
 
 ```bash
-pip install aiforge
+pip install aiforge-kit
 ```
 
 ---

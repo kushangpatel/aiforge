@@ -445,7 +445,7 @@ class DocLoader:
             from pypdf import PdfReader
         except ImportError:
             raise ImportError(
-                'pypdf not installed. Run: pip install "aiforge[docs]" to add PDF support.'
+                'pypdf not installed. Run: pip install "aiforge-kit[docs]" to add PDF support.'
             ) from None
         reader = PdfReader(str(path))
         return [
@@ -461,7 +461,7 @@ class DocLoader:
             import docx
         except ImportError:
             raise ImportError(
-                'python-docx not installed. Run: pip install "aiforge[docs]" for DOCX support.'
+                'python-docx not installed. Run: pip install "aiforge-kit[docs]" for DOCX support.'
             ) from None
         document = docx.Document(str(path))
         text = "\n".join(paragraph.text for paragraph in document.paragraphs)

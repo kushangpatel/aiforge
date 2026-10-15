@@ -104,7 +104,7 @@ The AIForge API server lets you:
 ### Install
 
 ```bash
-pip install aiforge[server]       # includes uvicorn
+pip install aiforge-kit[server]       # includes uvicorn
 ```
 
 ### Start the Server

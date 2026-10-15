@@ -342,7 +342,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: {python-version: "3.12"}
-      - run: pip install aiforge
+      - run: pip install aiforge-kit
       - name: Run evals
         env:
           AIFORGE_OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}

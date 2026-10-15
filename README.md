@@ -105,8 +105,8 @@ aiforge serve
 
 ```bash
 # From PyPI (0.2.0 and later)
-pip install aiforge
-pip install "aiforge[anthropic,mcp]"
+pip install aiforge-kit
+pip install "aiforge-kit[anthropic,mcp]"
 
 # Core + OpenAI provider (default), from a clone
 pip install -r requirements.txt

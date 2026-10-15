@@ -8,27 +8,27 @@ Get AIForge running in under 5 minutes.
 
 ```bash
 # Core + default provider (OpenAI)
-pip install aiforge
+pip install aiforge-kit
 
 # Specific providers
-pip install "aiforge[anthropic]"        # Anthropic + Voyage AI embeddings
-pip install "aiforge[local]"            # Ollama
+pip install "aiforge-kit[anthropic]"        # Anthropic + Voyage AI embeddings
+pip install "aiforge-kit[local]"            # Ollama
 
 # Everything
-pip install "aiforge[all]"
+pip install "aiforge-kit[all]"
 
 # Vector store backends
-pip install "aiforge[pinecone]"         # Pinecone
-pip install "aiforge[qdrant]"           # Qdrant
-pip install "aiforge[pgvector]"         # PostgreSQL + pgvector
+pip install "aiforge-kit[pinecone]"         # Pinecone
+pip install "aiforge-kit[qdrant]"           # Qdrant
+pip install "aiforge-kit[pgvector]"         # PostgreSQL + pgvector
 
 # API server + Playground UI
-pip install "aiforge[server]"           # FastAPI + Uvicorn
-pip install "aiforge[playground]"       # Streamlit UI
+pip install "aiforge-kit[server]"           # FastAPI + Uvicorn
+pip install "aiforge-kit[playground]"       # Streamlit UI
 ```
 
 To install the latest unreleased code instead, install from GitHub:
-`pip install "aiforge[anthropic] @ git+https://github.com/kushangpatel/aiforge.git"`.
+`pip install "aiforge-kit[anthropic] @ git+https://github.com/kushangpatel/aiforge.git"`.
 
 ### Plugin System
 
@@ -76,7 +76,7 @@ print(result.cost)  # Cost in USD
 
 ```bash
 # 1. Install
-pip install aiforge
+pip install aiforge-kit
 
 # 2. Scaffold config
 aiforge init
@@ -100,10 +100,10 @@ Each module is self-contained and can be used independently:
 
 ```python
 # Install only what you need
-pip install aiforge                        # Core + OpenAI provider
-pip install "aiforge[anthropicai]"         # Core + Anthropic + Voyage AI
-pip install "aiforge[local]"               # Core + Ollama provider
-pip install "aiforge[all]"                 # Everything
+pip install aiforge-kit                        # Core + OpenAI provider
+pip install "aiforge-kit[anthropicai]"         # Core + Anthropic + Voyage AI
+pip install "aiforge-kit[local]"               # Core + Ollama provider
+pip install "aiforge-kit[all]"                 # Everything
 
 # Use only what you need
 from aiforge import Summarizer     # Just summarization

@@ -430,7 +430,7 @@ Webhooks are used by `/qa/ingest` and `/search/index` for async job notification
 | Backend | Description | Requirements |
 |---------|-------------|-------------|
 | `langsmith` | LangSmith trace viewer — sets `LANGCHAIN_TRACING_V2=true`, `LANGCHAIN_API_KEY`, `LANGCHAIN_PROJECT` | `LANGSMITH_API_KEY` |
-| `otel` | OpenTelemetry — exports spans via OTLP | `pip install aiforge[otel]`, `OTEL_EXPORTER_ENDPOINT` |
+| `otel` | OpenTelemetry — exports spans via OTLP | `pip install aiforge-kit[otel]`, `OTEL_EXPORTER_ENDPOINT` |
 | `console` | Prints trace info to stdout (debug/dev only) | None |
 
 ```yaml
@@ -730,7 +730,7 @@ Data is persisted to disk at `chroma_persist_dir`. Each AIForge collection maps 
 ### pgvector (PostgreSQL)
 
 ```bash
-pip install aiforge[pgvector]
+pip install aiforge-kit[pgvector]
 ```
 
 ```yaml
@@ -745,7 +745,7 @@ The adapter auto-creates the `vector` extension, collection table, and IVFFlat i
 ### Pinecone
 
 ```bash
-pip install aiforge[pinecone]
+pip install aiforge-kit[pinecone]
 ```
 
 ```yaml
@@ -764,7 +764,7 @@ Each AIForge "collection" maps to a Pinecone **namespace** within the configured
 ### Qdrant
 
 ```bash
-pip install aiforge[qdrant]
+pip install aiforge-kit[qdrant]
 ```
 
 ```yaml

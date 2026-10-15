@@ -36,7 +36,7 @@ def main() -> None:
     if site_packages not in package_dir.parents:
         _fail(f"aiforge imported from {package_dir}, not from {site_packages}")
 
-    dist_version = importlib.metadata.version("aiforge")
+    dist_version = importlib.metadata.version("aiforge-kit")
     if aiforge.__version__ != dist_version:
         _fail(f"aiforge.__version__ {aiforge.__version__} != metadata {dist_version}")
 

@@ -9,7 +9,7 @@
 The vision module is included with the base `aiforge` install. No extras required. A vision-capable model (e.g. GPT-4o, Claude 3) is needed at runtime.
 
 ```bash
-pip install aiforge
+pip install aiforge-kit
 ```
 
 ---

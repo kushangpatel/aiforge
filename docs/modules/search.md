@@ -9,7 +9,7 @@
 The search module is included with the base `aiforge` install. ChromaDB is a core dependency.
 
 ```bash
-pip install aiforge
+pip install aiforge-kit
 ```
 
 ---

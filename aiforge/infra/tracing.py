@@ -72,7 +72,7 @@ def _setup_otel(settings: AIForgeSettings) -> None:
     except ImportError:
         _logger.warning(
             "opentelemetry-sdk not installed. "
-            'Run: pip install "aiforge[observability]" to enable OTel tracing.'
+            'Run: pip install "aiforge-kit[observability]" to enable OTel tracing.'
         )
         return
 

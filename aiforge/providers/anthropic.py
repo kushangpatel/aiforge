@@ -29,7 +29,7 @@ class AnthropicProvider(LangChainLLMProvider):
             from langchain_anthropic import ChatAnthropic
         except ImportError as exc:
             raise ImportError(
-                'langchain-anthropic not installed. Run: pip install "aiforge[anthropicai]"'
+                'langchain-anthropic not installed. Run: pip install "aiforge-kit[anthropicai]"'
             ) from exc
 
         self._settings = settings
@@ -82,7 +82,7 @@ class AnthropicEmbeddingProvider(EmbeddingProvider):
             from langchain_voyageai import VoyageAIEmbeddings
         except ImportError as exc:
             raise ImportError(
-                'langchain-voyageai not installed. Run: pip install "aiforge[anthropicai]"'
+                'langchain-voyageai not installed. Run: pip install "aiforge-kit[anthropicai]"'
             ) from exc
 
         self._model_name = settings.EMBEDDING_MODEL

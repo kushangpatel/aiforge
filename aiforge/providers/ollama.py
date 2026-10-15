@@ -27,7 +27,7 @@ class OllamaProvider(LangChainLLMProvider):
             from langchain_ollama import ChatOllama
         except ImportError as exc:
             raise ImportError(
-                'langchain-ollama not installed. Run: pip install "aiforge[local]"'
+                'langchain-ollama not installed. Run: pip install "aiforge-kit[local]"'
             ) from exc
 
         self._model_name = settings.MODEL
@@ -58,7 +58,7 @@ class OllamaEmbeddingProvider(EmbeddingProvider):
             from langchain_ollama import OllamaEmbeddings
         except ImportError as exc:
             raise ImportError(
-                'langchain-ollama not installed. Run: pip install "aiforge[local]"'
+                'langchain-ollama not installed. Run: pip install "aiforge-kit[local]"'
             ) from exc
 
         self._model_name = settings.EMBEDDING_MODEL

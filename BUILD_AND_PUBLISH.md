@@ -35,8 +35,8 @@ This produces two artifacts in `dist/`:
 
 ```
 dist/
-  aiforge-0.2.0.tar.gz            # source distribution (sdist)
-  aiforge-0.2.0-py3-none-any.whl  # wheel
+  aiforge_kit-0.2.0.tar.gz          # source distribution (sdist)
+  aiforge_kit-0.2.0-py3-none-any.whl  # wheel
 ```
 
 The wheel contains only the `aiforge` package plus its runtime data files
@@ -92,9 +92,9 @@ Build once, then distribute the `.whl` file to teammates:
 cd /path/to/aiforge && uv build
 
 # Install (on any machine)
-pip install dist/aiforge-0.2.0-py3-none-any.whl
+pip install dist/aiforge_kit-0.2.0-py3-none-any.whl
 # With extras:
-pip install "dist/aiforge-0.2.0-py3-none-any.whl[server,playground]"
+pip install "dist/aiforge_kit-0.2.0-py3-none-any.whl[server,playground]"
 ```
 
 ### Option D — Git-Based pip Install
@@ -109,7 +109,7 @@ pip install "git+https://github.com/kushangpatel/aiforge.git@main"
 pip install "git+https://github.com/kushangpatel/aiforge.git@v0.2.0"
 
 # With extras
-pip install "git+https://github.com/kushangpatel/aiforge.git@v0.2.0#egg=aiforge[server,docs]"
+pip install "git+https://github.com/kushangpatel/aiforge.git@v0.2.0#egg=aiforge-kit[server,docs]"
 ```
 
 Tag releases for stability:
@@ -129,7 +129,7 @@ aiforge @ file:///absolute/path/to/aiforge
 aiforge @ git+https://github.com/kushangpatel/aiforge.git@v0.2.0
 
 # From Git with extras (PEP 508)
-aiforge[server] @ git+https://github.com/kushangpatel/aiforge.git@v0.2.0
+aiforge-kit[server] @ git+https://github.com/kushangpatel/aiforge.git@v0.2.0
 ```
 
 ---
@@ -176,14 +176,14 @@ aws codeartifact login --tool pip \
   --repository python-internal
 
 # Install normally — CodeArtifact proxies PyPI for other deps
-pip install aiforge
-pip install "aiforge[server,playground]"
+pip install aiforge-kit
+pip install "aiforge-kit[server,playground]"
 ```
 
 Or set the index URL explicitly:
 
 ```bash
-pip install aiforge \
+pip install aiforge-kit \
   --index-url https://mycompany-123456.d.codeartifact.us-east-1.amazonaws.com/pypi/python-internal/simple/
 ```
 
@@ -211,7 +211,7 @@ twine upload --repository github dist/*
 **Consume:**
 
 ```bash
-pip install aiforge \
+pip install aiforge-kit \
   --index-url https://maven.pkg.github.com/kushangpatel/aiforge/simple/
 ```
 
@@ -231,7 +231,7 @@ twine upload \
 **Consume:**
 
 ```bash
-pip install aiforge \
+pip install aiforge-kit \
   --index-url https://artifactory.yourcompany.com/api/pypi/pypi-local/simple/
 ```
 
@@ -259,7 +259,7 @@ devpi login root
 devpi upload dist/*
 
 # Consume
-pip install aiforge --index-url http://your-server:3141/root/pypi/+simple/
+pip install aiforge-kit --index-url http://your-server:3141/root/pypi/+simple/
 ```
 
 ---
@@ -280,23 +280,11 @@ API token is stored anywhere.
 
 ### One-time setup (repository owner)
 
-**1. Check the project name.** PyPI rejects names that are too similar to an
-existing project, ignoring `-`, `_`, `.` and case. As of October 2026:
-
-- `aiforge` has no project on PyPI, **but `ai-forge` and `ai-forge-sdk` exist**
-  (registered, with no files), so an upload as `aiforge` is likely to be
-  refused with *"The name 'aiforge' is too similar to an existing project"*.
-  Options: ask PyPI for the name under
-  [PEP 541](https://peps.python.org/pep-0541/), or publish under another
-  distribution name.
-- On TestPyPI, `aiforge` belongs to an unrelated project, so the TestPyPI dry
-  run needs a different name as well.
-- Free on both indexes (checked including separator variants):
-  `aiforge-toolkit`, `aiforge-kit`, `aiforge-py`.
-
-To use another distribution name, change only `name` in `pyproject.toml` and
-the two `url:` lines in `release.yml`. The import name stays `aiforge`
-(`pip install aiforge-toolkit`, then `import aiforge`).
+**1. Project name.** The package is published as **`aiforge-kit`**
+(`pip install aiforge-kit`); the import name is still `aiforge`. `aiforge`
+itself could not be used: PyPI treats it as too similar to the existing
+`ai-forge` and `ai-forge-sdk` projects, and on TestPyPI it belongs to an
+unrelated project. `aiforge-kit` was free on both indexes in October 2026.
 
 **2. Register the trusted publisher on PyPI.** Sign in at
 <https://pypi.org>, open *Your account → Publishing → Add a new pending
@@ -305,7 +293,7 @@ enter:
 
 | Field | Value |
 |-------|-------|
-| PyPI Project Name | `aiforge` (or the name chosen above) |
+| PyPI Project Name | `aiforge-kit` |
 | Owner | `kushangpatel` |
 | Repository name | `aiforge` |
 | Workflow name | `release.yml` |
@@ -373,9 +361,9 @@ uvx twine upload dist/*            # prompts for a pypi-... API token
 ### Consumers install with
 
 ```bash
-pip install aiforge
-pip install "aiforge[all]"
-pip install "aiforge[server,playground,anthropic]"
+pip install aiforge-kit
+pip install "aiforge-kit[all]"
+pip install "aiforge-kit[server,playground,anthropic]"
 ```
 
 ---
@@ -405,7 +393,7 @@ These are defined in `pyproject.toml` under `[project.optional-dependencies]`:
 Install multiple extras with comma separation:
 
 ```bash
-pip install "aiforge[server,playground,anthropic,docs]"
+pip install "aiforge-kit[server,playground,anthropic,docs]"
 ```
 
 ---
@@ -444,7 +432,7 @@ Release is marked as a pre-release.
 | Check package metadata | `uvx twine check --strict dist/*` |
 | Smoke-test the wheel | `python -I scripts/smoke_wheel.py` (fresh venv, outside the repo) |
 | Development install | `uv sync --all-extras` or `pip install -e ".[dev]"` |
-| Install from wheel | `pip install dist/aiforge-*.whl` |
+| Install from wheel | `pip install dist/aiforge_kit-*.whl` |
 | Install from Git | `pip install "git+https://github.com/kushangpatel/aiforge.git@v0.2.0"` |
 | Current version | `python scripts/release_check.py version` |
 | Release to PyPI | bump version + CHANGELOG, merge, then `git tag -a vX.Y.Z -m "..."` and `git push origin vX.Y.Z` |
