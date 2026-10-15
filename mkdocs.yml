@@ -46,6 +46,10 @@ markdown_extensions:
       alternate_style: true
   - toc:
       permalink: true
+      # GitHub-style anchors, so links work on GitHub and on the site alike
+      slugify: !!python/object/apply:pymdownx.slugs.slugify
+        kwds:
+          case: lower
   - tables
   - attr_list
 

@@ -23,6 +23,9 @@ any extra instrumentation.
   - [OpenAI Models](#openai-models)
   - [Anthropic Models](#anthropic-models)
   - [Voyage Embeddings](#voyage-embeddings)
+  - [Google Gemini Models](#google-gemini-models)
+  - [Amazon Bedrock Models](#amazon-bedrock-models)
+  - [Mistral AI Models](#mistral-ai-models)
   - [Ollama / Local Models](#ollama--local-models)
 - [Context Windows](#context-windows)
 - [Custom Pricing Overrides](#custom-pricing-overrides)
@@ -33,6 +36,7 @@ any extra instrumentation.
 - [Request Cache — Cost Savings](#request-cache--cost-savings)
 - [Rate Limiting — Budget Protection](#rate-limiting--budget-protection)
 - [Batch Operations](#batch-operations)
+- [Evaluation Runs](#evaluation-runs)
 - [Cost Estimation (Monthly, Per Developer)](#cost-estimation-monthly-per-developer)
 - [Integration Examples](#integration-examples)
   - [Python SDK](#python-sdk)
@@ -257,6 +261,10 @@ public path by default).
 All prices are in **USD per 1,000,000 tokens** (1M tokens). The table is
 defined in `aiforge/core/pricing.py` and kept as a best-effort snapshot.
 
+Where a table has no cache columns, cached tokens use the default multipliers
+in [Prompt Caching](#prompt-caching--cost-savings). Ollama's `mistral` and
+`mistral-nemo` entries are local models and cost nothing.
+
 ### OpenAI Models
 
 | Model | Input ($/1M) | Output ($/1M) | Context Window |
@@ -302,6 +310,73 @@ Used with the Anthropic provider for embedding calls:
 | `voyage-3-lite` | 0.02 | — |
 | `voyage-large-2` | 0.12 | — |
 | `voyage-code-2` | 0.12 | — |
+
+### Google Gemini Models
+
+| Model | Input ($/1M) | Output ($/1M) | Cache read ($/1M) | Context Window |
+|-------|-------------|---------------|------------------|---------------|
+| `gemini-4-argon` | 2.00 | 10.00 | 0.10 | 1,048,576 |
+| `gemini-3.8-flash` | 0.75 | 3.75 | 0.075 | 1,048,576 |
+| `gemini-3.6-flash` | 0.75 | 3.75 | 0.075 | 1,048,576 |
+| `gemini-3.5-flash-lite` | 0.30 | 2.50 | 0.03 | 1,048,576 |
+| `gemini-3.1-flash-lite` | 0.25 | 1.50 | 0.025 | 1,048,576 |
+| `gemini-3.1-pro-preview` | 2.00 | 12.00 | 0.20 | 1,048,576 |
+| `gemini-2.5-pro` | 1.25 | 10.00 | 0.125 | 1,048,576 |
+| `gemini-2.5-flash` | 0.30 | 2.50 | 0.03 | 1,048,576 |
+| `gemini-2.5-flash-lite` | 0.10 | 0.40 | 0.01 | 1,048,576 |
+| `gemini-embedding-2` | 0.20 | — | — | — |
+
+Gemini Developer API, Standard tier. Pro models are listed at their rate for
+prompts up to 200K tokens; longer prompts cost more. `gemini-embedding-001`
+has no built-in price, so add it under `custom_pricing` if you use it.
+
+### Amazon Bedrock Models
+
+| Model | Input ($/1M) | Output ($/1M) | Cache read ($/1M) | Cache write ($/1M) | Context Window |
+|-------|-------------|---------------|------------------|-------------------|---------------|
+| `global.anthropic.claude-fable-5-1` | 10.00 | 50.00 | 0.25 | 12.50 | 1,000,000 |
+| `anthropic.claude-fable-5-1` | 11.00 | 55.00 | 0.275 | 13.75 | 1,000,000 |
+| `global.anthropic.claude-opus-5-5` | 4.00 | 20.00 | 0.20 | 5.00 | 1,000,000 |
+| `anthropic.claude-opus-5-5` | 4.40 | 22.00 | 0.22 | 5.50 | 1,000,000 |
+| `global.anthropic.claude-sonnet-5-5` | 2.00 | 10.00 | 0.10 | 2.50 | 1,000,000 |
+| `anthropic.claude-sonnet-5-5` | 2.20 | 11.00 | 0.11 | 2.75 | 1,000,000 |
+| `global.anthropic.claude-haiku-5-5` | 0.10 | 0.50 | 0.01 | 0.125 | 1,000,000 |
+| `anthropic.claude-haiku-5-5` | 0.11 | 0.55 | 0.011 | 0.1375 | 1,000,000 |
+| `global.anthropic.claude-sonnet-4-6` | 3.00 | 15.00 | 0.30 | 3.75 | 1,000,000 |
+| `anthropic.claude-sonnet-4-6` | 3.30 | 16.50 | 0.33 | 4.125 | 1,000,000 |
+| `global.anthropic.claude-haiku-4-5` | 1.00 | 5.00 | 0.10 | 1.25 | 200,000 |
+| `anthropic.claude-haiku-4-5` | 1.10 | 5.50 | 0.11 | 1.375 | 200,000 |
+| `global.amazon.nova-2-lite-v1` | 0.30 | 2.50 | 0.075 | 0.00 | 1,000,000 |
+| `amazon.nova-2-lite-v1` | 0.33 | 2.75 | 0.0825 | 0.00 | 1,000,000 |
+| `amazon.nova-pro-v1` | 0.80 | 3.20 | 0.20 | 0.00 | 300,000 |
+| `amazon.nova-lite-v1` | 0.06 | 0.24 | 0.015 | 0.00 | 300,000 |
+| `amazon.nova-micro-v1` | 0.035 | 0.14 | 0.00875 | 0.00 | 128,000 |
+| `amazon.titan-embed-text-v2` | 0.02 | — | — | — | — |
+| `amazon.titan-embed-text-v1` | 0.10 | — | — | — | — |
+
+US East (N. Virginia) on-demand prices. Keys are Bedrock model IDs without the
+version suffix: `us.anthropic.claude-haiku-4-5-20251001-v1:0` resolves to
+`anthropic.claude-haiku-4-5`. Geographic inference profiles (`us.`, `eu.`,
+`apac.`, …) share the in-region price, while `global.` profiles have their own,
+cheaper entry. Amazon Nova does not charge for cache writes. Claude Haiku 5.5 is
+listed at its rate for prompts up to 100K tokens.
+
+### Mistral AI Models
+
+| Model | Input ($/1M) | Output ($/1M) | Cache read ($/1M) | Context Window |
+|-------|-------------|---------------|------------------|---------------|
+| `mistral-large-4` | 0.68 | 2.09 | 0.07 | 1,000,000 |
+| `mistral-large-2512` | 0.50 | 1.50 | 0.05 | 256,000 |
+| `mistral-medium-3-5` | 1.50 | 7.50 | 0.15 | 256,000 |
+| `mistral-small-2603` | 0.15 | 0.60 | 0.015 | 256,000 |
+| `codestral-2508` | 0.30 | 0.90 | 0.03 | 128,000 |
+| `mistral-embed` | 0.10 | — | — | — |
+| `mistral-embed-2312` | 0.10 | — | — | — |
+| `codestral-embed` | 0.15 | — | — | — |
+| `codestral-embed-2505` | 0.15 | — | — | — |
+
+Cached input is billed at 10% of the input price. `mistral-large-4` is listed at
+its preview sale price.
 
 ### Ollama / Local Models
 
@@ -447,7 +522,7 @@ discount. AIForge reports them on every `CompletionResult`:
 | Field | Meaning |
 |-------|---------|
 | `cache_read_tokens` | Input tokens served from the provider's prompt cache |
-| `cache_write_tokens` | Input tokens written to the cache on this call (Anthropic) |
+| `cache_write_tokens` | Input tokens written to the cache on this call (Anthropic, Bedrock) |
 | `cost` | USD cost with cache reads and writes priced at their own rates |
 
 Default cache prices, as multiples of the model's input price:
@@ -457,8 +532,13 @@ Default cache prices, as multiples of the model's input price:
 | Anthropic (Claude) | 0.1× | 1.25× |
 | OpenAI / Azure / others | 0.5× | 1.0× (no surcharge) |
 
-OpenAI and Azure cache long prompts automatically. For Anthropic, caching is
-controlled by `prompt_cache` (`system` by default, or `auto` / `off`); see
+A pricing entry with explicit `cache_read` / `cache_write` prices overrides
+these multipliers; the built-in Gemini, Bedrock and Mistral entries all have
+them (see the tables above).
+
+OpenAI, Azure, Gemini and Mistral cache long prompts automatically. For
+Anthropic and Bedrock, caching is controlled by `prompt_cache` (`system` by
+default, or `auto` / `off`); see
 [Configuration](configuration.md) and [Providers → Prompt caching](providers.md#prompt-caching).
 
 Example from a live run of `claude-haiku-5-5` with a ~13.8K-token system
@@ -533,7 +613,7 @@ API provider limits and your budget.
 ```python
 from aiforge import Classifier
 
-c = Classifier(categories=["positive", "negative", "neutral"])
+c = Classifier(labels=["positive", "negative", "neutral"])
 batch = c.run_batch(["Great product!", "Terrible service.", "It's okay."])
 
 print(batch.total_cost)    # 0.0045 (sum of all calls)
@@ -542,7 +622,7 @@ print(len(batch.results))  # 3
 print(len(batch.failed))   # 0
 
 for r in batch.results:
-    print(f"{r.text}: ${r.cost:.4f}")
+    print(f"{r.label}: ${r.cost:.4f}")
 ```
 
 **`BatchResult` fields:**
@@ -553,6 +633,32 @@ for r in batch.results:
 | `total_cost` | `float` | Sum of all `result.cost` values |
 | `total_tokens` | `int` | Sum of all input + output tokens |
 | `failed` | `list[dict]` | Failed items with error details |
+
+---
+
+## Evaluation Runs
+
+[`aiforge.evals`](evals.md) reports the cost of an evaluation run, read from
+each case's `ModuleResponse`. LLM-judge scorers are counted separately, so you
+can see what the judging itself costs:
+
+```python
+from aiforge import Classifier
+from aiforge.evals import evaluate, label_match
+
+report = evaluate(
+    Classifier(labels=["bug", "feature", "question"]),
+    [{"input": "The app crashes on upload", "expected": "bug"}],
+    scorers=[label_match()],
+)
+print(report.total_cost)     # USD spent by the module across all cases
+print(report.scoring_cost)   # USD spent by llm_judge scorers
+print(report.total_tokens)
+```
+
+`aiforge eval run` prints the same totals, and the saved JSON report includes
+them in its `summary` block. Module calls made during an eval are also recorded
+in the session `CostTracker`.
 
 ---
 
@@ -583,7 +689,7 @@ from aiforge.infra.cost_tracker import CostTracker
 
 # Make some calls
 s = Summarizer()
-c = Classifier(categories=["bug", "feature", "question"])
+c = Classifier(labels=["bug", "feature", "question"])
 qa = DocQA()
 
 summary = s.run("Long document text...")
@@ -817,4 +923,5 @@ public class AiForgeCostExample {
 - [API Server](api-server.md) — REST API endpoints including `/stats`
 - [API Authentication](api-auth.md) — Securing the API server
 - [Providers](providers.md) — Provider-specific details and model lists
+- [Evaluations](evals.md) — Per-run cost, tokens and latency for test sets
 - [Modules](modules/) — Per-module SDK documentation

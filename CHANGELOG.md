@@ -9,6 +9,19 @@ called out under **Changed** or **Removed**.
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-10-15
+
+### Changed
+
+- Updated the README and the documentation site for the 0.2 features: installing
+  from PyPI as `aiforge-kit` with the `gemini`, `bedrock` and `mistral` extras,
+  Guardrails, Evals (`aiforge eval run` / `compare`), hybrid retrieval with
+  reranking and chunking strategies, the new settings, Gemini/Bedrock/Mistral
+  pricing tables and the architecture diagrams.
+- The documentation site now uses GitHub-style heading anchors, so in-page
+  links work on GitHub and on the site alike, and builds cleanly with
+  `mkdocs build --strict`.
+
 ## [0.2.1] - 2026-10-15
 
 ### Changed
@@ -121,6 +134,7 @@ the import name is still `aiforge`).
 
 Initial development version. Not published to PyPI.
 
-[Unreleased]: https://github.com/kushangpatel/aiforge/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/kushangpatel/aiforge/compare/v0.2.2...HEAD
+[0.2.2]: https://github.com/kushangpatel/aiforge/releases/tag/v0.2.2
 [0.2.1]: https://github.com/kushangpatel/aiforge/releases/tag/v0.2.1
 [0.2.0]: https://github.com/kushangpatel/aiforge/releases/tag/v0.2.0

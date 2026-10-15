@@ -68,7 +68,7 @@ from aiforge import Pipeline, Summarizer, Classifier
 
 pipe = Pipeline([
     ("summarize", Summarizer(style="concise")),
-    ("classify", Classifier(categories=["positive", "negative", "neutral"])),
+    ("classify", Classifier(labels=["positive", "negative", "neutral"])),
 ])
 
 result = pipe.run("Long customer feedback email text here...")
@@ -117,7 +117,7 @@ from aiforge import Summarizer, Classifier, Extractor, Generator, Router
 
 steps = [
     ("extract", Extractor(output_schema=TicketSchema)),   # BaseModule
-    ("classify", Classifier(categories=["bug", "feature"])), # BaseModule
+    ("classify", Classifier(labels=["bug", "feature"])), # BaseModule
     ("route", Router({                                     # Router
         "bug": Summarizer(style="bullet_points"),
         "feature": Generator(template="Draft a feature spec for: {text}"),
@@ -301,7 +301,7 @@ router = Router(
 
 ```python
 pipe = Pipeline([
-    ("classify", Classifier(categories=["support", "sales", "spam"])),
+    ("classify", Classifier(labels=["support", "sales", "spam"])),
     ("route", Router({
         "support": Summarizer(style="bullet_points"),
         "sales": Generator(template="Draft response: {text}"),
@@ -383,7 +383,7 @@ from aiforge import Pipeline, Summarizer, Classifier
 
 pipe = Pipeline([
     ("summarize", Summarizer(style="concise")),
-    ("classify", Classifier(categories=["positive", "negative"])),
+    ("classify", Classifier(labels=["positive", "negative"])),
 ])
 
 async def main():
@@ -628,7 +628,7 @@ from aiforge import Pipeline, Summarizer, Classifier, Router, Generator
 # ── Sequential pipeline ──
 pipe = Pipeline([
     ("summarize", Summarizer(style="concise")),
-    ("classify", Classifier(categories=["positive", "negative", "neutral"])),
+    ("classify", Classifier(labels=["positive", "negative", "neutral"])),
 ])
 result = pipe.run("Customer feedback text...")
 print(result.steps["classify"].label)
@@ -636,7 +636,7 @@ print(f"Cost: ${result.total_cost:.4f}")
 
 # ── Conditional routing ──
 pipe = Pipeline([
-    ("classify", Classifier(categories=["support", "sales", "spam"])),
+    ("classify", Classifier(labels=["support", "sales", "spam"])),
     ("route", Router({
         "support": Summarizer(style="bullet_points"),
         "sales": Generator(template="Draft response for: {text}"),

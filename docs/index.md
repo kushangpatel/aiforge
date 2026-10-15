@@ -2,7 +2,7 @@
 
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.1.0-orange.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.2.2-orange.svg)](https://github.com/kushangpatel/aiforge/blob/main/CHANGELOG.md)
 
 **AIForge** is a modular, provider-agnostic Python SDK that gives product teams production-ready AI capabilities with a single `pip install` and a config file. Each module — summarization, document Q&A, extraction, classification, semantic search, content generation, conversational agents, content moderation, translation, and vision — is self-contained, composable, and ships with a built-in Streamlit UI widget for instant prototyping.
 
@@ -15,8 +15,11 @@
 | Feature | Description |
 |---------|-------------|
 | **10 AI Modules** | Summarize, DocQA (RAG), Extract, Classify, Search, Generate, Chat, Moderate, Translate, Vision |
-| **Provider-Agnostic** | Swap OpenAI → Anthropic → Ollama (local) by changing 1 config value |
+| **Provider-Agnostic** | Swap OpenAI, Anthropic, Gemini, Bedrock, Mistral, Azure or Ollama (local) by changing 1 config value |
 | **Production-Ready** | Retry, rate limiting, streaming, cost tracking out of the box |
+| **Evals** | Score module outputs against test sets and gate CI on regressions (`aiforge eval run`) |
+| **Guardrails** | PII and secret redaction, prompt-injection checks, output validation around any module |
+| **Hybrid RAG** | Keyword + vector retrieval, reranking and heading-aware chunking for DocQA and Search |
 | **Composable Pipelines** | Chain modules into workflows (e.g., extract → classify → summarize) |
 | **Plugin System** | Extend with custom modules, providers, and vector stores via a unified registry |
 | **Built-in Observability** | OpenTelemetry + LangSmith tracing, structured logging, cost tracking |
@@ -30,6 +33,7 @@
 | Technology | Role |
 |-----------|------|
 | **LangChain** | Core LLM abstraction for all 10 modules |
+| **LangChain provider packages** | OpenAI, Anthropic, Google GenAI, AWS, Mistral and Ollama integrations (install as extras) |
 | **LangGraph** | Stateful multi-turn chat agent & RAG agentic loops |
 | **ChromaDB** | Default vector database for semantic search & RAG |
 | **Pinecone / Qdrant / pgvector** | Production-scale vector store alternatives (install as extras) |
@@ -45,7 +49,7 @@
 ### Prerequisites
 
 - **Python 3.12+**
-- An API key for at least one LLM provider (OpenAI, Anthropic, or Ollama for local)
+- An API key for at least one LLM provider (OpenAI, Anthropic, Gemini, Mistral, AWS credentials for Bedrock, or Ollama for local)
 
 ### 1. Clone & Set Up Environment
 
@@ -104,22 +108,30 @@ aiforge serve
 ## Installation Options
 
 ```bash
-# Core + OpenAI provider (default)
+# From PyPI (the distribution is aiforge-kit; the import name is aiforge)
+pip install aiforge-kit                          # Core + OpenAI provider + ChromaDB
+pip install "aiforge-kit[anthropic,mcp]"         # Pick extras as needed
+
+# From a clone
 pip install -r requirements.txt
+pip install -e ".[all]"                          # Editable install for development
 
-# Or install as an editable package for development
-pip install -e ".[all]"
-
-# Install specific extras
-pip install -e ".[anthropic]"          # Anthropic + Voyage AI embeddings
-pip install -e ".[local]"              # Ollama (local models)
-pip install -e ".[pinecone]"           # Pinecone vector store
-pip install -e ".[qdrant]"             # Qdrant vector store
-pip install -e ".[pgvector]"           # PostgreSQL + pgvector
-pip install -e ".[server]"             # FastAPI server + Streamlit playground
-pip install -e ".[observability]"      # OpenTelemetry + LangSmith
-pip install -e ".[docs]"              # PDF, DOCX, HTML document loaders
-pip install -e ".[all]"               # Everything
+# Extras (combine with commas, e.g. "aiforge-kit[gemini,server]")
+pip install "aiforge-kit[anthropic]"      # Anthropic + Voyage AI embeddings
+pip install "aiforge-kit[gemini]"         # Google Gemini
+pip install "aiforge-kit[bedrock]"        # Amazon Bedrock
+pip install "aiforge-kit[mistral]"        # Mistral AI
+pip install "aiforge-kit[local]"          # Ollama (local models)
+pip install "aiforge-kit[pinecone]"       # Pinecone vector store
+pip install "aiforge-kit[qdrant]"         # Qdrant vector store
+pip install "aiforge-kit[pgvector]"       # PostgreSQL + pgvector
+pip install "aiforge-kit[server]"         # FastAPI REST server
+pip install "aiforge-kit[playground]"     # Streamlit playground
+pip install "aiforge-kit[agentic]"        # LangGraph agentic RAG / chat agent
+pip install "aiforge-kit[observability]"  # OpenTelemetry + LangSmith
+pip install "aiforge-kit[docs]"           # PDF and DOCX document loaders
+pip install "aiforge-kit[mcp]"            # MCP client (stdio + Streamable HTTP)
+pip install "aiforge-kit[all]"            # Everything
 ```
 
 ---
@@ -150,6 +162,20 @@ answer = qa.ask("How does authentication work?")
 print(answer.text)
 print(answer.sources)                              # source citations
 ```
+
+Hybrid retrieval, reranking and heading-aware chunking are opt-in:
+
+```python
+qa = DocQA(
+    collection="my_docs",
+    chunking="markdown",        # split on headings ("recursive" | "markdown" | "token")
+    retrieval_mode="hybrid",    # BM25 keyword + vector, fused ("vector" | "hybrid" | "keyword")
+    rerank=True,                # LLM reranker over the fused candidates
+    rerank_top_n=4,
+)
+```
+
+`SemanticSearch` takes the same `retrieval_mode`, `rerank` and `chunking` options.
 
 ### Extract — Structured Data Extraction
 
@@ -255,6 +281,42 @@ result = v.run(image_url="photo.jpg", question="What color is the car?")
 print(result.answer)
 ```
 
+### Guardrails — Input & Output Checks
+
+```python
+from aiforge import Summarizer
+from aiforge.guardrails import Guard, PIIGuard, PromptInjectionGuard
+
+guard = Guard(
+    input=[PIIGuard(), PromptInjectionGuard()],
+    output=[PIIGuard()],
+    on_fail="redact",            # "block" (default) | "redact" | "warn"
+)
+safe_summarize = guard.wrap(Summarizer())
+result = safe_summarize.run("Email jane@example.com about the outage...")
+```
+
+See [Guardrails](guardrails.md) for all checks and redaction styles.
+
+### Evals — Regression Testing for Prompts and Models
+
+```python
+from aiforge import Classifier
+from aiforge.evals import evaluate, label_match
+
+report = evaluate(
+    Classifier(labels=["bug", "feature", "question"]),
+    "evals/tickets.jsonl",       # or a list of {"input": ..., "expected": ...}
+    scorers=[label_match()],
+    min_pass_rate=0.9,
+)
+report.print()
+assert report.passed
+```
+
+Or from CI: `aiforge eval run evals/tickets.jsonl -m classify -s label_match --min-pass-rate 0.9`.
+See [Evaluations](evals.md).
+
 ---
 
 ## Pipeline Composition
@@ -308,13 +370,17 @@ AIForge uses a layered configuration system:
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `AIFORGE_PROVIDER` | No | `openai` | LLM provider (`openai`, `anthropic`, `ollama`, `azure`) |
+| `AIFORGE_PROVIDER` | No | `openai` | LLM provider (`openai`, `anthropic`, `gemini`, `bedrock`, `mistral`, `ollama`, `azure`) |
 | `AIFORGE_MODEL` | No | `gpt-4o` | LLM model name |
 | `AIFORGE_TEMPERATURE` | No | `0` | LLM temperature |
 | `AIFORGE_EMBEDDING_MODEL` | No | `text-embedding-3-small` | Embedding model |
 | `AIFORGE_OPENAI_API_KEY` | Yes (if OpenAI) | — | OpenAI API key |
 | `AIFORGE_ANTHROPIC_API_KEY` | Yes (if Anthropic) | — | Anthropic API key |
 | `AIFORGE_VOYAGE_API_KEY` | Yes (if Anthropic) | — | Voyage AI key for Anthropic embeddings |
+| `AIFORGE_GOOGLE_API_KEY` | Yes (if Gemini) | — | Gemini Developer API key |
+| `AIFORGE_AWS_REGION` | No | AWS default | Bedrock region (credentials come from the AWS credential chain) |
+| `AIFORGE_AWS_PROFILE` | No | — | Named AWS profile for Bedrock |
+| `AIFORGE_MISTRAL_API_KEY` | Yes (if Mistral) | — | Mistral AI API key |
 | `AIFORGE_OLLAMA_BASE_URL` | No | `http://localhost:11434` | Ollama server URL |
 | `AIFORGE_VECTOR_STORE` | No | `chroma` | Vector backend (`chroma`, `pgvector`, `pinecone`, `qdrant`) |
 | `AIFORGE_CHROMA_PERSIST_DIR` | No | `./aiforge_data` | ChromaDB data directory |
@@ -322,11 +388,16 @@ AIForge uses a layered configuration system:
 | `AIFORGE_PINECONE_API_KEY` | Yes (if Pinecone) | — | Pinecone API key |
 | `AIFORGE_PINECONE_INDEX` | Yes (if Pinecone) | — | Pinecone index name |
 | `AIFORGE_QDRANT_URL` | Yes (if Qdrant) | — | Qdrant server URL |
+| `AIFORGE_RETRIEVAL_MODE` | No | `vector` | RAG retrieval (`vector`, `hybrid`, `keyword`) |
+| `AIFORGE_RERANK` | No | `false` | Rerank retrieved chunks before answering |
+| `AIFORGE_CHUNKING` | No | `recursive` | Chunking strategy (`recursive`, `markdown`, `token`) |
+| `AIFORGE_GUARDRAILS_ON_FAIL` | No | `block` | Default guardrail action (`block`, `redact`, `warn`) |
+| `AIFORGE_GUARDRAILS_PII_REDACTION` | No | `placeholder` | PII redaction style (`placeholder`, `mask`, `hash`) |
 | `AIFORGE_TRACING_ENABLED` | No | `false` | Enable LangSmith/OTel tracing |
 | `AIFORGE_COST_TRACKING_ENABLED` | No | `true` | Enable cost tracking |
 | `AIFORGE_API_KEY` | No | — | Bearer token auth for REST API |
 
-See [.env.example](.env.example) for the full list.
+See [.env.example](https://github.com/kushangpatel/aiforge/blob/main/.env.example) for the full list.
 
 ### Swapping Providers
 
@@ -410,7 +481,15 @@ aiforge init          # Scaffold aiforge.yaml + .env.example
 aiforge serve         # Start FastAPI server (default: 0.0.0.0:8000)
 aiforge playground    # Start Streamlit playground (default: port 8501)
 aiforge migrate       # Migrate vector store collections
+
+aiforge summarize --text "Long text..."      # Every module has a command
+aiforge qa ingest ./docs && aiforge qa ask "How does auth work?"
+aiforge eval run evals/cases.jsonl -m classify -s label_match --min-pass-rate 0.9
+aiforge eval compare report.json main-report.json  # exit 3 on regression
+aiforge models list                          # Models, pricing, cost estimates
 ```
+
+See the [CLI reference](cli.md) for every command and flag.
 
 ---
 
@@ -439,7 +518,9 @@ aiforge/
 │   │   ├── vectorstore_pgvector.py    # PgVectorStore adapter (PostgreSQL + pgvector)
 │   │   ├── vectorstore_factory.py     # Config-driven vector store factory
 │   │   ├── doc_loader.py             # Document loading (files, directories, git)
-│   │   ├── text_splitter.py          # Language-aware chunking
+│   │   ├── text_splitter.py          # Recursive, markdown and token chunking
+│   │   ├── retrieval.py              # BM25 index + hybrid retrieval (RRF)
+│   │   ├── rerank.py                 # LLM and score-function rerankers
 │   │   └── pricing.py                # Token pricing tables
 │   ├── infra/                         # Cross-cutting infrastructure
 │   │   ├── config.py                  # AIForgeSettings (Pydantic Settings)
@@ -450,8 +531,12 @@ aiforge/
 │   │   ├── logging.py                 # Structured logging (structlog)
 │   │   └── streaming.py              # Async streaming helpers
 │   ├── providers/                     # Concrete provider implementations
+│   │   ├── _langchain.py              # Shared LangChain provider base classes
 │   │   ├── openai.py                  # OpenAI (GPT-4o, text-embedding-3-small)
-│   │   ├── anthropic.py              # Anthropic (Claude 3.5) + Voyage embeddings
+│   │   ├── anthropic.py              # Anthropic (Claude) + Voyage embeddings
+│   │   ├── gemini.py                  # Google Gemini
+│   │   ├── bedrock.py                 # Amazon Bedrock (Converse API)
+│   │   ├── mistral.py                 # Mistral AI
 │   │   ├── ollama.py                  # Ollama (Llama 3, Mistral — local)
 │   │   └── azure.py                   # Azure OpenAI
 │   ├── modules/                       # 10 AI modules
@@ -465,6 +550,9 @@ aiforge/
 │   │   ├── moderate/                  # Content moderation & PII detection
 │   │   ├── translate/                 # Multilingual translation
 │   │   └── vision/                    # Multimodal image analysis
+│   ├── evals/                         # Datasets, scorers, eval runner, reports
+│   ├── guardrails/                    # Guard, input/output checks, PII redaction
+│   ├── mcp/                           # MCP client + tool bridge
 │   ├── pipeline/                      # Pipeline composition engine
 │   ├── server/                        # FastAPI REST API
 │   ├── playground/                    # Streamlit UI
@@ -476,15 +564,16 @@ aiforge/
 │   ├── integration/                   # Integration tests (real API calls)
 │   └── fixtures/                      # Sample texts, documents, recorded responses
 │
-├── docs/                              # Documentation
-│   ├── quickstart.md
-│   ├── configuration.md
-│   ├── providers.md
-│   ├── pipelines.md
-│   ├── cost-tracking.md
-│   └── modules/                       # Per-module docs
-│
-└── development-docs/                  # Internal dev guides & PRD
+└── docs/                              # Documentation
+    ├── quickstart.md
+    ├── configuration.md
+    ├── providers.md
+    ├── pipelines.md
+    ├── guardrails.md
+    ├── evals.md
+    ├── cost-tracking.md
+    ├── cli.md
+    └── modules/                       # Per-module docs
 ```
 
 ---
@@ -560,6 +649,11 @@ make docker          # Build Docker image
 | **Anthropic** | claude-opus-5-5, claude-sonnet-5-5, claude-haiku-5-5 | voyage-3 (via Voyage AI) | No |
 | **Ollama** | llama3, mistral, codellama, phi-3 | nomic-embed-text, mxbai-embed-large | Yes |
 | **Azure OpenAI** | Same as OpenAI (deployed models) | Same as OpenAI | No |
+| **Google Gemini** | gemini-3.8-flash, gemini-3.1-pro-preview, gemini-2.5-* | gemini-embedding-2 | No |
+| **Amazon Bedrock** | Claude, Amazon Nova and other Converse models | amazon.titan-embed-text-v2:0 | No |
+| **Mistral AI** | mistral-large-4, mistral-medium-3-5, codestral | mistral-embed | No |
+
+See [Providers](providers.md) for setup, default models and install extras.
 
 ---
 
@@ -625,11 +719,11 @@ register_vectorstore("weaviate", WeaviateStore)
 from aiforge.registry import list_modules, list_providers, list_vectorstores
 
 print(list_modules())       # ['chat', 'classify', ..., 'summarize']
-print(list_providers())     # ['anthropic', 'azure', 'ollama', 'openai']
+print(list_providers())     # ['openai', 'anthropic', 'ollama', 'azure', 'gemini', 'bedrock', 'mistral']
 print(list_vectorstores())  # ['chroma', 'pgvector', 'pinecone', 'qdrant']
 ```
 
-See [Plugin System docs](docs/configuration.md#plugin-system) for full details.
+See [Plugin System docs](configuration.md#plugin-system) for full details.
 
 ---
 

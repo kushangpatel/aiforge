@@ -311,6 +311,8 @@ aiforge eval run evals/tickets.yaml \
 | `--output/-o PATH` | Write the JSON report |
 | `--baseline/-b PATH` | Compare with a saved report |
 | `--tolerance F` | Allowed drop before a regression is flagged |
+| `--name NAME` | Report name (default: the dataset file stem) |
+| `--max-failures N` | Failing cases to print (default 10) |
 
 `aiforge eval compare current.json baseline.json` compares two saved
 reports.

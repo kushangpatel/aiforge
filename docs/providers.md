@@ -90,7 +90,7 @@ imported when you actually use a provider.
 | Provider | Install Extra | LLM Models | Embedding Models | Local? | API Keys Required |
 |----------|--------------|-----------|-----------------|--------|-------------------|
 | **OpenAI** | *(included by default)* | gpt-4o, gpt-4o-mini, gpt-4-turbo, gpt-3.5-turbo, o1, o1-mini, o3-mini, o3 | text-embedding-3-small, text-embedding-3-large, text-embedding-ada-002 | No | `OPENAI_API_KEY` |
-| **Anthropic** | `pip install "aiforge-kit[anthropicai]"` | claude-opus-5-5, claude-sonnet-5-5, claude-haiku-5-5, claude-fable-5-1 | voyage-3, voyage-3-lite, voyage-large-2, voyage-code-2 | No | `ANTHROPIC_API_KEY` + `VOYAGE_API_KEY` |
+| **Anthropic** | `pip install "aiforge-kit[anthropic]"` | claude-opus-5-5, claude-sonnet-5-5, claude-haiku-5-5, claude-fable-5-1 | voyage-3, voyage-3-lite, voyage-large-2, voyage-code-2 | No | `ANTHROPIC_API_KEY` + `VOYAGE_API_KEY` |
 | **Ollama** | `pip install "aiforge-kit[local]"` | llama3, llama3.1, llama3.2, llama3.3, mistral, mistral-nemo, codellama, phi-3, phi-4, gemma2, qwen2.5 | nomic-embed-text, mxbai-embed-large, all-minilm | Yes | None |
 | **Azure OpenAI** | *(shares langchain-openai)* | Same as OpenAI (via deployment names) | Same as OpenAI (via deployment names) | No | `AZURE_OPENAI_API_KEY` + `AZURE_OPENAI_ENDPOINT` |
 | **Google Gemini** | `pip install "aiforge-kit[gemini]"` | gemini-3.8-flash, gemini-3.5-flash-lite, gemini-3.1-pro-preview, gemini-4-argon, gemini-2.5-* | gemini-embedding-2, gemini-embedding-001 | No | `GOOGLE_API_KEY` |
@@ -191,10 +191,10 @@ temperature: 0.0
 
 ## Anthropic
 
-Requires the `anthropicai` extra.
+Requires the `anthropic` extra.
 
 ```bash
-pip install "aiforge-kit[anthropicai]"
+pip install "aiforge-kit[anthropic]"
 ```
 
 This installs `langchain-anthropic` (LLM) and `langchain-voyageai` (embeddings).
@@ -1122,7 +1122,7 @@ configuration if local throughput is a bottleneck.
 | Extra | Packages Installed | Use Case |
 |-------|--------------------|----------|
 | *(base)* | langchain-openai, chromadb, tenacity, tiktoken | OpenAI + ChromaDB (default) |
-| `anthropicai` | langchain-anthropic, langchain-voyageai | Anthropic LLM + Voyage AI embeddings |
+| `anthropic` (alias `anthropicai`) | langchain-anthropic, langchain-voyageai | Anthropic LLM + Voyage AI embeddings |
 | `local` | langchain-ollama | Ollama local inference |
 | `gemini` | langchain-google-genai ≥4.0, <5 | Google Gemini LLM + embeddings |
 | `bedrock` | langchain-aws ≥1.5, <2 | Amazon Bedrock LLM + embeddings |
@@ -1141,12 +1141,12 @@ configuration if local throughput is a bottleneck.
 
 ```bash
 pip install aiforge-kit                                      # Core + OpenAI + ChromaDB
-pip install "aiforge-kit[anthropicai]"                       # + Anthropic + Voyage
+pip install "aiforge-kit[anthropic]"                       # + Anthropic + Voyage
 pip install "aiforge-kit[local]"                             # + Ollama
 pip install "aiforge-kit[gemini]"                            # + Google Gemini
 pip install "aiforge-kit[bedrock]"                           # + Amazon Bedrock
 pip install "aiforge-kit[mistral]"                           # + Mistral AI
-pip install "aiforge-kit[anthropicai,pgvector,server]"       # Custom combo
+pip install "aiforge-kit[anthropic,pgvector,server]"       # Custom combo
 pip install "aiforge-kit[all]"                               # Everything
 ```
 
@@ -1156,7 +1156,7 @@ pip install "aiforge-kit[all]"                               # Everything
 
 | Symptom | Cause | Fix |
 |---------|-------|-----|
-| `ConfigError: provider 'anthropic' not registered` | Missing dependency | `pip install "aiforge-kit[anthropicai]"` |
+| `ConfigError: provider 'anthropic' not registered` | Missing dependency | `pip install "aiforge-kit[anthropic]"` |
 | `ConfigError: provider 'ollama' not registered` | Missing dependency | `pip install "aiforge-kit[local]"` |
 | `ConfigError: Provider 'gemini' is not available` | Missing dependency | `pip install "aiforge-kit[gemini]"` (likewise `bedrock`, `mistral`) |
 | Bedrock: `Could not load credentials` / `NoRegionError` | No AWS credentials or region | Configure the AWS credential chain (`aws configure`, SSO, role) and set `AIFORGE_AWS_REGION` |
