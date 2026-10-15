@@ -474,15 +474,13 @@ aiforge/
 │   ├── integration/                   # Integration tests (real API calls)
 │   └── fixtures/                      # Sample texts, documents, recorded responses
 │
-├── docs/                              # Documentation
-│   ├── quickstart.md
-│   ├── configuration.md
-│   ├── providers.md
-│   ├── pipelines.md
-│   ├── cost-tracking.md
-│   └── modules/                       # Per-module docs
-│
-└── development-docs/                  # Internal dev guides & PRD
+└── docs/                              # Documentation
+    ├── quickstart.md
+    ├── configuration.md
+    ├── providers.md
+    ├── pipelines.md
+    ├── cost-tracking.md
+    └── modules/                       # Per-module docs
 ```
 
 ---

@@ -56,7 +56,7 @@ Homepage = "https://github.com/kushangpatel/aiforge"
 Repository = "https://github.com/kushangpatel/aiforge"
 Issues = "https://github.com/kushangpatel/aiforge/issues"
 Changelog = "https://github.com/kushangpatel/aiforge/blob/main/CHANGELOG.md"
-Documentation = "https://github.com/kushangpatel/aiforge/tree/main/docs"
+Documentation = "https://kushangpatel.com/docs/aiforge/"
 
 [project.optional-dependencies]
 openai = ["langchain-openai>=1.0.0,<2"]
