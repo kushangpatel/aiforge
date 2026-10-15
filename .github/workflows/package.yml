@@ -1,0 +1,60 @@
+name: Package
+
+# Builds the sdist and wheel, checks their metadata, and installs the wheel
+# into a clean virtualenv to prove it is self-contained (no repo checkout on
+# sys.path, runtime data files shipped, console script works).
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: package-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build and smoke-install the wheel (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+          enable-cache: true
+
+      - name: Build sdist and wheel
+        run: uv build
+
+      - name: Check metadata
+        run: uvx twine check --strict dist/*
+
+      - name: Version matches CHANGELOG
+        run: python3 scripts/release_check.py notes "$(python3 scripts/release_check.py version)" > /dev/null
+
+      - name: Install the wheel into a clean virtualenv
+        run: |
+          uv venv "$RUNNER_TEMP/wheel-venv" --python ${{ matrix.python-version }}
+          uv pip install --python "$RUNNER_TEMP/wheel-venv/bin/python" dist/*.whl
+
+      - name: Smoke test from outside the repository
+        working-directory: ${{ runner.temp }}
+        run: |
+          "$RUNNER_TEMP/wheel-venv/bin/python" -I "$GITHUB_WORKSPACE/scripts/smoke_wheel.py"
+          "$RUNNER_TEMP/wheel-venv/bin/aiforge" --help
+
+      - uses: actions/upload-artifact@v4
+        if: matrix.python-version == '3.12'
+        with:
+          name: dist
+          path: dist/
+          retention-days: 7

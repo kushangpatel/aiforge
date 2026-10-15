@@ -104,7 +104,11 @@ aiforge serve
 ## Installation Options
 
 ```bash
-# Core + OpenAI provider (default)
+# From PyPI (0.2.0 and later)
+pip install aiforge
+pip install "aiforge[anthropic,mcp]"
+
+# Core + OpenAI provider (default), from a clone
 pip install -r requirements.txt
 
 # Or install as an editable package for development

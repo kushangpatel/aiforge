@@ -27,6 +27,9 @@ pip install "aiforge[server]"           # FastAPI + Uvicorn
 pip install "aiforge[playground]"       # Streamlit UI
 ```
 
+To install the latest unreleased code instead, install from GitHub:
+`pip install "aiforge[anthropic] @ git+https://github.com/kushangpatel/aiforge.git"`.
+
 ### Plugin System
 
 AIForge auto-registers all 10 built-in modules and vector stores on import. You can extend it with custom plugins:

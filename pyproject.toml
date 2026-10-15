@@ -1,23 +1,33 @@
 [build-system]
-requires = ["setuptools>=68.0", "wheel"]
+# setuptools 77 is the first release that accepts an SPDX `license` string.
+requires = ["setuptools>=77.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "aiforge"
-version = "0.1.0"
+# The version lives in aiforge/__version__.py; setuptools reads it statically.
+dynamic = ["version"]
 description = "Plug-and-play AI toolkit for product teams"
 readme = "README.md"
-license = {text = "MIT"}
+license = "MIT"
+license-files = ["LICENSE"]
 authors = [{name = "Kushang Patel"}]
 requires-python = ">=3.12"
-keywords = ["ai", "llm", "langchain", "rag", "nlp", "openai", "anthropic"]
+keywords = [
+    "ai", "llm", "langchain", "rag", "nlp", "openai", "anthropic", "claude",
+    "mcp", "summarization", "document-qa", "structured-output",
+]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Typing :: Typed",
 ]
 
 # Floors are the oldest versions CI has verified (see the "lowest" job);
@@ -40,6 +50,13 @@ dependencies = [
     "rich>=13.0.0",
     "langchain-openai>=1.0.0,<2",
 ]
+
+[project.urls]
+Homepage = "https://github.com/kushangpatel/aiforge"
+Repository = "https://github.com/kushangpatel/aiforge"
+Issues = "https://github.com/kushangpatel/aiforge/issues"
+Changelog = "https://github.com/kushangpatel/aiforge/blob/main/CHANGELOG.md"
+Documentation = "https://github.com/kushangpatel/aiforge/tree/main/docs"
 
 [project.optional-dependencies]
 openai = ["langchain-openai>=1.0.0,<2"]
@@ -85,12 +102,25 @@ all = [
 [project.scripts]
 aiforge = "aiforge.cli.main:app"
 
+[tool.setuptools.dynamic]
+version = {attr = "aiforge.__version__.__version__"}
+
+# Only the aiforge package goes in the wheel: tests/, docs/, development-docs/,
+# scripts/ and a local aiforge_data/ are left out ("aiforge*" would match the
+# last one, since namespace packages are discovered too).
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["aiforge*"]
+include = ["aiforge", "aiforge.*"]
 
+# Non-Python files loaded at runtime. playground/pages/*.py has no __init__.py
+# (Streamlit loads the pages by path), so it is listed explicitly.
 [tool.setuptools.package-data]
-aiforge = ["py.typed", "templates/*", "templates/.env.example"]
+aiforge = [
+    "py.typed",
+    "templates/*",
+    "templates/.env.example",
+    "playground/pages/*.py",
+]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
