@@ -46,6 +46,28 @@ _PROVIDER_EMBEDDING_MAP: dict[str, list[str]] = {
         "text-embedding-3-large",
         "text-embedding-ada-002",
     ],
+    "gemini": [
+        "gemini-embedding-2",
+        "gemini-embedding-001",
+    ],
+    "bedrock": [
+        "amazon.titan-embed-text-v2:0",
+        "amazon.titan-embed-text-v1",
+    ],
+    "mistral": [
+        "mistral-embed",
+        "mistral-embed-2312",
+        "codestral-embed",
+        "codestral-embed-2505",
+    ],
+}
+
+# Default (MODEL, EMBEDDING_MODEL) for providers whose models differ from the
+# global OpenAI defaults. Applied only when the setting is not given anywhere.
+_PROVIDER_DEFAULTS: dict[str, tuple[str, str]] = {
+    "gemini": ("gemini-3.8-flash", "gemini-embedding-2"),
+    "bedrock": ("global.anthropic.claude-sonnet-5-5", "amazon.titan-embed-text-v2:0"),
+    "mistral": ("mistral-medium-3-5", "mistral-embed"),
 }
 
 # ---------------------------------------------------------------------------
@@ -136,8 +158,9 @@ class AIForgeSettings(BaseSettings):
     MAX_TOKENS: int | None = None
     # Anthropic prompt caching: "system" caches the tools + system prompt
     # prefix, "auto" also caches each conversation's history, "off" disables.
-    # OpenAI and Azure cache prompts automatically; cached tokens are priced
-    # at the discounted rate either way.
+    # Bedrock (Claude, Nova) uses the same modes via cache points. OpenAI,
+    # Azure, Gemini and Mistral cache prompts automatically; cached tokens are
+    # priced at the discounted rate either way.
     PROMPT_CACHE: Literal["off", "system", "auto"] = "system"
     EMBEDDING_MODEL: str = "text-embedding-3-small"
 
@@ -151,6 +174,14 @@ class AIForgeSettings(BaseSettings):
     AZURE_OPENAI_ENDPOINT: str | None = None
     AZURE_OPENAI_DEPLOYMENT: str | None = None
     AZURE_OPENAI_API_VERSION: str = "2024-02-01"
+    GOOGLE_API_KEY: str | None = None  # Gemini Developer API
+    MISTRAL_API_KEY: str | None = None
+
+    # ------------------------------------------------------------------
+    # Amazon Bedrock (credentials come from the standard AWS chain)
+    # ------------------------------------------------------------------
+    AWS_REGION: str | None = None  # e.g. "us-east-1"; None = AWS default region
+    AWS_PROFILE: str | None = None  # named profile from ~/.aws/config
 
     # ------------------------------------------------------------------
     # Ollama
@@ -287,7 +318,7 @@ class AIForgeSettings(BaseSettings):
     @classmethod
     def validate_provider(cls, v: str) -> str:
         # Built-in providers are always accepted.
-        builtin = {"openai", "anthropic", "ollama", "azure"}
+        builtin = {"openai", "anthropic", "ollama", "azure", "gemini", "bedrock", "mistral"}
         if v in builtin:
             return v
         # For custom providers, check the runtime registry.
@@ -337,6 +368,25 @@ class AIForgeSettings(BaseSettings):
         return v
 
     @model_validator(mode="after")
+    def apply_provider_defaults(self) -> AIForgeSettings:
+        """Use the provider's default models when MODEL / EMBEDDING_MODEL are unset.
+
+        Runs before the embedding-compatibility check below, so
+        ``AIForgeSettings(PROVIDER="gemini")`` works without naming models.
+        The global OpenAI defaults also count as unset: modules rebuild their
+        settings from ``model_dump()``, which marks every field as given, and
+        ``gpt-4o`` is never valid for these providers.
+        """
+        defaults = _PROVIDER_DEFAULTS.get(self.PROVIDER)
+        if defaults is None:
+            return self
+        fields = type(self).model_fields
+        for name, value in zip(("MODEL", "EMBEDDING_MODEL"), defaults, strict=True):
+            if name not in self.model_fields_set or getattr(self, name) == fields[name].default:
+                setattr(self, name, value)
+        return self
+
+    @model_validator(mode="after")
     def validate_provider_embedding_combo(self) -> AIForgeSettings:
         """Ensure the embedding model is compatible with the chosen provider."""
         allowed = _PROVIDER_EMBEDDING_MAP.get(self.PROVIDER, [])
@@ -358,6 +408,8 @@ class AIForgeSettings(BaseSettings):
             "openai": ("OPENAI_API_KEY", self.OPENAI_API_KEY),
             "anthropic": ("ANTHROPIC_API_KEY", self.ANTHROPIC_API_KEY),
             "azure": ("AZURE_OPENAI_API_KEY", self.AZURE_OPENAI_API_KEY),
+            "gemini": ("GOOGLE_API_KEY", self.GOOGLE_API_KEY),
+            "mistral": ("MISTRAL_API_KEY", self.MISTRAL_API_KEY),
         }
         if self.PROVIDER in key_map:
             env_name, value = key_map[self.PROVIDER]

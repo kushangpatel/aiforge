@@ -19,6 +19,9 @@ direct constructor arguments — with a clear, deterministic priority order.
   - [API Keys (Secrets)](#api-keys-secrets)
   - [Ollama](#ollama)
   - [Azure OpenAI](#azure-openai)
+  - [Google Gemini](#google-gemini)
+  - [Amazon Bedrock](#amazon-bedrock)
+  - [Mistral AI](#mistral-ai)
   - [Vector Store](#vector-store)
   - [Retrieval & Chunking](#retrieval--chunking)
   - [Rate Limiting](#rate-limiting)
@@ -123,10 +126,10 @@ Settings picks it up. This means `provider: openai` in YAML becomes
 # aiforge.yaml — all non-secret settings go here
 
 # ── Provider & Model ─────────────────────────────────
-provider: openai                    # openai | anthropic | ollama | azure
+provider: openai                    # openai | anthropic | ollama | azure | gemini | bedrock | mistral
 model: gpt-4o                      # default LLM model
 temperature: 0.0                    # 0.0–2.0
-prompt_cache: system                # system | auto | off  (Anthropic prompt caching)
+prompt_cache: system                # system | auto | off  (Anthropic / Bedrock prompt caching)
 embedding_model: text-embedding-3-small
 
 # ── Vector Store ──────────────────────────────────────
@@ -216,6 +219,12 @@ AIFORGE_OPENAI_API_KEY=sk-...
 # AIFORGE_AZURE_OPENAI_API_KEY=...
 # AIFORGE_AZURE_OPENAI_ENDPOINT=https://<resource>.openai.azure.com/
 
+# ── Google Gemini / Mistral ──
+# AIFORGE_GOOGLE_API_KEY=...
+# AIFORGE_MISTRAL_API_KEY=...
+
+# ── Amazon Bedrock ── credentials come from the AWS chain, not from AIForge
+
 # ── Pinecone ──
 # AIFORGE_PINECONE_API_KEY=pk-...
 
@@ -239,11 +248,11 @@ All settings use the `AIFORGE_` prefix as an environment variable. In `aiforge.y
 
 | Field | Type | Default | Env Var | Description |
 |-------|------|---------|---------|-------------|
-| `PROVIDER` | `str` | `"openai"` | `AIFORGE_PROVIDER` | LLM provider: `openai`, `anthropic`, `ollama`, `azure`, or any registered custom provider |
-| `MODEL` | `str` | `"gpt-4o"` | `AIFORGE_MODEL` | Default LLM model name for the chosen provider |
+| `PROVIDER` | `str` | `"openai"` | `AIFORGE_PROVIDER` | LLM provider: `openai`, `anthropic`, `ollama`, `azure`, `gemini`, `bedrock`, `mistral`, or any registered custom provider |
+| `MODEL` | `str` | `"gpt-4o"` | `AIFORGE_MODEL` | Default LLM model name for the chosen provider (`gemini`, `bedrock` and `mistral` have their own defaults) |
 | `TEMPERATURE` | `float` | `0.0` | `AIFORGE_TEMPERATURE` | Sampling temperature (validated: 0.0–2.0) |
 | `MAX_TOKENS` | `int \| None` | `None` | `AIFORGE_MAX_TOKENS` | Hard token cap per LLM response; `None` = use model default |
-| `PROMPT_CACHE` | `"system" \| "auto" \| "off"` | `"system"` | `AIFORGE_PROMPT_CACHE` | Anthropic prompt caching: cache the system prompt, also the conversation, or nothing (see [Providers](providers.md#prompt-caching)) |
+| `PROMPT_CACHE` | `"system" \| "auto" \| "off"` | `"system"` | `AIFORGE_PROMPT_CACHE` | Anthropic and Bedrock prompt caching: cache the system prompt, also the conversation, or nothing (see [Providers](providers.md#prompt-caching)) |
 | `EMBEDDING_MODEL` | `str` | `"text-embedding-3-small"` | `AIFORGE_EMBEDDING_MODEL` | Embedding model (validated against PROVIDER compatibility) |
 
 **Provider-compatible embedding models:**
@@ -254,6 +263,9 @@ All settings use the `AIFORGE_` prefix as an environment variable. In `aiforge.y
 | `anthropic` | `voyage-3`, `voyage-3-lite`, `voyage-large-2`, `voyage-code-2` |
 | `ollama` | `nomic-embed-text`, `mxbai-embed-large`, `all-minilm` |
 | `azure` | `text-embedding-3-small`, `text-embedding-3-large`, `text-embedding-ada-002` |
+| `gemini` | `gemini-embedding-2`, `gemini-embedding-001` |
+| `bedrock` | `amazon.titan-embed-text-v2:0`, `amazon.titan-embed-text-v1` |
+| `mistral` | `mistral-embed`, `mistral-embed-2312`, `codestral-embed`, `codestral-embed-2505` |
 
 ### API Keys (Secrets)
 
@@ -264,6 +276,8 @@ All keys should go in `.env`, **not** in `aiforge.yaml`.
 | `OPENAI_API_KEY` | `str \| None` | `None` | `AIFORGE_OPENAI_API_KEY` | `PROVIDER=openai` |
 | `ANTHROPIC_API_KEY` | `str \| None` | `None` | `AIFORGE_ANTHROPIC_API_KEY` | `PROVIDER=anthropic` |
 | `VOYAGE_API_KEY` | `str \| None` | `None` | `AIFORGE_VOYAGE_API_KEY` | `PROVIDER=anthropic` with Voyage embeddings |
+| `GOOGLE_API_KEY` | `str \| None` | `None` | `AIFORGE_GOOGLE_API_KEY` | `PROVIDER=gemini` |
+| `MISTRAL_API_KEY` | `str \| None` | `None` | `AIFORGE_MISTRAL_API_KEY` | `PROVIDER=mistral` |
 | `PINECONE_API_KEY` | `str \| None` | `None` | `AIFORGE_PINECONE_API_KEY` | `VECTOR_STORE=pinecone` |
 | `QDRANT_API_KEY` | `str \| None` | `None` | `AIFORGE_QDRANT_API_KEY` | `VECTOR_STORE=qdrant` (Qdrant Cloud) |
 | `LANGSMITH_API_KEY` | `str \| None` | `None` | `AIFORGE_LANGSMITH_API_KEY` | `TRACING_BACKEND=langsmith` |
@@ -306,6 +320,47 @@ azure_openai_deployment: my-gpt4o-deployment
 AIFORGE_AZURE_OPENAI_API_KEY=...
 AIFORGE_AZURE_OPENAI_ENDPOINT=https://my-resource.openai.azure.com/
 ```
+
+### Google Gemini
+
+| Field | Type | Default | Env Var | Description |
+|-------|------|---------|---------|-------------|
+| `GOOGLE_API_KEY` | `str \| None` | `None` | `AIFORGE_GOOGLE_API_KEY` | Gemini Developer API key (falls back to `GOOGLE_API_KEY` / `GEMINI_API_KEY`) |
+
+```yaml
+provider: gemini                 # model: gemini-3.8-flash, embedding_model: gemini-embedding-2
+```
+
+### Amazon Bedrock
+
+| Field | Type | Default | Env Var | Description |
+|-------|------|---------|---------|-------------|
+| `AWS_REGION` | `str \| None` | `None` | `AIFORGE_AWS_REGION` | Bedrock region; `None` uses the AWS default region |
+| `AWS_PROFILE` | `str \| None` | `None` | `AIFORGE_AWS_PROFILE` | Named profile from `~/.aws/config` |
+
+AWS credentials come from the standard AWS chain (environment variables,
+`~/.aws/credentials`, SSO, instance or container roles). AIForge has no
+setting for them and never stores them.
+
+```yaml
+provider: bedrock                # model: global.anthropic.claude-sonnet-5-5
+aws_region: us-east-1            # embedding_model: amazon.titan-embed-text-v2:0
+# aws_profile: my-profile
+```
+
+### Mistral AI
+
+| Field | Type | Default | Env Var | Description |
+|-------|------|---------|---------|-------------|
+| `MISTRAL_API_KEY` | `str \| None` | `None` | `AIFORGE_MISTRAL_API_KEY` | Mistral API key (falls back to `MISTRAL_API_KEY`) |
+
+```yaml
+provider: mistral                # model: mistral-medium-3-5, embedding_model: mistral-embed
+```
+
+`gemini`, `bedrock` and `mistral` use the default models shown above when
+`MODEL` / `EMBEDDING_MODEL` are not set in any source. See
+[Providers](providers.md#google-gemini) for model lists and prices.
 
 ### Vector Store
 
@@ -616,7 +671,7 @@ Every field in `AIForgeSettings` maps to an `AIFORGE_`-prefixed environment vari
 | `AIFORGE_MODEL` | `str` | `gpt-4o` | Default LLM model |
 | `AIFORGE_TEMPERATURE` | `float` | `0.0` | Sampling temperature (0.0–2.0) |
 | `AIFORGE_MAX_TOKENS` | `int` | — | Hard token cap per response |
-| `AIFORGE_PROMPT_CACHE` | `str` | `system` | Anthropic prompt caching: `system`, `auto` or `off` |
+| `AIFORGE_PROMPT_CACHE` | `str` | `system` | Anthropic / Bedrock prompt caching: `system`, `auto` or `off` |
 | `AIFORGE_EMBEDDING_MODEL` | `str` | `text-embedding-3-small` | Embedding model |
 | `AIFORGE_OPENAI_API_KEY` | `str` | — | OpenAI API key |
 | `AIFORGE_ANTHROPIC_API_KEY` | `str` | — | Anthropic API key |
@@ -626,6 +681,10 @@ Every field in `AIForgeSettings` maps to an `AIFORGE_`-prefixed environment vari
 | `AIFORGE_AZURE_OPENAI_DEPLOYMENT` | `str` | — | Azure deployment name |
 | `AIFORGE_AZURE_OPENAI_API_VERSION` | `str` | `2024-02-01` | Azure API version |
 | `AIFORGE_OLLAMA_BASE_URL` | `str` | `http://localhost:11434` | Ollama server URL |
+| `AIFORGE_GOOGLE_API_KEY` | `str` | — | Google Gemini API key |
+| `AIFORGE_MISTRAL_API_KEY` | `str` | — | Mistral API key |
+| `AIFORGE_AWS_REGION` | `str` | AWS default | Amazon Bedrock region |
+| `AIFORGE_AWS_PROFILE` | `str` | — | AWS named profile for Bedrock |
 | `AIFORGE_VECTOR_STORE` | `str` | `chroma` | Vector store backend |
 | `AIFORGE_CHROMA_PERSIST_DIR` | `str` | `./aiforge_data` | ChromaDB directory |
 | `AIFORGE_PGVECTOR_DSN` | `str` | — | PostgreSQL connection string |
@@ -682,11 +741,12 @@ Every field in `AIForgeSettings` maps to an `AIFORGE_`-prefixed environment vari
 
 | Validator | Field(s) | Rule | Error |
 |-----------|----------|------|-------|
-| `validate_provider` | `PROVIDER` | Must be a built-in provider (`openai`, `anthropic`, `ollama`, `azure`) or registered via `register_provider()` | `ValueError` |
+| `validate_provider` | `PROVIDER` | Must be a built-in provider (`openai`, `anthropic`, `ollama`, `azure`, `gemini`, `bedrock`, `mistral`) or registered via `register_provider()` | `ValueError` |
 | `validate_vector_store` | `VECTOR_STORE` | Must not be empty; stripped and lowercased | `ValueError` |
 | `validate_cache_backend` | `CACHE_BACKEND` | Must be `memory` or `redis` | `ValueError` |
 | `validate_default_quality` | `DEFAULT_QUALITY` | Must be `high`, `medium`, or `low` | `ValueError` |
 | `validate_temperature` | `TEMPERATURE` | Must be in `[0.0, 2.0]` | `ValueError` |
+| `apply_provider_defaults` | `MODEL`, `EMBEDDING_MODEL` | For `gemini`, `bedrock` and `mistral`, fills in the provider's default models when they are not set in any source | — |
 | `validate_provider_embedding_combo` | `PROVIDER`, `EMBEDDING_MODEL` | Embedding model must be compatible with the selected provider | `ValueError` |
 | `validate_api_keys_present` | Provider-specific keys | **Warning only** — if `PROVIDER=openai` but `OPENAI_API_KEY` is empty, a `UserWarning` is emitted | Warning (not error) |
 
@@ -866,7 +926,7 @@ After `import aiforge`, the following are auto-registered:
 |----------|-------|
 | **Modules** | `summarize`, `qa`, `extract`, `classify`, `search`, `generate`, `chat`, `moderate` |
 | **Vector stores** | `chroma`, `pinecone`, `qdrant`, `pgvector` (if respective clients installed) |
-| **Providers** | `openai`, `anthropic`, `ollama`, `azure` (if respective extras installed) |
+| **Providers** | `openai`, `anthropic`, `ollama`, `azure`, `gemini`, `bedrock`, `mistral` (if respective extras installed) |
 
 ### Custom Module
 

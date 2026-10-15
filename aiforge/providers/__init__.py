@@ -65,6 +65,25 @@ def _ensure_registered() -> None:
     except ImportError:
         pass
 
+    # Gemini, Bedrock and Mistral — optional extras. The modules import their
+    # SDKs lazily, so register them only when the SDK is importable.
+    import importlib.util
+
+    if importlib.util.find_spec("langchain_google_genai") is not None:
+        from aiforge.providers.gemini import GeminiEmbeddingProvider, GeminiProvider
+
+        _REGISTRY["gemini"] = (GeminiProvider, GeminiEmbeddingProvider)
+
+    if importlib.util.find_spec("langchain_aws") is not None:
+        from aiforge.providers.bedrock import BedrockEmbeddingProvider, BedrockProvider
+
+        _REGISTRY["bedrock"] = (BedrockProvider, BedrockEmbeddingProvider)
+
+    if importlib.util.find_spec("langchain_mistralai") is not None:
+        from aiforge.providers.mistral import MistralEmbeddingProvider, MistralProvider
+
+        _REGISTRY["mistral"] = (MistralProvider, MistralEmbeddingProvider)
+
 
 def get_provider(settings: AIForgeSettings) -> LLMProvider:
     """Return the LLMProvider instance for the configured provider."""

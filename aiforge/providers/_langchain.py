@@ -30,7 +30,7 @@ from typing import Any
 import structlog
 from pydantic import BaseModel
 
-from aiforge.core.provider import LLMProvider
+from aiforge.core.provider import EmbeddingProvider, LLMProvider
 from aiforge.core.types import (
     APIConnectionError,
     APITimeoutError,
@@ -39,7 +39,7 @@ from aiforge.core.types import (
     RateLimitError,
     ToolCall,
 )
-from aiforge.infra.retry import retry_llm_call
+from aiforge.infra.retry import retry_embedding_call, retry_llm_call
 from aiforge.providers._utils import drop_unsupported_sampling, to_lc_messages
 
 logger = structlog.get_logger(__name__)
@@ -241,3 +241,50 @@ class LangChainLLMProvider(LLMProvider):
         ):
             if chunk.text:
                 yield chunk.text
+
+
+class LangChainEmbeddingProvider(EmbeddingProvider):
+    """Base class for embedding providers backed by LangChain ``Embeddings``.
+
+    Subclasses set ``self._embeddings`` and ``self._model_name``. SDK errors
+    are mapped through :meth:`_wrap_error` so rate limits and timeouts are
+    retried like LLM calls.
+    """
+
+    _embeddings: Any
+    _model_name: str
+
+    @property
+    def model_name(self) -> str:
+        return self._model_name
+
+    def _wrap_error(self, exc: Exception) -> ProviderError:
+        return wrap_error_by_class_name(exc)
+
+    @retry_embedding_call()
+    def embed(self, texts: list[str]) -> list[list[float]]:
+        try:
+            return list(self._embeddings.embed_documents(texts))
+        except Exception as exc:
+            raise self._wrap_error(exc) from exc
+
+    @retry_embedding_call()
+    async def embed_async(self, texts: list[str]) -> list[list[float]]:
+        try:
+            return list(await self._embeddings.aembed_documents(texts))
+        except Exception as exc:
+            raise self._wrap_error(exc) from exc
+
+    @retry_embedding_call()
+    def embed_query(self, text: str) -> list[float]:
+        try:
+            return list(self._embeddings.embed_query(text))
+        except Exception as exc:
+            raise self._wrap_error(exc) from exc
+
+    @retry_embedding_call()
+    async def embed_query_async(self, text: str) -> list[float]:
+        try:
+            return list(await self._embeddings.aembed_query(text))
+        except Exception as exc:
+            raise self._wrap_error(exc) from exc

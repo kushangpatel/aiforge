@@ -5,8 +5,10 @@ streaming, native tool calling, native structured output, prompt caching,
 image input, and the ChatAgent / Extractor / Classifier / Moderator modules.
 
 Reads keys the same way the SDK does (``AIFORGE_*`` variables or ``.env``).
-Providers without a key are skipped. Uses the cheapest current models, so a
-full run costs well under one US cent per provider.
+Providers without a key are skipped; Bedrock runs only when
+``AIFORGE_AWS_REGION`` is set and boto3 finds AWS credentials. Uses the
+cheapest current models, so a full run costs well under one US cent per
+provider.
 
     python scripts/smoke_live.py                 # every provider with a key
     python scripts/smoke_live.py anthropic       # just one
@@ -36,7 +38,36 @@ PROVIDERS: dict[str, dict[str, Any]] = {
         "EMBEDDING_MODEL": "voyage-3",
         "key": "ANTHROPIC_API_KEY",
     },
+    # Gemini and Mistral cache prompt prefixes implicitly, so a cache hit on
+    # the second call is likely but not guaranteed.
+    "gemini": {
+        "MODEL": "gemini-3.1-flash-lite",
+        "EMBEDDING_MODEL": "gemini-embedding-2",
+        "key": "GOOGLE_API_KEY",
+        "soft": {"prompt caching"},
+    },
+    "mistral": {
+        "MODEL": "mistral-small-2603",
+        "EMBEDDING_MODEL": "mistral-embed",
+        "key": "MISTRAL_API_KEY",
+        "soft": {"prompt caching"},
+    },
+    "bedrock": {
+        "MODEL": "global.anthropic.claude-haiku-5-5",
+        "EMBEDDING_MODEL": "amazon.titan-embed-text-v2:0",
+        "key": "AWS_REGION",
+    },
 }
+
+
+def _aws_credentials(settings: AIForgeSettings) -> bool:
+    """Whether boto3 can find AWS credentials (never prints them)."""
+    try:
+        import boto3
+    except ImportError:
+        return False
+    session = boto3.Session(profile_name=settings.AWS_PROFILE)
+    return session.get_credentials() is not None
 
 
 def _red_png(size: int = 64) -> bytes:
@@ -81,9 +112,12 @@ def _add_tool() -> Any:
 def run(provider_name: str) -> list[tuple[str, bool | None, str]]:
     cfg = dict(PROVIDERS[provider_name])
     key_field = cfg.pop("key")
+    soft: set[str] = cfg.pop("soft", set())
     settings = AIForgeSettings(PROVIDER=provider_name, **cfg)
     if not getattr(settings, key_field):
         return [(f"{provider_name}", None, f"skipped, AIFORGE_{key_field} not set")]
+    if provider_name == "bedrock" and not _aws_credentials(settings):
+        return [(provider_name, None, "skipped, boto3 found no AWS credentials")]
 
     provider = get_provider(settings)
     module_kwargs: dict[str, Any] = {"provider": provider_name, **cfg}
@@ -98,6 +132,8 @@ def run(provider_name: str) -> list[tuple[str, bool | None, str]]:
             detail = f"{type(exc).__name__}: {exc}"
             traceback.print_exc()
             ok = False
+            if name in soft:  # best effort for this provider: report, don't fail
+                ok, detail = None, f"not guaranteed here; {detail}"
         results.append(
             (f"{provider_name}: {name}", ok, f"{detail} ({time.monotonic() - start:.1f}s)")
         )

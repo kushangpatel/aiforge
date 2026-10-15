@@ -1,9 +1,9 @@
 # Providers
 
-AIForge is provider-agnostic. Swap between OpenAI, Anthropic, Ollama, and
-Azure OpenAI with a single config change — zero code changes required. All
-four providers implement identical `LLMProvider` and `EmbeddingProvider`
-interfaces, and a lazy-loaded registry means optional dependencies are only
+AIForge is provider-agnostic. Swap between OpenAI, Anthropic, Ollama,
+Azure OpenAI, Google Gemini, Amazon Bedrock and Mistral AI with a single config
+change — zero code changes required. All seven providers implement identical
+`LLMProvider` and `EmbeddingProvider` interfaces, and a lazy-loaded registry means optional dependencies are only
 imported when you actually use a provider.
 
 ---
@@ -33,6 +33,16 @@ imported when you actually use a provider.
   - [Azure OpenAI](#azure-openai)
     - [Azure OpenAI Configuration](#azure-openai-configuration)
     - [Deployment Names vs Model Names](#deployment-names-vs-model-names)
+  - [Google Gemini](#google-gemini)
+    - [Gemini Configuration](#gemini-configuration)
+    - [Gemini Supported Models](#gemini-supported-models)
+  - [Amazon Bedrock](#amazon-bedrock)
+    - [Bedrock Configuration](#bedrock-configuration)
+    - [Bedrock Supported Models](#bedrock-supported-models)
+    - [Bedrock Prompt Caching](#bedrock-prompt-caching)
+  - [Mistral AI](#mistral-ai)
+    - [Mistral Configuration](#mistral-configuration)
+    - [Mistral Supported Models](#mistral-supported-models)
   - [Provider-Embedding Compatibility](#provider-embedding-compatibility)
     - [Compatibility Map](#compatibility-map)
     - [Mismatch Error Example](#mismatch-error-example)
@@ -83,6 +93,9 @@ imported when you actually use a provider.
 | **Anthropic** | `pip install "aiforge-kit[anthropicai]"` | claude-opus-5-5, claude-sonnet-5-5, claude-haiku-5-5, claude-fable-5-1 | voyage-3, voyage-3-lite, voyage-large-2, voyage-code-2 | No | `ANTHROPIC_API_KEY` + `VOYAGE_API_KEY` |
 | **Ollama** | `pip install "aiforge-kit[local]"` | llama3, llama3.1, llama3.2, llama3.3, mistral, mistral-nemo, codellama, phi-3, phi-4, gemma2, qwen2.5 | nomic-embed-text, mxbai-embed-large, all-minilm | Yes | None |
 | **Azure OpenAI** | *(shares langchain-openai)* | Same as OpenAI (via deployment names) | Same as OpenAI (via deployment names) | No | `AZURE_OPENAI_API_KEY` + `AZURE_OPENAI_ENDPOINT` |
+| **Google Gemini** | `pip install "aiforge-kit[gemini]"` | gemini-3.8-flash, gemini-3.5-flash-lite, gemini-3.1-pro-preview, gemini-4-argon, gemini-2.5-* | gemini-embedding-2, gemini-embedding-001 | No | `GOOGLE_API_KEY` |
+| **Amazon Bedrock** | `pip install "aiforge-kit[bedrock]"` | Claude (anthropic.claude-*), Amazon Nova (amazon.nova-*), any Converse model | amazon.titan-embed-text-v2:0, amazon.titan-embed-text-v1 | No | AWS credential chain + `AWS_REGION` |
+| **Mistral AI** | `pip install "aiforge-kit[mistral]"` | mistral-large-4, mistral-medium-3-5, mistral-small-2603, codestral-2508 | mistral-embed, codestral-embed | No | `MISTRAL_API_KEY` |
 
 ---
 
@@ -366,6 +379,230 @@ name**, not the base model name.
 
 ---
 
+## Google Gemini
+
+Gemini models through the Gemini Developer API, using `langchain-google-genai`
+(`ChatGoogleGenerativeAI` and `GoogleGenerativeAIEmbeddings`).
+
+```bash
+pip install "aiforge-kit[gemini]"
+```
+
+### Gemini Configuration
+
+```bash
+AIFORGE_PROVIDER=gemini
+AIFORGE_GOOGLE_API_KEY=...                  # or GOOGLE_API_KEY / GEMINI_API_KEY
+AIFORGE_MODEL=gemini-3.8-flash              # Optional, this is the default
+AIFORGE_EMBEDDING_MODEL=gemini-embedding-2  # Optional, this is the default
+```
+
+```yaml
+# aiforge.yaml
+provider: gemini
+model: gemini-3.8-flash
+embedding_model: gemini-embedding-2
+```
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `AIFORGE_GOOGLE_API_KEY` | Yes | — | Gemini API key from Google AI Studio. Falls back to `GOOGLE_API_KEY` / `GEMINI_API_KEY` |
+| `AIFORGE_MODEL` | No | `gemini-3.8-flash` | LLM model, used when `MODEL` is not set anywhere |
+| `AIFORGE_EMBEDDING_MODEL` | No | `gemini-embedding-2` | Embedding model |
+| `AIFORGE_MAX_TOKENS` | No | model default | Sent as `max_output_tokens` |
+
+Google recommends leaving `temperature` at 1.0 for Gemini 3 and later models;
+AIForge's default of 0.0 is sent unchanged, so set `temperature: 1.0` if you
+see repetitive output.
+
+### Gemini Supported Models
+
+Prices are the Standard paid tier per 1M tokens, checked 2026-10-15
+([Gemini API pricing](https://ai.google.dev/gemini-api/docs/pricing)).
+"Cached" is the price of input tokens served from Gemini's implicit cache.
+
+| Model | Context Window | Input / 1M | Cached / 1M | Output / 1M |
+|-------|----------------|------------|-------------|-------------|
+| gemini-4-argon | 1,048,576 | $2.00 ¹ | $0.10 | $10.00 ¹ |
+| gemini-3.1-pro-preview | 1,048,576 | $2.00 ² | $0.20 | $12.00 ² |
+| gemini-3.8-flash | 1,048,576 | $0.75 ³ | $0.075 | $3.75 ³ |
+| gemini-3.6-flash | 1,048,576 | $0.75 ³ | $0.075 | $3.75 ³ |
+| gemini-3.5-flash-lite | 1,048,576 | $0.30 | $0.03 | $2.50 |
+| gemini-3.1-flash-lite | 1,048,576 | $0.25 | $0.025 | $1.50 |
+| gemini-2.5-pro | 1,048,576 | $1.25 ² | $0.125 | $10.00 ² |
+| gemini-2.5-flash | 1,048,576 | $0.30 | $0.03 | $2.50 |
+| gemini-2.5-flash-lite | 1,048,576 | $0.10 | $0.01 | $0.40 |
+
+¹ Rises to $4.00 / $20.00 (cached $0.20) on 2026-12-01.
+² Prompts up to 200K tokens; longer prompts are billed at a higher rate that
+the pricing table does not model.
+³ Rises to $1.50 / $7.50 (cached $0.15) on 2027-01-01.
+
+Update the table with `custom_pricing` when prices change (see
+[Configuration](configuration.md)).
+
+**Embeddings:**
+
+| Model | Max input | Dimensions | Input / 1M |
+|-------|-----------|------------|------------|
+| gemini-embedding-2 | 8,192 tokens | 3,072 (128–3,072) | $0.20 (text) |
+| gemini-embedding-001 | 2,048 tokens | 3,072 (128–3,072) | not in the pricing table |
+
+Gemini caches repeated prompt prefixes implicitly; hits are reported on
+`cache_read_tokens`. `PROMPT_CACHE` has no effect for Gemini.
+
+---
+
+## Amazon Bedrock
+
+Any Bedrock chat model through the Converse API, using `langchain-aws`
+(`ChatBedrockConverse` and `BedrockEmbeddings`). Claude and Amazon Nova are
+priced out of the box.
+
+```bash
+pip install "aiforge-kit[bedrock]"
+```
+
+### Bedrock Configuration
+
+AIForge never reads or stores AWS secrets. Credentials come from the standard
+AWS chain: `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` / `AWS_SESSION_TOKEN`,
+`~/.aws/credentials`, SSO, or an instance / container / Lambda role.
+
+```bash
+AIFORGE_PROVIDER=bedrock
+AIFORGE_AWS_REGION=us-east-1                            # or the AWS default region
+AIFORGE_AWS_PROFILE=my-profile                          # Optional named profile
+AIFORGE_MODEL=global.anthropic.claude-sonnet-5-5        # Optional, this is the default
+AIFORGE_EMBEDDING_MODEL=amazon.titan-embed-text-v2:0    # Optional, this is the default
+```
+
+```yaml
+# aiforge.yaml
+provider: bedrock
+aws_region: us-east-1
+model: us.amazon.nova-pro-v1:0
+```
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `AIFORGE_AWS_REGION` | No | AWS default region | Bedrock region, e.g. `us-east-1` |
+| `AIFORGE_AWS_PROFILE` | No | default profile | Named profile from `~/.aws/config` |
+| `AIFORGE_MODEL` | No | `global.anthropic.claude-sonnet-5-5` | Model ID or inference-profile ID |
+| `AIFORGE_EMBEDDING_MODEL` | No | `amazon.titan-embed-text-v2:0` | Embedding model ID |
+
+`MODEL` is a Bedrock model ID or inference-profile ID. Recent Claude models
+are only served through inference profiles: `global.` (any commercial region,
+cheapest) or a geography prefix such as `us.`, `eu.`, `jp.` or `apac.`
+(data stays in that geography, 10% surcharge for Claude). Current Claude
+models reject `temperature` / `top_p` / `top_k` on Bedrock too; AIForge drops
+them automatically.
+
+### Bedrock Supported Models
+
+On-demand prices for US East (N. Virginia), checked 2026-10-15 through the
+AWS Price List API ([Amazon Bedrock pricing](https://aws.amazon.com/bedrock/pricing/)).
+The pricing table understands every ID form: `us.anthropic.claude-haiku-4-5-20251001-v1:0`
+is priced as `anthropic.claude-haiku-4-5`.
+
+| Model (ID without prefix) | Context | `global.` in / out per 1M | Geo / in-region in / out per 1M |
+|-------|---------|------------|------------|
+| anthropic.claude-opus-5-5 | 1M | $4.00 / $20.00 | $4.40 / $22.00 |
+| anthropic.claude-sonnet-5-5 | 1M | $2.00 / $10.00 | $2.20 / $11.00 |
+| anthropic.claude-haiku-5-5 ¹ | 1M | $0.10 / $0.50 | $0.11 / $0.55 |
+| anthropic.claude-fable-5-1 | 1M | $10.00 / $50.00 | $11.00 / $55.00 |
+| anthropic.claude-sonnet-4-6 | 1M | $3.00 / $15.00 | $3.30 / $16.50 |
+| anthropic.claude-haiku-4-5-20251001-v1:0 | 200K | $1.00 / $5.00 | $1.10 / $5.50 |
+| amazon.nova-2-lite-v1:0 | 1M | $0.30 / $2.50 | $0.33 / $2.75 |
+| amazon.nova-pro-v1:0 | 300K | — | $0.80 / $3.20 |
+| amazon.nova-lite-v1:0 | 300K | — | $0.06 / $0.24 |
+| amazon.nova-micro-v1:0 | 128K | — | $0.035 / $0.14 |
+
+¹ Prompts up to 100K tokens; longer prompts cost 5x.
+
+Cache reads and writes use each model's own Bedrock rates (Claude Sonnet 5.5 reads
+are 0.05x input; Nova cache writes are free).
+
+**Embeddings:**
+
+| Model | Max input | Input / 1M |
+|-------|-----------|------------|
+| amazon.titan-embed-text-v2:0 | 8K tokens | $0.02 |
+| amazon.titan-embed-text-v1 | 8K tokens | $0.10 |
+
+### Bedrock Prompt Caching
+
+Bedrock caches prompts at `cachePoint` blocks, on Claude 3.7 and later and on
+Amazon Nova. AIForge places them from `PROMPT_CACHE`:
+
+| Value | Behaviour |
+|-------|-----------|
+| `system` (default) | Cache point after the system prompt (tools + system prompt are reused) |
+| `auto` | `langchain-aws` places cache points on the system prompt, tools and conversation end |
+| `off` | No cache points |
+
+Content blocks marked with `cache_control` (for example
+`messages.system(text, cache=True)`) become cache points in every mode. On
+models without prompt caching the markers are dropped.
+
+---
+
+## Mistral AI
+
+Mistral's hosted models, using `langchain-mistralai` (`ChatMistralAI` and
+`MistralAIEmbeddings`).
+
+```bash
+pip install "aiforge-kit[mistral]"
+```
+
+### Mistral Configuration
+
+```bash
+AIFORGE_PROVIDER=mistral
+AIFORGE_MISTRAL_API_KEY=...              # or MISTRAL_API_KEY
+AIFORGE_MODEL=mistral-medium-3-5         # Optional, this is the default
+AIFORGE_EMBEDDING_MODEL=mistral-embed    # Optional, this is the default
+```
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `AIFORGE_MISTRAL_API_KEY` | Yes | — | Mistral API key. Falls back to `MISTRAL_API_KEY` |
+| `AIFORGE_MODEL` | No | `mistral-medium-3-5` | LLM model |
+| `AIFORGE_EMBEDDING_MODEL` | No | `mistral-embed` | Embedding model |
+
+Mistral accepts temperatures from 0.0 to 1.0; higher values are capped at 1.0.
+
+### Mistral Supported Models
+
+Prices per 1M tokens, checked 2026-10-15
+([Mistral pricing](https://docs.mistral.ai/inference/pricing)). Cached input
+is billed at 10% of the input price.
+
+| Model | Context Window | Input / 1M | Cached / 1M | Output / 1M |
+|-------|----------------|------------|-------------|-------------|
+| mistral-large-4 ¹ | 1,000,000 | $0.68 | $0.07 | $2.09 |
+| mistral-large-2512 (Large 3) | 256,000 | $0.50 | $0.05 | $1.50 |
+| mistral-medium-3-5 | 256,000 | $1.50 | $0.15 | $7.50 |
+| mistral-small-2603 (Small 4) | 256,000 | $0.15 | $0.015 | $0.60 |
+| codestral-2508 | 128,000 | $0.30 | $0.03 | $0.90 |
+
+¹ Public preview, at its sale price (list price $1.36 / $4.18).
+
+**Embeddings:**
+
+| Model | Max input | Dimensions | Input / 1M |
+|-------|-----------|------------|------------|
+| mistral-embed (mistral-embed-2312) | 8K tokens | 1,024 | $0.10 |
+| codestral-embed (codestral-embed-2505) | 8K tokens | 1,536 (up to 3,072) | $0.15 |
+
+Mistral caches repeated prompt prefixes; hits are reported on
+`cache_read_tokens`. To improve the hit rate, pass the same
+`prompt_cache_key=` on calls that share a prefix. `PROMPT_CACHE` has no effect
+for Mistral.
+
+---
+
 ## Provider-Embedding Compatibility
 
 Not all LLM providers include their own embedding API. AIForge validates
@@ -380,6 +617,13 @@ helpful message if they don't match.
 | `anthropic` | voyage-3, voyage-3-lite, voyage-large-2, voyage-code-2 | Auto-routed to Voyage AI — requires `VOYAGE_API_KEY` |
 | `ollama` | nomic-embed-text, mxbai-embed-large, all-minilm | Must be pulled locally before use |
 | `azure` | *(Any deployed embedding model)* | Must match a deployed model in your Azure resource |
+| `gemini` | gemini-embedding-2, gemini-embedding-001 | Same `GOOGLE_API_KEY` as the LLM |
+| `bedrock` | amazon.titan-embed-text-v2:0, amazon.titan-embed-text-v1 | Same AWS region and credentials as the LLM |
+| `mistral` | mistral-embed, mistral-embed-2312, codestral-embed, codestral-embed-2505 | Same `MISTRAL_API_KEY` as the LLM |
+
+`gemini`, `bedrock` and `mistral` fill in their default `MODEL` and
+`EMBEDDING_MODEL` when you don't set them, so `provider: gemini` alone is a
+complete configuration.
 
 ### Mismatch Error Example
 
@@ -492,10 +736,13 @@ use this path.
 | `auto` | Top-level automatic caching, which also reuses a growing conversation history |
 | `off` | No breakpoints |
 
-OpenAI and Azure cache long prompts automatically. Either way, cached input
+Amazon Bedrock uses the same three modes with `cachePoint` blocks (see
+[Bedrock Prompt Caching](#bedrock-prompt-caching)). OpenAI, Azure, Gemini and
+Mistral cache long prompts automatically. Either way, cached input
 tokens are reported on `CompletionResult.cache_read_tokens` /
 `cache_write_tokens` and priced at the discounted rate (Claude: reads 0.1x,
-writes 1.25x; OpenAI: reads 0.5x). Override with `cache_read` / `cache_write`
+writes 1.25x; OpenAI: reads 0.5x; Gemini, Bedrock and Mistral models carry
+their own cached-input prices). Override with `cache_read` / `cache_write`
 keys in `custom_pricing`. See [Cost Tracking](cost-tracking.md#prompt-caching--cost-savings).
 
 ### EmbeddingProvider
@@ -578,6 +825,9 @@ _REGISTRY = {
     "anthropic": (AnthropicProvider, AnthropicEmbeddingProvider),   # if langchain-anthropic installed
     "ollama":    (OllamaProvider,    OllamaEmbeddingProvider),      # if langchain-ollama installed
     "azure":     (AzureProvider,     AzureEmbeddingProvider),       # shares langchain-openai
+    "gemini":    (GeminiProvider,    GeminiEmbeddingProvider),      # if langchain-google-genai installed
+    "bedrock":   (BedrockProvider,   BedrockEmbeddingProvider),     # if langchain-aws installed
+    "mistral":   (MistralProvider,   MistralEmbeddingProvider),     # if langchain-mistralai installed
 }
 ```
 
@@ -590,7 +840,8 @@ Providers whose dependencies are missing are silently skipped.
 from aiforge.providers import list_providers
 
 print(list_providers())
-# ["openai", "anthropic", "ollama", "azure"]  — only those with deps installed
+# ["openai", "anthropic", "ollama", "azure", "gemini", "bedrock", "mistral"]
+# — gemini, bedrock and mistral only when their extra is installed
 ```
 
 ### Custom Provider Registration
@@ -818,6 +1069,19 @@ Each provider maps native SDK exceptions to the AIForge error hierarchy:
 | Connection* | `APIConnectionError` |
 | Other | `ProviderError` |
 
+**Gemini / Bedrock / Mistral** (`wrap_sdk_error()` in `aiforge/providers/_errors.py`),
+which also follows the exception's `__cause__` chain:
+
+| Native Error | Mapped To |
+|-------------|-----------|
+| HTTP 429, *RateLimit*, AWS `ThrottlingException` / `ServiceQuotaExceededException` | `RateLimitError` |
+| HTTP 408 / 504, *Timeout*, AWS `ModelTimeoutException`, botocore `ReadTimeoutError` | `APITimeoutError` |
+| *Connect* (httpx `ConnectError`, botocore `EndpointConnectionError`) | `APIConnectionError` |
+| Other | `ProviderError` |
+
+Embedding errors from these three providers are mapped the same way, so
+`@retry_embedding_call()` retries them too.
+
 **Ollama** (`_wrap_ollama_error()`):
 
 | Native Error | Mapped To | Extra Help |
@@ -860,6 +1124,9 @@ configuration if local throughput is a bottleneck.
 | *(base)* | langchain-openai, chromadb, tenacity, tiktoken | OpenAI + ChromaDB (default) |
 | `anthropicai` | langchain-anthropic, langchain-voyageai | Anthropic LLM + Voyage AI embeddings |
 | `local` | langchain-ollama | Ollama local inference |
+| `gemini` | langchain-google-genai ≥4.0, <5 | Google Gemini LLM + embeddings |
+| `bedrock` | langchain-aws ≥1.5, <2 | Amazon Bedrock LLM + embeddings |
+| `mistral` | langchain-mistralai ≥1.0, <2 | Mistral AI LLM + embeddings |
 | `pinecone` | pinecone≥5.1.0 | Pinecone vector store |
 | `qdrant` | qdrant-client≥1.7.0 | Qdrant vector store |
 | `pgvector` | psycopg[binary]≥3.1.0 | PostgreSQL/pgvector |
@@ -876,6 +1143,9 @@ configuration if local throughput is a bottleneck.
 pip install aiforge-kit                                      # Core + OpenAI + ChromaDB
 pip install "aiforge-kit[anthropicai]"                       # + Anthropic + Voyage
 pip install "aiforge-kit[local]"                             # + Ollama
+pip install "aiforge-kit[gemini]"                            # + Google Gemini
+pip install "aiforge-kit[bedrock]"                           # + Amazon Bedrock
+pip install "aiforge-kit[mistral]"                           # + Mistral AI
 pip install "aiforge-kit[anthropicai,pgvector,server]"       # Custom combo
 pip install "aiforge-kit[all]"                               # Everything
 ```
@@ -888,6 +1158,10 @@ pip install "aiforge-kit[all]"                               # Everything
 |---------|-------|-----|
 | `ConfigError: provider 'anthropic' not registered` | Missing dependency | `pip install "aiforge-kit[anthropicai]"` |
 | `ConfigError: provider 'ollama' not registered` | Missing dependency | `pip install "aiforge-kit[local]"` |
+| `ConfigError: Provider 'gemini' is not available` | Missing dependency | `pip install "aiforge-kit[gemini]"` (likewise `bedrock`, `mistral`) |
+| Bedrock: `Could not load credentials` / `NoRegionError` | No AWS credentials or region | Configure the AWS credential chain (`aws configure`, SSO, role) and set `AIFORGE_AWS_REGION` |
+| Bedrock: `ValidationException` about on-demand throughput | Bare model ID for a profile-only model | Use an inference profile ID, e.g. `global.anthropic.claude-sonnet-5-5` |
+| Gemini output repeats itself | Low temperature on Gemini 3+ | Set `temperature: 1.0` |
 | `ConfigError: Embedding model '...' not available with provider '...'` | Provider/embedding mismatch | Set `EMBEDDING_MODEL` to a compatible model (see [Compatibility Map](#compatibility-map)) |
 | `ConfigError: AZURE_OPENAI_ENDPOINT is required` | Azure endpoint not set | Set `AIFORGE_AZURE_OPENAI_ENDPOINT` |
 | `APIConnectionError: Is the Ollama server running?` | Ollama not running | Start Ollama: `ollama serve` |

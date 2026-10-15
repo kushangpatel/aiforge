@@ -65,11 +65,13 @@ def supports_sampling_params(model: str) -> bool:
 
     * Anthropic Claude Opus 4.7 and every Claude 5+ model reject non-default
       sampling parameters (HTTP 400, or a client-side ``ValueError`` in
-      ``langchain-anthropic``).
+      ``langchain-anthropic``), also when served through Amazon Bedrock.
     * OpenAI reasoning models (o-series and the GPT-5+ family, except the
       ``-chat`` variants) only accept the default temperature.
     """
     name = model.lower().split("/")[-1]
+    # Bedrock IDs: "anthropic.claude-…", "us.anthropic.claude-…", "global.anthropic.claude-…"
+    name = name.split("anthropic.", 1)[-1]
 
     match = _CLAUDE_VERSION_RE.match(name)
     if match:

@@ -124,7 +124,9 @@ def playground(
     try:
         import streamlit  # noqa: F401
     except ImportError:
-        console.print('[red]Streamlit not installed.[/red] Run: pip install "aiforge-kit[playground]"')
+        console.print(
+            '[red]Streamlit not installed.[/red] Run: pip install "aiforge-kit[playground]"'
+        )
         raise typer.Exit(1) from None
 
     playground_path = Path(__file__).parent.parent / "playground" / "app.py"

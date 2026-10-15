@@ -47,6 +47,8 @@ _SENSITIVE_KEYS = frozenset(
         "voyage_api_key",
         "langsmith_api_key",
         "azure_openai_api_key",
+        "google_api_key",
+        "mistral_api_key",
     }
 )
 
