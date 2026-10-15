@@ -2,7 +2,8 @@
 
 Exercises the features unit tests can only check offline: plain completion,
 streaming, native tool calling, native structured output, prompt caching,
-image input, and the ChatAgent / Extractor / Classifier / Moderator modules.
+image input, embeddings, and the ChatAgent / Extractor / Classifier /
+Moderator modules.
 
 Reads keys the same way the SDK does (``AIFORGE_*`` variables or ``.env``).
 Providers without a key are skipped; Bedrock runs only when
@@ -29,7 +30,7 @@ from pydantic import BaseModel
 
 from aiforge.core import messages as m
 from aiforge.infra.config import AIForgeSettings
-from aiforge.providers import get_provider
+from aiforge.providers import get_embedding_provider, get_provider
 
 PROVIDERS: dict[str, dict[str, Any]] = {
     "openai": {"MODEL": "gpt-4o-mini", "key": "OPENAI_API_KEY"},
@@ -37,6 +38,7 @@ PROVIDERS: dict[str, dict[str, Any]] = {
         "MODEL": "claude-haiku-5-5",
         "EMBEDDING_MODEL": "voyage-3",
         "key": "ANTHROPIC_API_KEY",
+        "embedding_key": "VOYAGE_API_KEY",
     },
     # Gemini and Mistral cache prompt prefixes implicitly, so a cache hit on
     # the second call is likely but not guaranteed.
@@ -112,6 +114,7 @@ def _add_tool() -> Any:
 def run(provider_name: str) -> list[tuple[str, bool | None, str]]:
     cfg = dict(PROVIDERS[provider_name])
     key_field = cfg.pop("key")
+    embedding_key = cfg.pop("embedding_key", None)
     soft: set[str] = cfg.pop("soft", set())
     settings = AIForgeSettings(PROVIDER=provider_name, **cfg)
     if not getattr(settings, key_field):
@@ -204,6 +207,21 @@ def run(provider_name: str) -> list[tuple[str, bool | None, str]]:
         assert "red" in r.text.lower(), r.text
         return repr(r.text.strip())
 
+    def embeddings() -> str:
+        emb = get_embedding_provider(settings)
+        docs = emb.embed(["The cat sat on the mat.", "Stock markets fell today."])
+        query = emb.embed_query("Where did the cat sit?")
+        assert len(docs) == 2 and len(docs[0]) == len(docs[1]) == len(query) > 0
+
+        def cosine(a: list[float], b: list[float]) -> float:
+            dot = sum(x * y for x, y in zip(a, b, strict=True))
+            norm = (sum(x * x for x in a) * sum(y * y for y in b)) ** 0.5
+            return float(dot / norm)
+
+        # The query should sit closer to the cat sentence than the markets one.
+        assert cosine(query, docs[0]) > cosine(query, docs[1])
+        return f"{len(query)} dims"
+
     def chat_agent() -> str:
         from aiforge.modules.chat.module import ChatAgent
 
@@ -243,18 +261,25 @@ def run(provider_name: str) -> list[tuple[str, bool | None, str]]:
         assert any(f.type == "prompt_injection" for f in out.flags), out
         return f"{[f.type for f in out.flags]}"
 
-    for name, fn in [
+    checks: list[tuple[str, Callable[[], str]]] = [
         ("completion", completion),
         ("streaming", streaming),
         ("native tool calling", tool_calling),
         ("native structured output", structured),
         ("prompt caching", prompt_cache),
         ("image input", image),
+        ("embeddings", embeddings),
         ("ChatAgent with tools", chat_agent),
         ("Extractor", extractor),
         ("Classifier", classifier),
         ("Moderator", moderator),
-    ]:
+    ]
+    if embedding_key and not getattr(settings, embedding_key):
+        checks = [c for c in checks if c[0] != "embeddings"]
+        results.append(
+            (f"{provider_name}: embeddings", None, f"skipped, AIFORGE_{embedding_key} not set")
+        )
+    for name, fn in checks:
         check(name, fn)
     return results
 
