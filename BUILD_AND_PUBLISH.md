@@ -123,10 +123,10 @@ git push origin v0.2.0
 
 ```txt
 # From local path
-aiforge @ file:///absolute/path/to/aiforge
+aiforge-kit @ file:///absolute/path/to/aiforge
 
 # From Git
-aiforge @ git+https://github.com/kushangpatel/aiforge.git@v0.2.0
+aiforge-kit @ git+https://github.com/kushangpatel/aiforge.git@v0.2.0
 
 # From Git with extras (PEP 508)
 aiforge-kit[server] @ git+https://github.com/kushangpatel/aiforge.git@v0.2.0
@@ -189,31 +189,9 @@ pip install aiforge-kit \
 
 ### Option B — GitHub Packages
 
-**Configure `~/.pypirc`:**
-
-```ini
-[distutils]
-index-servers = github
-
-[github]
-repository = https://maven.pkg.github.com/kushangpatel/aiforge
-username = __token__
-password = ghp_YOUR_PERSONAL_ACCESS_TOKEN
-```
-
-**Publish:**
-
-```bash
-uv build
-twine upload --repository github dist/*
-```
-
-**Consume:**
-
-```bash
-pip install aiforge-kit \
-  --index-url https://maven.pkg.github.com/kushangpatel/aiforge/simple/
-```
+GitHub Packages has no Python (PyPI) registry, so it cannot host the wheel.
+Use the Git-based install from section 2, Option D, or one of the registries
+below instead.
 
 ### Option C — JFrog Artifactory
 

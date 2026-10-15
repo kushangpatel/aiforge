@@ -1,8 +1,8 @@
 # AIForge — Plug-and-Play AI Toolkit for Product Teams
 
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.2.2-orange.svg)](https://github.com/kushangpatel/aiforge/blob/main/CHANGELOG.md)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://github.com/kushangpatel/aiforge/blob/main/LICENSE)
+[![PyPI](https://img.shields.io/pypi/v/aiforge-kit.svg)](https://pypi.org/project/aiforge-kit/)
 
 **AIForge** is a modular, provider-agnostic Python SDK that gives product teams production-ready AI capabilities with a single `pip install` and a config file. Each module — summarization, document Q&A, extraction, classification, semantic search, content generation, conversational agents, content moderation, translation, and vision — is self-contained, composable, and ships with a built-in Streamlit UI widget for instant prototyping.
 
@@ -54,7 +54,7 @@
 ### 1. Clone & Set Up Environment
 
 ```bash
-git clone <repo-url>
+git clone https://github.com/kushangpatel/aiforge.git
 cd aiforge
 
 # Create and activate a Python virtual environment
@@ -584,7 +584,7 @@ aiforge/
 
 ```bash
 # Clone the repo
-git clone <repo-url>
+git clone https://github.com/kushangpatel/aiforge.git
 cd aiforge
 
 # Create Python virtual environment
@@ -748,7 +748,7 @@ print(tracker.by_model)    # {"gpt-4o": 0.040, "text-embedding-3-small": 0.002}
 
 ## License
 
-MIT — see [LICENSE](LICENSE) for details.
+MIT — see [LICENSE](https://github.com/kushangpatel/aiforge/blob/main/LICENSE) for details.
 
 ---
 

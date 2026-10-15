@@ -9,6 +9,17 @@ called out under **Changed** or **Removed**.
 
 ## [Unreleased]
 
+### Added
+
+- CONTRIBUTING, SECURITY and CODE_OF_CONDUCT files, plus issue and pull
+  request templates, for the public repository.
+
+### Fixed
+
+- README links now point at absolute GitHub URLs, so they work on PyPI.
+- Build & Publish guide: the GitHub Packages instructions are removed, since
+  GitHub Packages has no Python registry.
+
 ## [0.2.2] - 2026-10-15
 
 ### Changed

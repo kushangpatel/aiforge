@@ -1,8 +1,9 @@
 # AIForge — Plug-and-Play AI Toolkit for Product Teams
 
+[![PyPI](https://img.shields.io/pypi/v/aiforge-kit.svg)](https://pypi.org/project/aiforge-kit/)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.2.2-orange.svg)](CHANGELOG.md)
+[![CI](https://github.com/kushangpatel/aiforge/actions/workflows/ci.yml/badge.svg)](https://github.com/kushangpatel/aiforge/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://github.com/kushangpatel/aiforge/blob/main/LICENSE)
 
 **AIForge** is a modular, provider-agnostic Python SDK that gives product teams production-ready AI capabilities with a single `pip install` and a config file. Each module — summarization, document Q&A, extraction, classification, semantic search, content generation, conversational agents, content moderation, translation, and vision — is self-contained, composable, and ships with a built-in Streamlit UI widget for instant prototyping.
 
@@ -54,7 +55,7 @@
 ### 1. Clone & Set Up Environment
 
 ```bash
-git clone <repo-url>
+git clone https://github.com/kushangpatel/aiforge.git
 cd aiforge
 
 # Create and activate a Python virtual environment
@@ -288,7 +289,7 @@ safe_summarize = guard.wrap(Summarizer())
 result = safe_summarize.run("Email jane@example.com about the outage...")
 ```
 
-See [Guardrails](docs/guardrails.md) for all checks and redaction styles.
+See [Guardrails](https://github.com/kushangpatel/aiforge/blob/main/docs/guardrails.md) for all checks and redaction styles.
 
 ### Evals — Regression Testing for Prompts and Models
 
@@ -307,7 +308,7 @@ assert report.passed
 ```
 
 Or from CI: `aiforge eval run evals/tickets.jsonl -m classify -s label_match --min-pass-rate 0.9`.
-See [Evaluations](docs/evals.md).
+See [Evaluations](https://github.com/kushangpatel/aiforge/blob/main/docs/evals.md).
 
 ---
 
@@ -389,7 +390,7 @@ AIForge uses a layered configuration system:
 | `AIFORGE_COST_TRACKING_ENABLED` | No | `true` | Enable cost tracking |
 | `AIFORGE_API_KEY` | No | — | Bearer token auth for REST API |
 
-See [.env.example](.env.example) for the full list.
+See [.env.example](https://github.com/kushangpatel/aiforge/blob/main/.env.example) for the full list.
 
 ### Swapping Providers
 
@@ -479,7 +480,7 @@ aiforge eval compare report.json main-report.json  # exit 3 on regression
 aiforge models list                          # Models, pricing, cost estimates
 ```
 
-See the [CLI reference](docs/cli.md) for every command and flag.
+See the [CLI reference](https://github.com/kushangpatel/aiforge/blob/main/docs/cli.md) for every command and flag.
 
 ---
 
@@ -574,7 +575,7 @@ aiforge/
 
 ```bash
 # Clone the repo
-git clone <repo-url>
+git clone https://github.com/kushangpatel/aiforge.git
 cd aiforge
 
 # Create Python virtual environment
@@ -643,7 +644,7 @@ make docker          # Build Docker image
 | **Amazon Bedrock** | Claude, Amazon Nova and other Converse models | amazon.titan-embed-text-v2:0 | No |
 | **Mistral AI** | mistral-large-4, mistral-medium-3-5, codestral | mistral-embed | No |
 
-See [Providers](docs/providers.md) for setup, default models and install extras.
+See [Providers](https://github.com/kushangpatel/aiforge/blob/main/docs/providers.md) for setup, default models and install extras.
 
 ---
 
@@ -713,7 +714,7 @@ print(list_providers())     # ['openai', 'anthropic', 'ollama', 'azure', 'gemini
 print(list_vectorstores())  # ['chroma', 'pgvector', 'pinecone', 'qdrant']
 ```
 
-See [Plugin System docs](docs/configuration.md#plugin-system) for full details.
+See [Plugin System docs](https://github.com/kushangpatel/aiforge/blob/main/docs/configuration.md#plugin-system) for full details.
 
 ---
 
@@ -736,9 +737,18 @@ print(tracker.by_model)    # {"gpt-4o": 0.040, "text-embedding-3-small": 0.002}
 
 ---
 
+## Contributing
+
+Contributions are welcome. See [CONTRIBUTING.md](https://github.com/kushangpatel/aiforge/blob/main/CONTRIBUTING.md) for the
+development setup and the checks CI runs, and report security problems
+privately as described in [SECURITY.md](https://github.com/kushangpatel/aiforge/blob/main/SECURITY.md). This project follows
+a [Code of Conduct](https://github.com/kushangpatel/aiforge/blob/main/CODE_OF_CONDUCT.md).
+
+---
+
 ## License
 
-MIT — see [LICENSE](LICENSE) for details.
+MIT — see [LICENSE](https://github.com/kushangpatel/aiforge/blob/main/LICENSE) for details.
 
 ---
 
