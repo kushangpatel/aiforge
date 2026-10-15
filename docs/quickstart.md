@@ -101,7 +101,7 @@ Each module is self-contained and can be used independently:
 ```python
 # Install only what you need
 pip install aiforge-kit                        # Core + OpenAI provider
-pip install "aiforge-kit[anthropicai]"         # Core + Anthropic + Voyage AI
+pip install "aiforge-kit[anthropic]"         # Core + Anthropic + Voyage AI
 pip install "aiforge-kit[local]"               # Core + Ollama provider
 pip install "aiforge-kit[all]"                 # Everything
 
@@ -214,7 +214,7 @@ m = Moderator(checks=["pii", "toxicity", "prompt_injection"])
 result = m.check("My email is john@example.com")
 print(result.flagged)  # True
 
-cleaned = m.redact("Call me at 555-0123")
+cleaned = m.redact("Call me at 555-867-5309")
 print(cleaned.text)  # "Call me at [PHONE]"
 ```
 

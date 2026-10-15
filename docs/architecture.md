@@ -32,6 +32,9 @@ graph TB
             VIS["Vision"]
         end
         PIPE["Pipeline Engine<br/><i>Sequential + Router</i>"]
+        GUARD["Guardrails<br/><i>Input / output checks, PII</i>"]
+        EVAL["Evals<br/><i>Datasets, scorers, reports</i>"]
+        RET["Retrieval<br/><i>BM25 + vector, RRF, rerank</i>"]
     end
 
     subgraph Infra["Infrastructure"]
@@ -46,7 +49,10 @@ graph TB
 
     subgraph Providers["LLM Providers"]
         OAI["OpenAI<br/><i>GPT-4o, o1, o3-mini</i>"]
-        ANT["Anthropic<br/><i>Claude 3.5</i>"]
+        ANT["Anthropic<br/><i>Claude</i>"]
+        GEM["Google Gemini"]
+        BED["Amazon Bedrock<br/><i>Converse API</i>"]
+        MIS["Mistral AI"]
         OLL["Ollama<br/><i>Local Models</i>"]
         AZR["Azure OpenAI"]
     end
@@ -54,6 +60,9 @@ graph TB
     subgraph Embeddings["Embedding Providers"]
         EOAI["OpenAI Embeddings"]
         EVOY["Voyage AI<br/><i>via Anthropic</i>"]
+        EGEM["Gemini Embeddings"]
+        EBED["Bedrock Titan Embeddings"]
+        EMIS["Mistral Embeddings"]
         EOLL["Ollama Embeddings"]
         EAZR["Azure Embeddings"]
     end
@@ -78,6 +87,12 @@ graph TB
     REG --> Modules
     REG --> PIPE
     PIPE --> Modules
+    GUARD --> Modules
+    EVAL --> Modules
+    CLI --> EVAL
+    DQA --> RET
+    SEM --> RET
+    RET --> VectorStores
     Modules --> RL
     Modules --> CACHE
     Modules --> COST
@@ -120,10 +135,14 @@ graph TB
 | **langchain-openai** | ≥1.0 | `providers/openai.py`, `providers/azure.py` | OpenAI and Azure OpenAI provider |
 | **langchain-anthropic** | ≥1.4 (extra) | `providers/anthropic.py` | Anthropic Claude provider (Opus, Sonnet, Haiku, Fable) with prompt caching |
 | **langchain-ollama** | ≥1.0 (extra) | `providers/ollama.py` | Local model inference (Llama, Mistral, etc.) |
+| **langchain-google-genai** | ≥4.0, <5 (extra `gemini`) | `providers/gemini.py` | Google Gemini chat and embeddings (Gemini Developer API) |
+| **langchain-aws** | ≥1.5, <2 (extra `bedrock`) | `providers/bedrock.py` | Amazon Bedrock Converse API (Claude, Nova, …) and Titan embeddings |
+| **langchain-mistralai** | ≥1.1.3, <2 (extra `mistral`) | `providers/mistral.py` | Mistral AI chat and embeddings |
 | **langchain-voyageai** | extra | `providers/anthropic.py` | Voyage AI embeddings (used with Anthropic provider) |
 | **LangGraph** | ≥1.0 (extra) | `modules/qa/`, `modules/chat/` | Agentic workflows: multi-step reasoning, tool use, memory |
 | **MCP SDK** | ≥2.0 (extra) | `mcp/` | Model Context Protocol client: stdio, streamable HTTP and (deprecated) SSE transports |
-| **langchain-text-splitters** | ≥1.0 | `core/text_splitter.py` | Language-aware document chunking for RAG |
+| **langchain-text-splitters** | ≥1.0 | `core/text_splitter.py` | Recursive, markdown-heading and token chunking for RAG |
+| **BM25 + RRF** | built in | `core/retrieval.py`, `core/rerank.py` | Keyword index, hybrid fusion and reranking (no extra dependency) |
 
 ### Vector Store Backends
 
@@ -311,9 +330,9 @@ INGEST:
     ↓
   DocLoader — recursive file discovery (pdf, docx, txt, md, py, etc.)
     ↓
-  TextSplitter — language-aware chunking (chunk_size + overlap)
+  TextSplitter — chunking strategy: recursive (default), markdown or token
     ↓
-  EmbeddingProvider.embed(chunks) — OpenAI / Voyage / Ollama
+  EmbeddingProvider.embed(chunks) — OpenAI / Voyage / Gemini / Bedrock / Mistral / Ollama
     ↓
   VectorStore.upsert(embeddings, metadata, IDs)
     ↓
@@ -322,11 +341,14 @@ INGEST:
 QUERY:
   User question
     ↓
-  EmbeddingProvider.embed_query(question) — same provider as ingest
+  Retriever (retrieval_mode):
+    vector  — EmbeddingProvider.embed_query + VectorStore.query (fetch_k)
+    keyword — BM25 over the collection's chunks
+    hybrid  — both, merged with reciprocal rank fusion (RRF_K)
     ↓
-  VectorStore.query(vector, top_k) — cosine similarity search
+  Optional reranker (rerank=True) — LLMReranker or custom, keeps rerank_top_n
     ↓
-  Retrieved context chunks + similarity scores
+  Retrieved context chunks + scores
     ↓
   LLM prompt: system context + retrieved docs + user question
     ↓
@@ -359,8 +381,9 @@ sequenceDiagram
         Note over U,LLM: QUERY
         U->>M: Question
         M->>EP: Embed question
-        M->>VS: Similarity search (top-k)
-        VS-->>M: Relevant chunks
+        M->>VS: Similarity search (fetch_k)
+        VS-->>M: Vector candidates
+        Note over M: hybrid: fuse with BM25 hits (RRF), then optional rerank
         M->>LLM: Context + question
         LLM-->>M: Answer
         M-->>U: QAResponse
@@ -463,6 +486,27 @@ All modules inherit from `BaseModule` which provides:
 
 ---
 
+## Guardrails and Evals
+
+```
+Guard(input=[...checks], output=[...checks], on_fail="block" | "redact" | "warn")
+  ├─ check_input(text) / check_output(text) → GuardResult
+  └─ wrap(module_or_callable) → GuardedCallable (same run/arun interface)
+  Checks: PIIGuard, PromptInjectionGuard, MaxLengthGuard, BannedTermsGuard,
+          RegexGuard, SchemaGuard, SystemPromptLeakGuard
+  "block" raises GuardrailViolation
+
+evaluate(target, dataset, scorers=[...]) → EvalReport
+  ├─ datasets: list of cases or .jsonl / .json / .yaml / .csv
+  ├─ scorers: exact_match, contains, regex, json_match, numeric_close,
+  │           label_match, embedding_similarity, llm_judge, ...
+  └─ EvalReport.compare(baseline) → regressions; `aiforge eval` gates CI
+```
+
+See [Guardrails](guardrails.md) and [Evaluations](evals.md).
+
+---
+
 ## Provider Abstraction
 
 ```
@@ -485,8 +529,14 @@ EmbeddingProvider (ABC)
 Implementations:
   ├─ OpenAIProvider / OpenAIEmbeddingProvider
   ├─ AnthropicProvider / AnthropicEmbeddingProvider (→ Voyage AI, prompt caching)
+  ├─ GeminiProvider / GeminiEmbeddingProvider
+  ├─ BedrockProvider / BedrockEmbeddingProvider (AWS credential chain)
+  ├─ MistralProvider / MistralEmbeddingProvider
   ├─ OllamaProvider / OllamaEmbeddingProvider
   └─ AzureProvider / AzureEmbeddingProvider
+
+LangChainEmbeddingProvider(EmbeddingProvider) ← providers/_langchain.py
+  shared embedding base used by the Gemini, Bedrock and Mistral providers
 ```
 
 ---

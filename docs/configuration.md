@@ -24,6 +24,7 @@ direct constructor arguments — with a clear, deterministic priority order.
   - [Mistral AI](#mistral-ai)
   - [Vector Store](#vector-store)
   - [Retrieval & Chunking](#retrieval--chunking)
+  - [Guardrails](#guardrails)
   - [Rate Limiting](#rate-limiting)
   - [Cost Tracking](#cost-tracking)
   - [Request Cache](#request-cache)
@@ -37,10 +38,10 @@ direct constructor arguments — with a clear, deterministic priority order.
   - [Custom Prompts](#custom-prompts)
   - [Custom Pricing](#custom-pricing)
   - [Custom Context Windows](#custom-context-windows)
+  - [MCP Servers](#mcp-servers)
 - [Complete Environment Variable Reference](#complete-environment-variable-reference)
 - [Validators](#validators)
 - [Settings Loading Internals](#settings-loading-internals)
-- [Using Settings in Code](#using-settings-in-code)
 - [Vector Store Backends](#vector-store-backends)
   - [ChromaDB (default)](#chromadb-default)
   - [pgvector (PostgreSQL)](#pgvector-postgresql)
@@ -117,10 +118,11 @@ The primary configuration file. Place it in your project root (the directory
 where you run `aiforge` commands). All keys are **flat** (no nesting, except
 for structured fields like `custom_prompts` and `custom_pricing`).
 
-The YAML loader reads each top-level key, uppercases it, prefixes it with
-`AIFORGE_`, and temporarily sets it as an environment variable so Pydantic
-Settings picks it up. This means `provider: openai` in YAML becomes
-`AIFORGE_PROVIDER=openai`.
+The YAML loader is a Pydantic Settings source: it reads each top-level key,
+uppercases it (an optional `aiforge_` prefix is stripped) and matches it to a
+settings field, so `provider: openai` sets `PROVIDER`. YAML has the lowest
+priority after the built-in defaults: `.env`, environment variables and
+constructor arguments all override it.
 
 ```yaml
 # aiforge.yaml — all non-secret settings go here
@@ -138,6 +140,18 @@ chroma_persist_dir: ./aiforge_data
 # pgvector_dsn: postgresql://user:pass@localhost:5432/aiforge
 # pinecone_index: my-index
 # qdrant_url: http://localhost:6333
+
+# ── Retrieval & Chunking (DocQA / SemanticSearch) ────
+retrieval_mode: vector              # vector | hybrid | keyword
+rrf_k: 60                           # RRF damping constant (hybrid)
+rerank: false                       # rerank retrieved candidates
+# rerank_top_n: 5                   # hits kept after reranking
+fetch_k: 20                         # candidates per retriever before fusion / reranking
+chunking: recursive                 # recursive | markdown | token  (DocQA)
+
+# ── Guardrails ────────────────────────────────────────
+guardrails_pii_redaction: placeholder   # placeholder | mask | hash
+guardrails_on_fail: block               # block | redact | warn
 
 # ── Rate Limiting ─────────────────────────────────────
 rate_limit_rpm: 500                 # requests per minute
@@ -404,6 +418,22 @@ fetch_k: 30
 chunking: markdown
 ```
 
+### Guardrails
+
+Defaults for [`aiforge.guardrails`](guardrails.md), used when a call leaves the
+argument out.
+
+| Field | Type | Default | Env Var | Description |
+|-------|------|---------|---------|-------------|
+| `GUARDRAILS_PII_REDACTION` | `str` | `"placeholder"` | `AIFORGE_GUARDRAILS_PII_REDACTION` | Redaction style when `PIIGuard` or `redact_pii` gets no `style=`: `placeholder` (reversible `[EMAIL_1]`), `mask` or `hash` |
+| `GUARDRAILS_ON_FAIL` | `str` | `"block"` | `AIFORGE_GUARDRAILS_ON_FAIL` | What a `Guard` created without `on_fail=` does on a violation: `block`, `redact` or `warn` |
+
+```yaml
+# aiforge.yaml
+guardrails_pii_redaction: mask
+guardrails_on_fail: redact
+```
+
 ### Rate Limiting
 
 | Field | Type | Default | Env Var | Description |
@@ -452,7 +482,7 @@ print(tracker.summary())
 
 The API server's `GET /stats` endpoint exposes these same metrics over HTTP.
 
-**Built-in pricing table** covers OpenAI (gpt-4o, gpt-4o-mini, gpt-4-turbo, gpt-4.5, gpt-3.5-turbo, o1, o1-mini, o3-mini, o3), Anthropic (claude-opus-5-5, claude-sonnet-5-5, claude-haiku-5-5 and earlier 4.x/5.x models), and Ollama models (zero cost). See [Custom Pricing](#custom-pricing) to override or add models.
+**Built-in pricing table** covers OpenAI (gpt-4o, gpt-4o-mini, gpt-4-turbo, gpt-4.5, gpt-3.5-turbo, o1, o1-mini, o3-mini, o3), Anthropic (claude-opus-5-5, claude-sonnet-5-5, claude-haiku-5-5 and earlier 4.x/5.x models), Voyage embeddings, Google Gemini, Amazon Bedrock (Claude, Nova, Titan embeddings), Mistral AI, and Ollama models (zero cost). See [Cost Tracking](cost-tracking.md#built-in-pricing-table) for the full table. See [Custom Pricing](#custom-pricing) to override or add models.
 
 ### Request Cache
 
@@ -511,7 +541,7 @@ Webhooks are used by `/qa/ingest` and `/search/index` for async job notification
 | Backend | Description | Requirements |
 |---------|-------------|-------------|
 | `langsmith` | LangSmith trace viewer — sets `LANGCHAIN_TRACING_V2=true`, `LANGCHAIN_API_KEY`, `LANGCHAIN_PROJECT` | `LANGSMITH_API_KEY` |
-| `otel` | OpenTelemetry — exports spans via OTLP | `pip install aiforge-kit[otel]`, `OTEL_EXPORTER_ENDPOINT` |
+| `otel` | OpenTelemetry — exports spans via OTLP | `pip install "aiforge-kit[observability]"`, `OTEL_EXPORTER_ENDPOINT` |
 | `console` | Prints trace info to stdout (debug/dev only) | None |
 
 ```yaml
@@ -659,6 +689,14 @@ custom_context_windows:
 
 Context window sizes are used by the Summarizer to decide between `stuff` and `map_reduce` strategies. The fallback for unknown models is `8,192`.
 
+### MCP Servers
+
+| Field | Type | Default | Env Var | Description |
+|-------|------|---------|---------|-------------|
+| `MCP_SERVERS` | `list[dict]` | `[]` | `AIFORGE_MCP_SERVERS` | MCP servers whose tools `ChatAgent` loads (needs the `[mcp]` extra) |
+
+See [MCP Integration](mcp.md) for the server entry format.
+
 ---
 
 ## Complete Environment Variable Reference
@@ -701,6 +739,8 @@ Every field in `AIForgeSettings` maps to an `AIFORGE_`-prefixed environment vari
 | `AIFORGE_RERANK_TOP_N` | `int` | — | Hits kept after reranking |
 | `AIFORGE_FETCH_K` | `int` | `20` | Candidates fetched before fusion / reranking |
 | `AIFORGE_CHUNKING` | `str` | `recursive` | `recursive`, `markdown` or `token` |
+| `AIFORGE_GUARDRAILS_PII_REDACTION` | `str` | `placeholder` | Default PII redaction style: `placeholder`, `mask` or `hash` |
+| `AIFORGE_GUARDRAILS_ON_FAIL` | `str` | `block` | Default `Guard` action: `block`, `redact` or `warn` |
 | `AIFORGE_RATE_LIMIT_RPM` | `int` | `500` | Requests per minute |
 | `AIFORGE_RATE_LIMIT_TPM` | `int` | `150000` | Tokens per minute |
 | `AIFORGE_COST_TRACKING_ENABLED` | `bool` | `true` | Enable cost tracking |
@@ -732,6 +772,7 @@ Every field in `AIForgeSettings` maps to an `AIFORGE_`-prefixed environment vari
 | `AIFORGE_CUSTOM_PROMPTS` | `dict` | `{}` | Per-module prompt overrides |
 | `AIFORGE_CUSTOM_PRICING` | `dict` | `{}` | Model pricing overrides |
 | `AIFORGE_CUSTOM_CONTEXT_WINDOWS` | `dict` | `{}` | Model context-window overrides |
+| `AIFORGE_MCP_SERVERS` | `list` | `[]` | MCP servers for `ChatAgent` |
 
 ---
 
@@ -759,21 +800,14 @@ Every field in `AIForgeSettings` maps to an `AIFORGE_`-prefixed environment vari
 ```python
 @lru_cache(maxsize=1)
 def get_settings() -> AIForgeSettings:
-    """Return the global settings singleton."""
-    yaml_path = Path("aiforge.yaml")
-    if yaml_path.exists():
-        settings = AIForgeSettings.from_yaml(yaml_path)
-    else:
-        settings = AIForgeSettings()
-
-    # Apply runtime overrides from config
-    apply_pricing_overrides(settings.CUSTOM_PRICING)
-    apply_context_window_overrides(settings.CUSTOM_CONTEXT_WINDOWS)
+    """Return the cached global settings singleton."""
+    settings = AIForgeSettings()          # reads ./aiforge.yaml if present
+    apply_runtime_overrides(settings)     # custom pricing / context windows
     return settings
 ```
 
 - **Cached:** `@lru_cache(maxsize=1)` — first call loads config, subsequent calls return the same instance
-- **YAML loading:** `from_yaml()` reads the YAML file, flattens keys to `AIFORGE_*` env vars, temporarily sets them so Pydantic picks them up, then restores the original env state
+- **YAML loading:** `./aiforge.yaml` is read by a custom settings source (`YamlConfigSettingsSource`) that ranks below `.env` and environment variables. `AIForgeSettings.from_yaml(path, **overrides)` loads a different file for one instantiation
 - **Pricing/context-window overrides:** Applied once at first call
 - **Cache clearing:** Tests use `get_settings.cache_clear()` to reset
 

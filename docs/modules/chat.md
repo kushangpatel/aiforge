@@ -791,4 +791,4 @@ aiforge/modules/chat/
 - [API Server](../api-server.md) — `POST /chat` endpoint
 - [Playground](../playground.md) — Interactive chat tab with built-in tools
 - [Configuration](../configuration.md) — Full settings reference
-- [Build & Publish](../BUILD_AND_PUBLISH.md) — Packaging and distribution
+- [Build & Publish](https://github.com/kushangpatel/aiforge/blob/main/BUILD_AND_PUBLISH.md) — Packaging and distribution

@@ -2009,7 +2009,7 @@ public class AIForgeClient {
 
         // ── Moderate ──
         ObjectNode modBody = JSON.createObjectNode()
-                .put("text", "Call me at 555-0123 or user@example.com")
+                .put("text", "Call me at 555-867-5309 or user@example.com")
                 .put("action", "redact");
         ArrayNode checks = modBody.putArray("checks");
         checks.add("pii");

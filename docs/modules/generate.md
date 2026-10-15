@@ -19,8 +19,8 @@ pip install aiforge-kit
 ```python
 from aiforge import Generator
 from aiforge import GenerateResponse          # response type
-from aiforge import register_guardrail        # custom guardrail decorator
-from aiforge import GuardrailResult           # guardrail return type
+from aiforge.modules.generate import register_guardrail  # custom guardrail decorator
+from aiforge.modules.generate import GuardrailResult     # guardrail return type
 ```
 
 ---
@@ -65,7 +65,7 @@ Generator(
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `template` | `str \| None` | `None` | Template string with `{variable}` placeholders. Variables are substituted at call time via keyword arguments. Mutually exclusive with `prompt` at call time. |
-| `guardrails` | `list[str] \| None` | `None` | List of guardrail names to enforce on generated output. Built-in: `"no_pii"`, `"no_competitor_mentions"`, `"no_pricing"`, `"professional_tone"`. See [Guardrails](#guardrails). |
+| `guardrails` | `list[str] \| None` | `None` | List of guardrail names to enforce on generated output. Built-in: `"no_pii"`, `"no_competitor_mentions"`, `"no_pricing"`, `"professional_tone"`. See [Guardrails](#guardrails); for input/output checks around any module, see [`aiforge.guardrails`](../guardrails.md). |
 | `max_tokens` | `int` | `1024` | Maximum tokens for LLM generation. Must be ≥ 1. |
 | `temperature` | `float` | `0.7` | LLM sampling temperature. Must be in range `[0.0, 2.0]`. Higher values produce more creative output. |
 | `competitors` | `list[str] \| None` | `None` | List of competitor names for the `no_competitor_mentions` guardrail. Required when using that guardrail. |
@@ -300,7 +300,7 @@ print(result.to_text())         # same as result.text
 Return type for custom guardrail functions. A dataclass, not a Pydantic model.
 
 ```python
-from aiforge import GuardrailResult
+from aiforge.modules.generate import GuardrailResult
 ```
 
 | Field | Type | Default | Description |
@@ -448,6 +448,13 @@ POST /generate/rewrite
 
 Guardrails are enforced **after** generation. If any guardrail is violated, the Generator retries with the violation feedback included in the prompt (up to 2 retries, 3 total attempts).
 
+!!! note "Generator guardrails vs `aiforge.guardrails`"
+    The `guardrails=` names here are Generator-only output checks that trigger a
+    regeneration; they never edit the text. To redact PII and secrets in the
+    input, block prompt injection, or check the output of any module, wrap the
+    Generator with a [`Guard`](../guardrails.md):
+    `Guard(input=[PIIGuard()], output=[PIIGuard()]).wrap(Generator())`.
+
 ### Built-in Guardrails
 
 | Guardrail | Detection | What It Catches | Cost |
@@ -463,7 +470,7 @@ Guardrails are enforced **after** generation. If any guardrail is violated, the 
 # PII protection
 g = Generator(guardrails=["no_pii"])
 result = g.generate(prompt="Write a welcome email for a new user")
-# If the LLM includes "john@email.com" or "555-0123", it retries
+# If the LLM includes "john@email.com" or "555-867-5309", it retries
 
 # Competitor protection
 g = Generator(
@@ -519,7 +526,8 @@ else:
 Register custom guardrail functions using the `@register_guardrail` decorator:
 
 ```python
-from aiforge import register_guardrail, GuardrailResult, Generator
+from aiforge import Generator
+from aiforge.modules.generate import register_guardrail, GuardrailResult
 
 @register_guardrail("max_sentences")
 def check_max_sentences(text: str) -> GuardrailResult:

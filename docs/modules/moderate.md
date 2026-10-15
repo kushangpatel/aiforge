@@ -439,7 +439,7 @@ PII detection uses **regex patterns only** — no LLM calls, making it fast (~1m
 | `email` | RFC-style regex | Matches standard email format: `user@domain.tld` |
 | `ssn` | `\d{3}-\d{2}-\d{4}` | US Social Security Number with dashes |
 | `credit_card` | Visa/MC/Amex/Discover + **Luhn validation** | Matches 13–16 digit card numbers with optional dashes/spaces. Only flags cards that pass the Luhn checksum (prevents false positives). |
-| `phone` | US/CA + international | Matches `(555) 867-5309`, `+1-555-867-5309`, `+44 20 7946 0958`, etc. Requires at least 7 digits. |
+| `phone` | US/CA + international | Matches `(555) 867-5309`, `+1-555-867-5309`, `+44 20 7946 0958`, etc. US/CA numbers need an area code (10 digits), so `555-0123` is not flagged. |
 
 ### Overlap Prevention
 
@@ -453,7 +453,7 @@ When redacting, longest spans are replaced first to prevent partial overwrites. 
 m = Moderator(checks=["pii"], pii_types=["email", "phone"])
 
 # Only detects email and phone, ignores SSN
-result = m.check("Email: a@b.com, SSN: 123-45-6789, Phone: 555-0123")
+result = m.check("Email: a@b.com, SSN: 123-45-6789, Phone: 555-867-5309")
 print([f.subtype for f in result.flags])  # ["email", "phone"]
 ```
 

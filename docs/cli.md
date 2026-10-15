@@ -33,6 +33,9 @@ The `aiforge` command is registered automatically when you install the package.
       - [aiforge search query](#aiforge-search-query)
   - [Agent Commands](#agent-commands)
     - [aiforge chat](#aiforge-chat)
+  - [Evaluation Commands](#evaluation-commands)
+    - [aiforge eval run](#aiforge-eval-run)
+    - [aiforge eval compare](#aiforge-eval-compare)
   - [Discovery Commands](#discovery-commands)
     - [aiforge config](#aiforge-config)
     - [aiforge models](#aiforge-models)
@@ -87,6 +90,8 @@ Some commands require optional extras:
 |---------|---------------|---------|
 | `aiforge serve` | `server` | `pip install "aiforge-kit[server]"` |
 | `aiforge playground` | `playground` | `pip install "aiforge-kit[playground]"` |
+| `aiforge qa ask`, `aiforge chat` | `agentic` (LangGraph) | `pip install "aiforge-kit[agentic]"` |
+| Any command with `AIFORGE_PROVIDER=anthropic` / `ollama` / `gemini` / `bedrock` / `mistral` | that provider's extra | `pip install "aiforge-kit[gemini]"` etc. (see [Providers](providers.md)) |
 | All other commands | *(none)* | — |
 
 ---
@@ -110,12 +115,17 @@ $ aiforge --help
 │ extract       Extract structured data from text                         │
 │ generate      Generate text from a prompt / template                    │
 │ moderate      Content moderation & PII redaction                        │
-│ qa            Document Q&A: ingest documents and ask questions           │
+│ translate     Translate text between languages                          │
+│ vision        Analyze images with vision models                         │
+│ rewrite       Rewrite text according to instructions                    │
+│ sentiment     Analyze text sentiment                                    │
+│ qa            Document Q&A: ingest documents and ask questions          │
 │ search        Semantic search: index documents and query                │
-│ chat          Interactive AI chat agent                                  │
+│ chat          Interactive AI chat agent                                 │
 │ config        Show resolved configuration                               │
 │ models        List models & estimate costs                              │
 │ registry      Explore registered components                             │
+│ eval          Evaluate modules against test datasets                    │
 ╰──────────────────────────────────────────────────────────────────────────╯
 ```
 
@@ -658,11 +668,49 @@ aiforge eval run cases.jsonl --module classify \
   --output report.json --baseline main-report.json
 ```
 
+```
+aiforge eval run [OPTIONS] DATASET
+```
+
+`DATASET` is a `.jsonl`, `.json`, `.yaml`/`.yml` or `.csv` file. Pass either
+`--module` or `--target`.
+
+| Option | Short | Default | Description |
+|--------|-------|---------|-------------|
+| `--module` | `-m` | — | Registered module name, e.g. `classify` |
+| `--module-args` | | — | Module constructor kwargs as JSON, e.g. `'{"labels": ["a"]}'` |
+| `--target` | | — | Callable to evaluate instead of a module: `pkg.mod:func` |
+| `--method` | | module's main method | Module method to call |
+| `--call-args` | | — | Kwargs passed on every call, as JSON |
+| `--scorer` | `-s` | — | Scorer name, optionally with JSON params: `'contains:{"value": "refund"}'`. Repeatable |
+| `--min-pass-rate` | | `1.0` | Minimum pass rate (0–1) for every scorer |
+| `--threshold` | | — | Per-scorer minimum, e.g. `llm_judge=0.8`. Repeatable |
+| `--concurrency` | `-c` | `5` | Cases in flight |
+| `--timeout` | | — | Per-case timeout (seconds) |
+| `--judge-provider` | | configured | Provider for `llm_judge` |
+| `--judge-model` | | configured | Model for `llm_judge` |
+| `--output` | `-o` | — | Write the JSON report here |
+| `--baseline` | `-b` | — | Baseline report to compare against |
+| `--tolerance` | | `0.0` | Allowed drop (0–1) before a regression is flagged |
+| `--name` | | dataset file stem | Report name |
+| `--max-failures` | | `10` | Failing cases to print |
+
 ### aiforge eval compare
 
-Compare two saved reports and flag per-scorer regressions.
+Compare two saved reports and flag per-scorer regressions. Exits `3` when the
+current report regressed.
 
-See [Evaluations](evals.md) for scorers, datasets and exit codes.
+```bash
+aiforge eval compare report.json main-report.json --tolerance 0.02
+```
+
+| Argument / Option | Default | Description |
+|-------------------|---------|-------------|
+| `CURRENT` | *(required)* | Current report JSON |
+| `BASELINE` | *(required)* | Baseline report JSON |
+| `--tolerance` | `0.0` | Allowed drop (0–1) before a regression is flagged |
+
+See [Evaluations](evals.md) for scorers, datasets and the report format.
 
 ---
 
@@ -827,10 +875,14 @@ Common environment variables used across CLI commands:
 | `AIFORGE_AZURE_OPENAI_API_KEY` | — | `serve`, `playground` | Azure OpenAI key |
 | `AIFORGE_AZURE_OPENAI_ENDPOINT` | — | `serve`, `playground` | Azure resource URL |
 | `AIFORGE_OLLAMA_BASE_URL` | `http://localhost:11434` | `serve`, `playground` | Ollama server URL |
+| `AIFORGE_GOOGLE_API_KEY` | — | `serve`, `playground` | Google Gemini API key |
+| `AIFORGE_MISTRAL_API_KEY` | — | `serve`, `playground` | Mistral API key |
+| `AIFORGE_AWS_REGION` | AWS default | `serve`, `playground` | Amazon Bedrock region |
+| `AIFORGE_AWS_PROFILE` | — | `serve`, `playground` | AWS named profile for Bedrock |
 | `AIFORGE_CHROMA_PERSIST_DIR` | `./aiforge_data` | `migrate` | ChromaDB data directory |
 | `AIFORGE_API_KEY` | — | `serve` | API auth bearer token |
 | `AIFORGE_LOG_LEVEL` | `INFO` | `serve` | Logging level |
-| `AIFORGE_LOG_FORMAT` | `console` | `serve` | Log format (`console` / `json`) |
+| `AIFORGE_LOG_FORMAT` | `json` | `serve` | Log format (`json` / `console`) |
 | `AIFORGE_CORS_ORIGINS` | `*` | `serve` | CORS allowed origins |
 
 ---
@@ -841,6 +893,15 @@ Common environment variables used across CLI commands:
 |------|---------|
 | `0` | Success |
 | `1` | Missing dependency (`uvicorn` or `streamlit` not installed) |
+
+`aiforge eval` has its own exit codes so it can gate CI:
+
+| Code | Meaning |
+|------|---------|
+| `0` | Every scorer met its threshold and there was no regression |
+| `1` | At least one scorer is below its minimum pass rate |
+| `2` | Bad usage (unknown module or scorer, invalid JSON, …) |
+| `3` | Thresholds met, but the run regressed against the baseline |
 
 All commands use Rich console output for coloured, formatted messages:
 - Green checkmarks for success
@@ -894,7 +955,7 @@ aiforge extract --text "Alice, 30, NYC" --schema-file person.json --format yaml
 aiforge generate -f email_template.txt --var name=Alice --var product=Widget
 
 # Moderate and redact PII
-aiforge moderate --text "Call me at 555-0123" --redact
+aiforge moderate --text "Call me at 555-867-5309" --redact
 ```
 
 ### Document Q&A Workflow
@@ -1130,3 +1191,4 @@ container restarts.
 - [API Auth](api-auth.md) — API key authentication details
 - [Playground](playground.md) — Interactive UI documentation
 - [Providers](providers.md) — Provider setup and configuration
+- [Evaluations](evals.md) — Datasets, scorers and CI gating for `aiforge eval`
