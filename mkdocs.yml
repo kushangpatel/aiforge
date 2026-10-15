@@ -73,6 +73,7 @@ nav:
       - API Authentication: api-auth.md
       - Playground: playground.md
       - MCP Integration: mcp.md
+      - Evaluations: evals.md
   - Architecture: architecture.md
   - CLI Reference: cli.md
 
